@@ -4,3 +4,11 @@ __pycache__/
 *.mkv
 *.mp4
 cookies.txt
+
+# ai-toolkit: skille instalowane lokalnie, nie publikujemy ich w tym repo.
+# Kanał recovery jest kursowy i licencyjnie nie może tu trafić - dlatego
+# instalujemy tylko `sync` (managed), a i tak nic z tego nie jest śledzone.
+.claude/skills/*/
+.agents/skills/*/
+.claude/settings.local.json
+.ai-toolkit/

@@ -48,6 +48,34 @@ This exists because the TV will not fetch an HTTPS URL itself — it accepts the
 without complaint and then sits in `STOPPED` — and because it has no way to authenticate
 against a cloud account.
 
+## Cloud sources
+
+Two companion commands resolve a cloud item to a direct stream and hand it to the relay, so
+nothing is downloaded in that case either.
+
+```bash
+cast-gopro --token eyJhbGc...              # store a browser token once
+cast-gopro                                 # list the GoPro cloud library
+cast-gopro 3                               # cast the third entry
+cast-gopro https://gopro.com/v/AbCdE       # public GoPro share link
+cast-photos https://photos.app.goo.gl/xxx  # Google Photos share link
+cast-photos <private link> -c cookies.txt  # private item, with your cookies
+```
+
+**GoPro** talks to `api.gopro.com` with a bearer token copied out of a logged-in browser
+(devtools, the `Authorization` header); it expires after a few hours. The library listing is
+cached so items can be picked by number, and the highest available variation that verifies as
+video is the one cast.
+
+**Google Photos** has no usable API for this — since 31 March 2025 the Library API only exposes
+items the user explicitly picks — so the starting point is a link to one video. The page is
+parsed for candidate stream URLs, each candidate is probed with a one-byte range request, and
+the first that answers as video wins. Public share links need nothing; private links need a
+cookie jar.
+
+Both resolvers are written defensively because neither format is documented and both can change
+without notice: when nothing resolves, the command says what it saw instead of failing blind.
+
 ## Limitations
 
 **Audio codecs.** Video is passed through untouched, so the TV has to decode it. H.264, HEVC,
@@ -59,6 +87,12 @@ re-encodes just the audio.
 
 **Subtitles** as a separate `.srt` rely on a Samsung-specific DLNA extension. Subtitles muxed
 into an MKV work on their own.
+
+## Repository tooling
+
+`ai-toolkit sync` installs the managed authoring skills locally. They are deliberately not
+tracked here — see `.gitignore` — and the recovery channel is never installed into this repo,
+because it carries course-licensed material that must not enter a public repository.
 
 ## Tested on
 

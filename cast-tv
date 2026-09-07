@@ -376,6 +376,7 @@ def main():
                               base, ip))
     print("   Ctrl+C kończy (film na TV też się zatrzyma)\n")
 
+    grało, czekano = False, 0
     try:
         while True:
             time.sleep(2)
@@ -387,7 +388,17 @@ def main():
             rel, dur = tag(info, "RelTime"), tag(info, "TrackDuration")
             sys.stdout.write("\r   %-12s %s / %s   " % (state, rel or "-", dur or "-"))
             sys.stdout.flush()
-            if state == "STOPPED" and rel not in ("", "00:00:00"):
+            if state in ("PLAYING", "TRANSITIONING", "PAUSED_PLAYBACK"):
+                grało = True
+            elif not grało:
+                # telewizor nie ruszył - po ~24 s to nie jest wolny start, tylko odmowa
+                czekano += 2
+                if czekano >= 24:
+                    print("\n   Telewizor nie zaczął odtwarzać. Zwykle znaczy to, że nie\n"
+                          "   przyjmuje tego kodeka albo kontenera.")
+                    break
+                continue
+            if state == "STOPPED" and grało:
                 print("\n   Koniec.")
                 break
     except KeyboardInterrupt:

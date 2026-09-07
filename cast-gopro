@@ -1,0 +1,182 @@
+#!/usr/bin/env python3
+"""Rzuca materiał z chmury GoPro na telewizor - bez pobierania na dysk.
+
+    cast-gopro --token eyJhbGc...      zapisz token z przeglądarki (raz)
+    cast-gopro                         lista ostatnich nagrań
+    cast-gopro 3                       rzuć trzecią pozycję z listy na TV
+    cast-gopro https://gopro.com/v/AbC publiczny link "share"
+"""
+import argparse
+import json
+import os
+import re
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+import castcloud as cc  # noqa: E402
+
+API = "https://api.gopro.com"
+MEDIA_ACCEPT = "application/vnd.gopro.jk.media+json; version=2.0.0"
+TOKEN_FILE = os.path.join(cc.CONFIG, "gopro-token")
+JAK_ZDOBYC_TOKEN = """
+Token bierze się z zalogowanej przeglądarki (ważny kilka godzin):
+
+  1. wejdź na https://gopro.com/media-library/ i zaloguj się
+  2. F12 → zakładka Sieć → kliknij dowolne żądanie do api.gopro.com
+  3. skopiuj wartość nagłówka Authorization (część po "Bearer ", zaczyna się od eyJ)
+  4. cast-gopro --token eyJhbGc...
+"""
+
+
+def token(explicit=None):
+    if explicit:
+        return explicit.strip()
+    if os.environ.get("GOPRO_TOKEN"):
+        return os.environ["GOPRO_TOKEN"].strip()
+    try:
+        with open(TOKEN_FILE) as fh:
+            return fh.read().strip()
+    except FileNotFoundError:
+        cc.die("Brak tokenu GoPro." + JAK_ZDOBYC_TOKEN)
+
+
+def save_token(value):
+    os.makedirs(cc.CONFIG, exist_ok=True)
+    path = TOKEN_FILE
+    with open(path, "w") as fh:
+        fh.write(value.strip())
+    os.chmod(path, 0o600)
+    print("Token zapisany w %s (tylko dla Ciebie, 0600)." % path)
+
+
+def api(path, tok, params=None):
+    url = API + path + ("?" + params if params else "")
+    status, body, _ = cc.fetch(url, headers={
+        "Authorization": "Bearer " + tok, "Accept": MEDIA_ACCEPT})
+    if status == 401:
+        cc.die("GoPro odrzuciło token (401) - wygasł albo jest niepełny." + JAK_ZDOBYC_TOKEN)
+    if status >= 400:
+        cc.die("GoPro odpowiedziało %d:\n%s" % (status, body[:400]))
+    try:
+        return json.loads(body)
+    except ValueError:
+        cc.die("Odpowiedź GoPro nie jest JSON-em:\n%s" % body[:400])
+
+
+def lista(tok, ile):
+    data = api("/media/search", tok, params=(
+        "fields=id,filename,captured_at,content_title,file_size,type,resolution,"
+        "duration&order_by=captured_at&per_page=%d&page=1" % ile))
+    media = data.get("_embedded", {}).get("media")
+    if media is None:
+        cc.die("Nie rozpoznaję odpowiedzi GoPro (klucze: %s).\n"
+               "Wklej mi ją, dopasuję parser." % ", ".join(data)[:200])
+    pozycje = []
+    for m in media:
+        pozycje.append({
+            "id": m.get("id"),
+            "nazwa": m.get("content_title") or m.get("filename") or m.get("id"),
+            "data": (m.get("captured_at") or "")[:10],
+            "typ": m.get("type", ""),
+            "rozmiar": m.get("file_size"),
+            "res": m.get("resolution", ""),
+        })
+    cc.cache_write("gopro-list.json", pozycje)
+    return pozycje
+
+
+def pokaz(pozycje):
+    if not pozycje:
+        print("Biblioteka pusta albo filtr nic nie zwrócił.")
+        return
+    szer = max(len(p["nazwa"]) for p in pozycje)
+    for i, p in enumerate(pozycje, 1):
+        print("%3d. %-*s  %s  %-6s %8s  %s" % (
+            i, szer, p["nazwa"], p["data"] or "----------",
+            p["res"] or "", cc.human(p["rozmiar"]), p["typ"]))
+    print("\nRzuć na telewizor:  cast-gopro <numer>")
+
+
+def adres_z_biblioteki(media_id, tok):
+    """Podpisany adres mp4 dla wpisu z chmury; kolejność jakości: source > high."""
+    data = api("/media/%s/download" % media_id, tok)
+    emb = data.get("_embedded", {})
+    kandydaci = []
+    for wariant in emb.get("variations", []) or []:
+        if (wariant.get("type") or "").lower() in ("mp4", "video", ""):
+            kandydaci.append((_ranga(wariant.get("label")), wariant.get("label", "?"),
+                              wariant.get("url")))
+    for plik in emb.get("files", []) or []:
+        kandydaci.append((0, "source", plik.get("url")))
+    kandydaci = [k for k in kandydaci if k[2]]
+    if not kandydaci:
+        cc.die("Brak adresu do pobrania w odpowiedzi GoPro (klucze: %s).\n"
+               "Wklej mi JSON-a, dopasuję parser." % ", ".join(emb) or "-")
+    kandydaci.sort(key=lambda k: k[0])
+    for _, label, url in kandydaci:
+        info = cc.is_video(url)
+        if info:
+            print("  jakość: %s (%s, %s)" % (label, info[0], cc.human(info[1])))
+            return url
+    print("  ! żaden wariant nie potwierdził się jako wideo, biorę pierwszy")
+    return kandydaci[0][2]
+
+
+def _ranga(label):
+    return {"source": 0, "high": 1, "high_res": 1, "mobile": 2, "low": 3}.get(
+        (label or "").lower(), 5)
+
+
+def adres_z_linku(url):
+    """Publiczny link gopro.com/v/... - adres siedzi w JSON-ie na stronie."""
+    _, html, _ = cc.fetch(url)
+    kandydaci = re.findall(r'https?://[^"\'\\ ]+?\.mp4[^"\'\\ ]*', html)
+    # najpierw dłuższe adresy - podpisane linki do źródła są dłuższe od miniatur
+    for kand in sorted(set(kandydaci), key=len, reverse=True):
+        kand = kand.replace("\\u0026", "&").replace("\\/", "/")
+        if cc.is_video(kand):
+            return kand
+    cc.die("Nie znalazłem strumienia na tej stronie.\n"
+           "Sprawdź, czy link jest publiczny (Share → Copy link).")
+
+
+def main():
+    ap = argparse.ArgumentParser(description="Rzuć materiał z GoPro na telewizor.")
+    ap.add_argument("co", nargs="?", help="numer z listy, id materiału albo link gopro.com/v/...")
+    ap.add_argument("--token", help="zapisz token dostępu z przeglądarki i zakończ")
+    ap.add_argument("-n", "--ile", type=int, default=25, help="ile pozycji na liście")
+    ap.add_argument("-t", "--tv", help="adres IP telewizora")
+    ap.add_argument("-p", "--port", type=int, help="port serwera HTTP w cast-tv")
+    ap.add_argument("--url-only", action="store_true",
+                    help="wypisz sam adres, nie rzucaj na TV")
+    args = ap.parse_args()
+
+    if args.token:
+        save_token(args.token)
+        return 0
+
+    if args.co and args.co.startswith(("http://", "https://")):
+        url, tytul = adres_z_linku(args.co), args.co
+    elif args.co:
+        tok = token()
+        pozycje = cc.cache_read("gopro-list.json")
+        if args.co.isdigit() and pozycje and 1 <= int(args.co) <= len(pozycje):
+            wpis = pozycje[int(args.co) - 1]
+        elif args.co.isdigit():
+            cc.die("Nie mam listy w pamięci - odpal najpierw `cast-gopro`.")
+        else:
+            wpis = {"id": args.co, "nazwa": args.co}
+        print("Pobieram adres dla: %s" % wpis["nazwa"])
+        url, tytul = adres_z_biblioteki(wpis["id"], tok), wpis["nazwa"]
+    else:
+        pokaz(lista(token(), args.ile))
+        return 0
+
+    if args.url_only:
+        print(url)
+        return 0
+    return cc.cast(url, tv=args.tv, port=args.port, title=tytul)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,0 +1,106 @@
+#!/usr/bin/env python3
+"""Rzuca film z Google Photos na telewizor - bez pobierania na dysk.
+
+    cast-photos https://photos.app.goo.gl/xxxx        link "udostępnij"
+    cast-photos https://photos.google.com/photo/ID -c cookies.txt
+
+Google nie daje na to API: od 31.03.2025 Photos Library API pokazuje aplikacji
+tylko to, co użytkownik ręcznie wskaże, więc nie da się przeglądać biblioteki.
+Punktem zaczepienia jest konkretny link do filmu - publiczny albo, z Twoimi
+ciasteczkami, prywatny.
+"""
+import argparse
+import os
+import re
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+import castcloud as cc  # noqa: E402
+
+# kolejność prób: pełne pobranie, potem coraz niższe strumienie progresywne
+SUFIKSY = ["=dv", "=m37", "=m22", "=m18"]
+JAK_ZDOBYC_CIASTECZKA = """
+Dla prywatnego linku potrzebne są Twoje ciasteczka Google:
+  rozszerzenie typu "Get cookies.txt" → eksport dla photos.google.com → cookies.txt
+  cast-photos <link> -c cookies.txt
+Publiczny link (Udostępnij → Utwórz link) działa bez tego.
+"""
+
+
+def odsloc(tekst):
+    """HTML/JSON z Google jest podwójnie eskejpowany."""
+    return (tekst.replace("\\u003d", "=").replace("\\u0026", "&")
+                 .replace("\\/", "/").replace("\\u003f", "?"))
+
+
+def kandydaci(html):
+    """Adresy, które mogą być strumieniem wideo - od najpewniejszych."""
+    html = odsloc(html)
+    lista, widziane = [], set()
+
+    def dodaj(url):
+        if url not in widziane:
+            widziane.add(url)
+            lista.append(url)
+
+    # 1. gotowe adresy do pobrania wideo
+    for m in re.findall(r'https://video-downloads\.googleusercontent\.com/[^"\'\\ <>]+', html):
+        dodaj(m)
+    # 2. bazowe identyfikatory materiału - dokładamy własne sufiksy
+    bazy = re.findall(
+        r'https://(?:lh\d|ci\d?|yt\d)\.googleusercontent\.com/'
+        r'(?:[A-Za-z0-9_\-]{1,12}/)*[A-Za-z0-9_\-]{20,}', html)
+    for baza in dict.fromkeys(bazy):
+        for sufiks in SUFIKSY:
+            dodaj(baza + sufiks)
+    return lista
+
+
+def rozwiaz(link, op):
+    if re.match(r'https://(video-downloads|lh\d)\.googleusercontent\.com/', link):
+        return link                       # ktoś podał gotowy adres
+
+    status, html, koncowy = cc.fetch(link, op)
+    if "accounts.google.com" in koncowy or status in (401, 403):
+        cc.die("Google poprosiło o logowanie." + JAK_ZDOBYC_CIASTECZKA)
+    if status >= 400:
+        cc.die("Strona odpowiedziała %d - link wygasł albo jest prywatny.%s"
+               % (status, JAK_ZDOBYC_CIASTECZKA))
+
+    lista = kandydaci(html)
+    if not lista:
+        cc.die("Nie znalazłem na tej stronie żadnego materiału.\n"
+               "Jeśli to link prywatny, dołóż ciasteczka.%s" % JAK_ZDOBYC_CIASTECZKA)
+
+    print("  sprawdzam %d kandydatów na strumień..." % len(lista))
+    for url in lista:
+        info = cc.is_video(url, op)
+        if info:
+            print("  trafiony: %s, %s" % (info[0], cc.human(info[1])))
+            return url
+    cc.die("Znalazłem %d adresów, ale żaden nie oddaje wideo - to pewnie zdjęcia,\n"
+           "albo Google zmieniło format strony. Wyślij mi ten link, dopasuję parser."
+           % len(lista))
+
+
+def main():
+    ap = argparse.ArgumentParser(description="Rzuć film z Google Photos na telewizor.")
+    ap.add_argument("link", help="link do filmu w Google Photos")
+    ap.add_argument("-c", "--cookies", help="ciasteczka w formacie Netscape (linki prywatne)")
+    ap.add_argument("-t", "--tv", help="adres IP telewizora")
+    ap.add_argument("-p", "--port", type=int, help="port serwera HTTP w cast-tv")
+    ap.add_argument("--url-only", action="store_true", help="wypisz sam adres, nie rzucaj na TV")
+    args = ap.parse_args()
+
+    op = cc.opener_for(args.cookies)
+    url = rozwiaz(args.link, op)
+    if args.url_only:
+        print(url)
+        return 0
+    # ciasteczka idą dalej do cast-tv: podpisane adresy Google bywają związane z sesją
+    return cc.cast(url, tv=args.tv, cookies=args.cookies, port=args.port,
+                   title="Google Photos")
+
+
+if __name__ == "__main__":
+    sys.exit(main())
