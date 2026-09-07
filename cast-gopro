@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Rzuca materiał z chmury GoPro na telewizor - bez pobierania na dysk.
+"""Play material from the GoPro cloud on a TV - without downloading it.
 
-    cast-gopro --token eyJhbGc...      zapisz token z przeglądarki (raz)
-    cast-gopro                         lista ostatnich nagrań
-    cast-gopro 3                       rzuć trzecią pozycję z listy na TV
-    cast-gopro https://gopro.com/v/AbC publiczny link "share"
+    cast-gopro --token eyJhbGc...      store a browser token (once)
+    cast-gopro                         list recent media
+    cast-gopro 3                       cast the third entry
+    cast-gopro https://gopro.com/v/AbC public share link
 """
 import argparse
 import json
@@ -18,12 +18,14 @@ import castcloud as cc  # noqa: E402
 API = "https://api.gopro.com"
 MEDIA_ACCEPT = "application/vnd.gopro.jk.media+json; version=2.0.0"
 TOKEN_FILE = os.path.join(cc.CONFIG, "gopro-token")
-JAK_ZDOBYC_TOKEN = """
-Token bierze się z zalogowanej przeglądarki (ważny kilka godzin):
+HOW_TO_GET_A_TOKEN = """
+The token comes from a logged-in browser and lasts a few hours:
 
-  1. wejdź na https://gopro.com/media-library/ i zaloguj się
-  2. F12 → zakładka Sieć → kliknij dowolne żądanie do api.gopro.com
-  3. skopiuj wartość nagłówka Authorization (część po "Bearer ", zaczyna się od eyJ)
+  1. open https://gopro.com/media-library/ and sign in
+  2. F12 -> Application -> Storage -> Cookies -> https://gopro.com
+  3. copy the value of gp_access_token (it starts with eyJ)
+     or: F12 -> Network -> any api.gopro.com request -> Request Headers ->
+         the part of "authorization" after "Bearer "
   4. cast-gopro --token eyJhbGc...
 """
 
@@ -37,16 +39,20 @@ def token(explicit=None):
         with open(TOKEN_FILE) as fh:
             return fh.read().strip()
     except FileNotFoundError:
-        cc.die("Brak tokenu GoPro." + JAK_ZDOBYC_TOKEN)
+        cc.die("No GoPro token stored." + HOW_TO_GET_A_TOKEN)
 
 
 def save_token(value):
+    value = value.strip()
+    # pasting twice in a row yields two copies glued together; the symmetry shows it
+    if len(value) % 2 == 0 and value[:len(value) // 2] == value[len(value) // 2:]:
+        value = value[:len(value) // 2]
+        print("The token was pasted twice - storing one copy.")
     os.makedirs(cc.CONFIG, exist_ok=True)
-    path = TOKEN_FILE
-    with open(path, "w") as fh:
-        fh.write(value.strip())
-    os.chmod(path, 0o600)
-    print("Token zapisany w %s (tylko dla Ciebie, 0600)." % path)
+    with open(TOKEN_FILE, "w") as fh:
+        fh.write(value)
+    os.chmod(TOKEN_FILE, 0o600)
+    print("Token stored in %s (yours only, mode 0600)." % TOKEN_FILE)
 
 
 def api(path, tok, params=None):
@@ -54,128 +60,140 @@ def api(path, tok, params=None):
     status, body, _ = cc.fetch(url, headers={
         "Authorization": "Bearer " + tok, "Accept": MEDIA_ACCEPT})
     if status == 401:
-        cc.die("GoPro odrzuciło token (401) - wygasł albo jest niepełny." + JAK_ZDOBYC_TOKEN)
+        cc.die("GoPro rejected the token (401) - expired or incomplete."
+               + HOW_TO_GET_A_TOKEN)
     if status >= 400:
-        cc.die("GoPro odpowiedziało %d:\n%s" % (status, body[:400]))
+        cc.die("GoPro answered %d:\n%s" % (status, body[:400]))
     try:
         return json.loads(body)
     except ValueError:
-        cc.die("Odpowiedź GoPro nie jest JSON-em:\n%s" % body[:400])
+        cc.die("GoPro's answer is not JSON:\n%s" % body[:400])
 
 
-def lista(tok, ile):
+def list_media(tok, count):
     data = api("/media/search", tok, params=(
         "fields=id,filename,captured_at,content_title,file_size,type,resolution,"
-        "duration&order_by=captured_at&per_page=%d&page=1" % ile))
+        "duration&order_by=captured_at&per_page=%d&page=1" % count))
     media = data.get("_embedded", {}).get("media")
     if media is None:
-        cc.die("Nie rozpoznaję odpowiedzi GoPro (klucze: %s).\n"
-               "Wklej mi ją, dopasuję parser." % ", ".join(data)[:200])
-    pozycje = []
+        cc.die("Unfamiliar answer from GoPro (keys: %s).\n"
+               "Send it over and the parser can be adjusted." % ", ".join(data)[:200])
+    items = []
     for m in media:
-        pozycje.append({
+        items.append({
             "id": m.get("id"),
-            "nazwa": m.get("content_title") or m.get("filename") or m.get("id"),
-            "data": (m.get("captured_at") or "")[:10],
-            "typ": m.get("type", ""),
-            "rozmiar": m.get("file_size"),
+            "name": m.get("content_title") or m.get("filename") or m.get("id"),
+            "date": (m.get("captured_at") or "")[:10],
+            "kind": m.get("type", ""),
+            "size": m.get("file_size"),
             "res": m.get("resolution", ""),
         })
-    cc.cache_write("gopro-list.json", pozycje)
-    return pozycje
+    cc.cache_write("gopro-list.json", items)
+    return items
 
 
-def pokaz(pozycje):
-    if not pozycje:
-        print("Biblioteka pusta albo filtr nic nie zwrócił.")
+def show(items):
+    if not items:
+        print("The library is empty, or the filter matched nothing.")
         return
-    szer = max(len(p["nazwa"]) for p in pozycje)
-    for i, p in enumerate(pozycje, 1):
+    width = max(len(i["name"]) for i in items)
+    for n, i in enumerate(items, 1):
         print("%3d. %-*s  %s  %-6s %8s  %s" % (
-            i, szer, p["nazwa"], p["data"] or "----------",
-            p["res"] or "", cc.human(p["rozmiar"]), p["typ"]))
-    print("\nRzuć na telewizor:  cast-gopro <numer>")
+            n, width, i["name"], i["date"] or "----------",
+            i["res"] or "", cc.human(i["size"]), i["kind"]))
+    print("\nCast one:  cast-gopro <number>")
 
 
-def adres_z_biblioteki(media_id, tok):
-    """Podpisany adres mp4 dla wpisu z chmury; kolejność jakości: source > high."""
-    data = api("/media/%s/download" % media_id, tok)
-    emb = data.get("_embedded", {})
-    kandydaci = []
-    for wariant in emb.get("variations", []) or []:
-        if (wariant.get("type") or "").lower() in ("mp4", "video", ""):
-            kandydaci.append((_ranga(wariant.get("label")), wariant.get("label", "?"),
-                              wariant.get("url")))
-    for plik in emb.get("files", []) or []:
-        kandydaci.append((0, "source", plik.get("url")))
-    kandydaci = [k for k in kandydaci if k[2]]
-    if not kandydaci:
-        cc.die("Brak adresu do pobrania w odpowiedzi GoPro (klucze: %s).\n"
-               "Wklej mi JSON-a, dopasuję parser." % ", ".join(emb) or "-")
-    kandydaci.sort(key=lambda k: k[0])
-    for _, label, url in kandydaci:
-        info = cc.is_video(url)
-        if info:
-            print("  jakość: %s (%s, %s)" % (label, info[0], cc.human(info[1])))
-            return url
-    print("  ! żaden wariant nie potwierdził się jako wideo, biorę pierwszy")
-    return kandydaci[0][2]
-
-
-def _ranga(label):
-    return {"source": 0, "high": 1, "high_res": 1, "mobile": 2, "low": 3}.get(
+def _rank(label):
+    """Lower is better. The names come from what the API actually returns."""
+    return {"source": 0, "high_res_proxy_mp4": 1, "high": 1, "high_res": 1,
+            "mobile": 2, "file": 2, "edit_proxy": 3, "low": 4}.get(
         (label or "").lower(), 5)
 
 
-def adres_z_linku(url):
-    """Publiczny link gopro.com/v/... - adres siedzi w JSON-ie na stronie."""
+def library_url(media_id, tok, quality="auto"):
+    """Signed mp4 address for a cloud entry; best quality first."""
+    data = api("/media/%s/download" % media_id, tok)
+    emb = data.get("_embedded", {})
+    options = []
+    for var in emb.get("variations", []) or []:
+        if (var.get("type") or "").lower() in ("mp4", "video", ""):
+            options.append((_rank(var.get("label")), var.get("label", "?"),
+                            var.get("url")))
+    for f in emb.get("files", []) or []:
+        # not the source: for the media tested these were 1280 px proxies
+        options.append((_rank("file"), "file", f.get("url")))
+    options = [o for o in options if o[2]]
+    if not options:
+        cc.die("No download address in GoPro's answer (keys: %s).\n"
+               "Send the JSON over and the parser can be adjusted."
+               % (", ".join(emb) or "-"))
+    options.sort(key=lambda o: o[0])
+    if quality == "proxy":          # a deliberately lighter file
+        options = [o for o in options if o[0] > 0] or options
+    elif quality == "source":
+        options = [o for o in options if o[0] == 0] or options
+    for _, label, url in options:
+        info = cc.is_video(url)
+        if info:
+            print("  quality: %s (%s, %s)" % (label, info[0], cc.human(info[1])))
+            return url
+    print("  ! no variant confirmed itself as video, taking the first one")
+    return options[0][2]
+
+
+def share_url(url):
+    """Public gopro.com/v/... link - the address sits in JSON on the page."""
     _, html, _ = cc.fetch(url)
-    kandydaci = re.findall(r'https?://[^"\'\\ ]+?\.mp4[^"\'\\ ]*', html)
-    # najpierw dłuższe adresy - podpisane linki do źródła są dłuższe od miniatur
-    for kand in sorted(set(kandydaci), key=len, reverse=True):
-        kand = kand.replace("\\u0026", "&").replace("\\/", "/")
-        if cc.is_video(kand):
-            return kand
-    cc.die("Nie znalazłem strumienia na tej stronie.\n"
-           "Sprawdź, czy link jest publiczny (Share → Copy link).")
+    found = re.findall(r'https?://[^"\'\\ ]+?\.mp4[^"\'\\ ]*', html)
+    # longest first: a signed source link is longer than a thumbnail's
+    for candidate in sorted(set(found), key=len, reverse=True):
+        candidate = candidate.replace("\\u0026", "&").replace("\\/", "/")
+        if cc.is_video(candidate):
+            return candidate
+    cc.die("No stream found on that page.\n"
+           "Check the link is public (Share -> Copy link).")
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Rzuć materiał z GoPro na telewizor.")
-    ap.add_argument("co", nargs="?", help="numer z listy, id materiału albo link gopro.com/v/...")
-    ap.add_argument("--token", help="zapisz token dostępu z przeglądarki i zakończ")
-    ap.add_argument("-n", "--ile", type=int, default=25, help="ile pozycji na liście")
-    ap.add_argument("-t", "--tv", help="adres IP telewizora")
-    ap.add_argument("-p", "--port", type=int, help="port serwera HTTP w cast-tv")
+    ap = argparse.ArgumentParser(description="Play GoPro cloud material on a TV.")
+    ap.add_argument("what", nargs="?",
+                    help="number from the listing, media id, or a gopro.com/v/... link")
+    ap.add_argument("--token", help="store an access token from the browser and exit")
+    ap.add_argument("-n", "--count", type=int, default=25, help="how many entries to list")
+    ap.add_argument("-q", "--quality", choices=("auto", "source", "proxy"), default="auto",
+                    help="auto takes the best variant, proxy a lighter preview")
+    ap.add_argument("-t", "--tv", help="TV address")
+    ap.add_argument("-p", "--port", type=int, help="HTTP port for cast-tv to serve on")
     ap.add_argument("--url-only", action="store_true",
-                    help="wypisz sam adres, nie rzucaj na TV")
+                    help="print the address instead of casting it")
     args = ap.parse_args()
 
     if args.token:
         save_token(args.token)
         return 0
 
-    if args.co and args.co.startswith(("http://", "https://")):
-        url, tytul = adres_z_linku(args.co), None
-    elif args.co:
+    if args.what and args.what.startswith(("http://", "https://")):
+        url, title = share_url(args.what), None
+    elif args.what:
         tok = token()
-        pozycje = cc.cache_read("gopro-list.json")
-        if args.co.isdigit() and pozycje and 1 <= int(args.co) <= len(pozycje):
-            wpis = pozycje[int(args.co) - 1]
-        elif args.co.isdigit():
-            cc.die("Nie mam listy w pamięci - odpal najpierw `cast-gopro`.")
+        items = cc.cache_read("gopro-list.json")
+        if args.what.isdigit() and items and 1 <= int(args.what) <= len(items):
+            item = items[int(args.what) - 1]
+        elif args.what.isdigit():
+            cc.die("No listing cached - run `cast-gopro` first.")
         else:
-            wpis = {"id": args.co, "nazwa": args.co}
-        print("Pobieram adres dla: %s" % wpis["nazwa"])
-        url, tytul = adres_z_biblioteki(wpis["id"], tok), wpis["nazwa"]
+            item = {"id": args.what, "name": args.what}
+        print("Resolving: %s" % item["name"])
+        url, title = library_url(item["id"], tok, args.quality), item["name"]
     else:
-        pokaz(lista(token(), args.ile))
+        show(list_media(token(), args.count))
         return 0
 
     if args.url_only:
         print(url)
         return 0
-    return cc.cast(url, tv=args.tv, port=args.port, title=tytul)
+    return cc.cast(url, tv=args.tv, port=args.port, title=title)
 
 
 if __name__ == "__main__":

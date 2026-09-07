@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
-"""Rzuca film z Google Photos na telewizor - bez pobierania na dysk.
+"""Play a Google Photos video on a TV - without downloading it.
 
-    cast-photos https://photos.app.goo.gl/xxxx        link "udostępnij"
+    cast-photos https://photos.app.goo.gl/xxxx        share link
     cast-photos https://photos.google.com/photo/ID -c cookies.txt
 
-Google nie daje na to API: od 31.03.2025 Photos Library API pokazuje aplikacji
-tylko to, co użytkownik ręcznie wskaże, więc nie da się przeglądać biblioteki.
-Punktem zaczepienia jest konkretny link do filmu - publiczny albo, z Twoimi
-ciasteczkami, prywatny.
+Google offers no API for this: since 31 March 2025 the Photos Library API
+only exposes items the user explicitly picks, so a library cannot be browsed.
+The entry point is a link to one video - public, or private with your cookies.
 """
 import argparse
 import os
@@ -17,87 +16,117 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
 import castcloud as cc  # noqa: E402
 
-# kolejność prób: pełne pobranie, potem coraz niższe strumienie progresywne
-SUFIKSY = ["=dv", "=m37", "=m22", "=m18"]
-JAK_ZDOBYC_CIASTECZKA = """
-Dla prywatnego linku potrzebne są Twoje ciasteczka Google:
-  rozszerzenie typu "Get cookies.txt" → eksport dla photos.google.com → cookies.txt
+# tried in order: full download first, then progressively smaller streams
+SUFFIXES = ["=dv", "=m37", "=m22", "=m18"]
+# hosts where Google serves the media itself rather than a page
+MEDIA_HOST = re.compile(
+    r'https://(?:(?:lh\d|ci\d?|yt\d)\.googleusercontent\.com'
+    r'|video-downloads\.googleusercontent\.com'
+    r'|photos\.fife\.usercontent\.google\.com)/')
+HOW_TO_GET_COOKIES = """
+A private link needs your Google cookies:
+  a "Get cookies.txt" style extension -> export for photos.google.com -> cookies.txt
   cast-photos <link> -c cookies.txt
-Publiczny link (Udostępnij → Utwórz link) działa bez tego.
+A share link (Share -> Create link) needs none of this.
 """
 
 
-def odsloc(tekst):
-    """HTML/JSON z Google jest podwójnie eskejpowany."""
-    return (tekst.replace("\\u003d", "=").replace("\\u0026", "&")
-                 .replace("\\/", "/").replace("\\u003f", "?"))
+def unescape_google(text):
+    """HTML and JSON from Google arrive doubly escaped."""
+    return (text.replace("\\u003d", "=").replace("\\u0026", "&")
+                .replace("\\/", "/").replace("\\u003f", "?"))
 
 
-def kandydaci(html):
-    """Adresy, które mogą być strumieniem wideo - od najpewniejszych."""
-    html = odsloc(html)
-    lista, widziane = [], set()
+def variants(address):
+    """Turn a media address into candidate video variants, keeping its query.
 
-    def dodaj(url):
-        if url not in widziane:
-            widziane.add(url)
-            lista.append(url)
+    An address copied off the page carries a thumbnail suffix
+    (=w539-h959-s-k-no-gm), and anything after "?" (authuser=1) must survive.
+    """
+    base, _, query = address.partition("?")
+    base = base.split("=")[0]
+    tail = ("?" + query) if query else ""
+    return [base + s + tail for s in SUFFIXES]
 
-    # 1. gotowe adresy do pobrania wideo
-    for m in re.findall(r'https://video-downloads\.googleusercontent\.com/[^"\'\\ <>]+', html):
-        dodaj(m)
-    # 2. bazowe identyfikatory materiału - dokładamy własne sufiksy
-    bazy = re.findall(
-        r'https://(?:lh\d|ci\d?|yt\d)\.googleusercontent\.com/'
+
+def candidates(html):
+    """Addresses that could be a video stream, most promising first."""
+    html = unescape_google(html)
+    out, seen = [], set()
+
+    def add(url):
+        if url not in seen:
+            seen.add(url)
+            out.append(url)
+
+    # 1. ready-made video download addresses
+    for m in re.findall(r'https://video-downloads\.googleusercontent\.com/[^"\'\\ <>]+',
+                        html):
+        add(m)
+    # 2. base media identifiers - we append our own suffixes
+    bases = re.findall(
+        r'https://(?:(?:lh\d|ci\d?|yt\d)\.googleusercontent\.com'
+        r'|photos\.fife\.usercontent\.google\.com)/'
         r'(?:[A-Za-z0-9_\-]{1,12}/)*[A-Za-z0-9_\-]{20,}', html)
-    for baza in dict.fromkeys(bazy):
-        for sufiks in SUFIKSY:
-            dodaj(baza + sufiks)
-    return lista
+    for base in dict.fromkeys(bases):
+        for variant in variants(base):
+            add(variant)
+    return out
 
 
-def rozwiaz(link, op):
-    if re.match(r'https://(video-downloads|lh\d)\.googleusercontent\.com/', link):
-        return link                       # ktoś podał gotowy adres
+def resolve(link, op):
+    if MEDIA_HOST.match(link):
+        # already a media address - only the right variant is missing
+        tries = [link] if "/video-downloads" in link else variants(link)
+        for url in tries:
+            info = cc.is_video(url, op)
+            if info:
+                print("  match: %s, %s" % (info[0], cc.human(info[1])))
+                return url
+        cc.die("That address serves no video - Google answers 403.\n"
+               "It is an address from inside a logged-in page, valid only in your\n"
+               "session. Use Share -> Create link, or add cookies (-c)."
+               + HOW_TO_GET_COOKIES)
 
-    status, html, koncowy = cc.fetch(link, op)
-    if "accounts.google.com" in koncowy or status in (401, 403):
-        cc.die("Google poprosiło o logowanie." + JAK_ZDOBYC_CIASTECZKA)
+    status, html, final = cc.fetch(link, op)
+    if "accounts.google.com" in final or status in (401, 403):
+        cc.die("Google asked for a login." + HOW_TO_GET_COOKIES)
     if status >= 400:
-        cc.die("Strona odpowiedziała %d - link wygasł albo jest prywatny.%s"
-               % (status, JAK_ZDOBYC_CIASTECZKA))
+        cc.die("The page answered %d - the link expired or is private.%s"
+               % (status, HOW_TO_GET_COOKIES))
 
-    lista = kandydaci(html)
-    if not lista:
-        cc.die("Nie znalazłem na tej stronie żadnego materiału.\n"
-               "Jeśli to link prywatny, dołóż ciasteczka.%s" % JAK_ZDOBYC_CIASTECZKA)
+    found = candidates(html)
+    if not found:
+        cc.die("No media found on that page.\n"
+               "If the link is private, add cookies.%s" % HOW_TO_GET_COOKIES)
 
-    print("  sprawdzam %d kandydatów na strumień..." % len(lista))
-    for url in lista:
+    print("  probing %d candidate streams..." % len(found))
+    for url in found:
         info = cc.is_video(url, op)
         if info:
-            print("  trafiony: %s, %s" % (info[0], cc.human(info[1])))
+            print("  match: %s, %s" % (info[0], cc.human(info[1])))
             return url
-    cc.die("Znalazłem %d adresów, ale żaden nie oddaje wideo - to pewnie zdjęcia,\n"
-           "albo Google zmieniło format strony. Wyślij mi ten link, dopasuję parser."
-           % len(lista))
+    cc.die("Found %d addresses, none of which serves video - they are probably\n"
+           "stills, or Google changed the page format. Send the link over and the\n"
+           "parser can be adjusted." % len(found))
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Rzuć film z Google Photos na telewizor.")
-    ap.add_argument("link", help="link do filmu w Google Photos")
-    ap.add_argument("-c", "--cookies", help="ciasteczka w formacie Netscape (linki prywatne)")
-    ap.add_argument("-t", "--tv", help="adres IP telewizora")
-    ap.add_argument("-p", "--port", type=int, help="port serwera HTTP w cast-tv")
-    ap.add_argument("--url-only", action="store_true", help="wypisz sam adres, nie rzucaj na TV")
+    ap = argparse.ArgumentParser(description="Play a Google Photos video on a TV.")
+    ap.add_argument("link", help="link to a video in Google Photos")
+    ap.add_argument("-c", "--cookies", help="Netscape cookie jar (for private links)")
+    ap.add_argument("-t", "--tv", help="TV address")
+    ap.add_argument("-p", "--port", type=int, help="HTTP port for cast-tv to serve on")
+    ap.add_argument("--url-only", action="store_true",
+                    help="print the address instead of casting it")
     args = ap.parse_args()
 
     op = cc.opener_for(args.cookies)
-    url = rozwiaz(args.link, op)
+    url = resolve(args.link, op)
     if args.url_only:
         print(url)
         return 0
-    # ciasteczka idą dalej do cast-tv: podpisane adresy Google bywają związane z sesją
+    # cookies travel on to cast-tv: signed Google addresses can be session-bound
     return cc.cast(url, tv=args.tv, cookies=args.cookies, port=args.port,
                    title="Google Photos")
 

@@ -62,6 +62,7 @@ nothing is downloaded in that case either.
 cast-gopro --token eyJhbGc...              # store a browser token once
 cast-gopro                                 # list the GoPro cloud library
 cast-gopro 3                               # cast the third entry
+cast-gopro 3 -q proxy                      # ... as a lighter proxy variant
 cast-gopro https://gopro.com/v/AbCdE       # public GoPro share link
 cast-photos https://photos.app.goo.gl/xxx  # Google Photos share link
 cast-photos <private link> -c cookies.txt  # private item, with your cookies
@@ -70,7 +71,10 @@ cast-photos <private link> -c cookies.txt  # private item, with your cookies
 **GoPro** talks to `api.gopro.com` with a bearer token copied out of a logged-in browser
 (devtools, the `Authorization` header); it expires after a few hours. The library listing is
 cached so items can be picked by number, and the highest available variation that verifies as
-video is the one cast.
+video is the one cast. Camera originals can be too much for a TV to decode - a 5.3K GoPro clip
+runs at 119 Mbit/s in a 3840x3360 frame, which this TV refuses outright - so `-q proxy` picks
+the proxy variant the cloud already holds. When the TV never starts, the file is probed and the
+likely reason printed rather than left to guesswork.
 
 **Google Photos** has no usable API for this — since 31 March 2025 the Library API only exposes
 items the user explicitly picks — so the starting point is a link to one video. The page is

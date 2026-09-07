@@ -1,8 +1,8 @@
-"""Wspólne części dla cast-gopro i cast-photos.
+"""Shared parts of cast-gopro and cast-photos.
 
-Obie komendy robią to samo w dwóch krokach: zamieniają adres strony albo wpis
-w bibliotece na bezpośredni adres strumienia, a potem oddają go cast-tv, które
-przepuszcza dane do telewizora. Nic nie ląduje na dysku.
+Both commands do the same two things: turn a link, or an entry in a cloud
+library, into a direct stream address, and then hand that to cast-tv, which
+relays it to the TV. Nothing is written to disk.
 """
 import http.cookiejar
 import json
@@ -25,22 +25,22 @@ def die(msg, code=1):
 
 
 def opener_for(cookies_path):
-    """Opener urllib z ciasteczkami w formacie Netscape (albo bez nich)."""
+    """A urllib opener carrying a Netscape cookie jar, or a plain one."""
     if not cookies_path:
         return urllib.request.build_opener()
     jar = http.cookiejar.MozillaCookieJar()
     try:
         jar.load(os.path.abspath(cookies_path), ignore_discard=True, ignore_expires=True)
     except Exception as e:
-        die("Nie wczytałem ciasteczek z %s: %s" % (cookies_path, e))
-    print("  ciasteczka: %d wpisów" % len(jar))
+        die("Could not read cookies from %s: %s" % (cookies_path, e))
+    print("  cookies: %d entries" % len(jar))
     return urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
 
 
 def fetch(url, op=None, headers=None, limit=6_000_000):
-    """Pobiera stronę/JSON. Zwraca (status, tekst, adres_końcowy)."""
+    """Fetch a page or JSON document. Returns (status, text, final_url)."""
     req = urllib.request.Request(url, headers=dict(
-        {"User-Agent": UA, "Accept-Language": "pl,en;q=0.8"}, **(headers or {})))
+        {"User-Agent": UA, "Accept-Language": "en;q=0.9"}, **(headers or {})))
     try:
         with (op.open(req, timeout=30) if op else
               urllib.request.urlopen(req, timeout=30)) as r:
@@ -48,14 +48,14 @@ def fetch(url, op=None, headers=None, limit=6_000_000):
     except urllib.error.HTTPError as e:
         return e.code, e.read(limit).decode("utf-8", "replace"), url
     except Exception as e:
-        die("Nie udało się pobrać %s: %s" % (url, e))
+        die("Could not fetch %s: %s" % (url, e))
 
 
 def is_video(url, op=None, headers=None):
-    """Sprawdza pierwszym bajtem, czy adres naprawdę oddaje wideo.
+    """Ask for one byte to find out whether an address really serves video.
 
-    HEAD bywa blokowany na googleusercontent, więc pytamy o zakres 0-1 bajtu.
-    Zwraca (content_type, rozmiar_lub_None) albo None.
+    HEAD is often refused on googleusercontent, hence the range request.
+    Returns (content_type, size_or_None), or None.
     """
     req = urllib.request.Request(url, headers=dict(
         {"User-Agent": UA, "Range": "bytes=0-1"}, **(headers or {})))
@@ -69,8 +69,13 @@ def is_video(url, op=None, headers=None):
                 size = int(rng.rsplit("/", 1)[1])
             elif r.headers.get("Content-Length", "").isdigit():
                 size = int(r.headers["Content-Length"])
-            if ctype.startswith("video/") or ctype in (
-                    "application/octet-stream", "application/mp4"):
+            # CDNs label video inconsistently - GoPro serves its source files as
+            # binary/octet-stream - so Content-Type alone cannot be trusted.
+            path = urllib.parse.urlparse(url).path.lower()
+            if (ctype.startswith("video/")
+                    or ctype.endswith("/octet-stream")
+                    or ctype == "application/mp4"
+                    or path.endswith((".mp4", ".m4v", ".mov", ".mkv", ".ts"))):
                 return ctype, size
             return None
     except Exception:
@@ -87,14 +92,14 @@ def human(size):
 
 
 def cast_tv_path():
-    """cast-tv leży obok tego pliku (symlink w ~/.local/bin też zadziała)."""
+    """cast-tv sits next to this file (a symlink in ~/.local/bin works too)."""
     here = os.path.dirname(os.path.realpath(__file__))
     local = os.path.join(here, "cast-tv")
     return local if os.access(local, os.X_OK) else "cast-tv"
 
 
 def cast(url, tv=None, cookies=None, port=None, title=None):
-    """Oddaje adres do cast-tv, które przepuszcza strumień do telewizora."""
+    """Hand the address to cast-tv, which relays the stream to the TV."""
     cmd = [cast_tv_path(), url]
     if tv:
         cmd += ["-t", tv]
@@ -103,11 +108,11 @@ def cast(url, tv=None, cookies=None, port=None, title=None):
     if port:
         cmd += ["-p", str(port)]
     if title:
-        print("▶  %s" % title, flush=True)   # przed oddaniem stdout do cast-tv
+        cmd += ["--title", title]   # the name at the source is often meaningless
     try:
         return subprocess.call(cmd)
     except FileNotFoundError:
-        die("Nie znalazłem cast-tv w PATH ani obok %s" % __file__)
+        die("cast-tv is neither in PATH nor next to %s" % __file__)
 
 
 def cache_write(name, data):
