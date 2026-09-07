@@ -156,7 +156,7 @@ def main():
         return 0
 
     if args.co and args.co.startswith(("http://", "https://")):
-        url, tytul = adres_z_linku(args.co), args.co
+        url, tytul = adres_z_linku(args.co), None
     elif args.co:
         tok = token()
         pozycje = cc.cache_read("gopro-list.json")

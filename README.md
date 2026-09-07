@@ -44,6 +44,11 @@ cookies if given) and re-serves the stream to the TV as plain HTTP, forwarding `
 both ways so seeking still works. Data passes through memory in 256 KB chunks and is never
 written to disk.
 
+A source that ignores `Range` and answers `200` with the whole file is compensated for: the
+relay skips to the requested offset itself and synthesises the `206` the TV expects. Without
+that the TV asks for the offset of the MP4 index, receives the start of the file, and quietly
+refuses to play. `--debug` prints every request the TV makes, which is how that was found.
+
 This exists because the TV will not fetch an HTTPS URL itself — it accepts the SOAP call
 without complaint and then sits in `STOPPED` — and because it has no way to authenticate
 against a cloud account.

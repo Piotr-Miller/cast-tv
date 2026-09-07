@@ -102,17 +102,25 @@ class RangeHandler(http.server.BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
     files = {}          # ścieżka URL -> ścieżka na dysku
     remote = {}         # ścieżka URL -> zdalny URL (tryb proxy)
+    debug = False       # wypisuj żądania telewizora
     opener = None       # urllib opener z ciasteczkami, dla trybu proxy
     caption_url = None
 
     def log_message(self, *a):
         pass
 
+    def dbg(self, msg):
+        if self.debug:
+            sys.stderr.write("\n   [tv] %s\n" % msg)
+            sys.stderr.flush()
+
     def _resolve(self):
         path = urllib.parse.unquote(self.path.split("?")[0])
         return self.files.get(path)
 
     def _headers(self, disk, size, start, end, partial):
+        self.dbg("%s %s  Range=%s -> %d-%d/%d" % (
+            self.command, self.path, self.headers.get("Range", "-"), start, end, size))
         ext = os.path.splitext(disk)[1].lower()
         self.send_response(206 if partial else 200)
         self.send_header("Content-Type", MIME.get(ext, "application/octet-stream"))
@@ -151,22 +159,59 @@ class RangeHandler(http.server.BaseHTTPRequestHandler):
 
     def _proxy(self, body=True):
         upstream = self._remote()
+        chce = self.headers.get("Range")
+        start = end = None
+        m = re.match(r"bytes=(\d+)-(\d*)", chce or "")
+        if m:
+            start = int(m.group(1))
+            end = int(m.group(2)) if m.group(2) else None
+
         req = urllib.request.Request(upstream, headers={
             "User-Agent": "Mozilla/5.0", "Accept": "*/*"})
-        if self.headers.get("Range"):
-            req.add_header("Range", self.headers["Range"])
+        if chce:
+            req.add_header("Range", chce)
+        self.dbg("%s %s  Range=%s" % (self.command, self.path, chce or "-"))
         try:
             resp = (self.opener or urllib.request).urlopen(req, timeout=30)
         except Exception as e:
             sys.stderr.write("\n   ! źródło odmówiło: %s\n" % e)
             self.send_error(502); return
+
         with resp:
-            self.send_response(resp.status)
-            for h in ("Content-Type", "Content-Length", "Content-Range", "Accept-Ranges"):
-                if resp.headers.get(h):
-                    self.send_header(h, resp.headers[h])
-            if not resp.headers.get("Accept-Ranges"):
+            dlugosc = resp.headers.get("Content-Length")
+            self.dbg("źródło: %s %s, %s bajtów" % (
+                resp.status, resp.headers.get("Content-Type", "?"), dlugosc or "?"))
+
+            # Źródło mogło zignorować Range i oddać całość od zera. Telewizor
+            # czeka wtedy na bajty spod offsetu, dostaje początek pliku i milknie
+            # - więc docinamy zakres sami.
+            docinamy = start is not None and resp.status != 206
+            calosc = int(dlugosc) if (dlugosc or "").isdigit() else None
+            if docinamy and calosc:
+                koniec = min(end if end is not None else calosc - 1, calosc - 1)
+                if start > koniec:
+                    self.send_response(416)
+                    self.send_header("Content-Range", "bytes */%d" % calosc)
+                    self.end_headers(); return
+                self.send_response(206)
+                if resp.headers.get("Content-Type"):
+                    self.send_header("Content-Type", resp.headers["Content-Type"])
+                self.send_header("Content-Range", "bytes %d-%d/%d" % (start, koniec, calosc))
+                self.send_header("Content-Length", str(koniec - start + 1))
                 self.send_header("Accept-Ranges", "bytes")
+                do_wyslania = koniec - start + 1
+                self.dbg("docinam zakres za źródło: %d-%d/%d" % (start, koniec, calosc))
+            else:
+                self.send_response(resp.status)
+                for h in ("Content-Type", "Content-Length", "Content-Range", "Accept-Ranges"):
+                    if resp.headers.get(h):
+                        self.send_header(h, resp.headers[h])
+                if not resp.headers.get("Accept-Ranges"):
+                    self.send_header("Accept-Ranges", "bytes")
+                do_wyslania = None
+                if docinamy:      # nieznana długość - da się tylko przewinąć i lecieć do końca
+                    self.close_connection = True
+
             self.send_header("transferMode.dlna.org", "Streaming")
             self.send_header("contentFeatures.dlna.org",
                              "DLNA.ORG_OP=01;DLNA.ORG_CI=0;DLNA.ORG_FLAGS="
@@ -174,12 +219,23 @@ class RangeHandler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             if not body:
                 return
+
             try:
-                while True:
-                    chunk = resp.read(256 * 1024)
-                    if not chunk:
+                if docinamy:                     # przewiń u siebie do żądanego offsetu
+                    zostalo = start
+                    while zostalo > 0:
+                        kawalek = resp.read(min(256 * 1024, zostalo))
+                        if not kawalek:
+                            return
+                        zostalo -= len(kawalek)
+                while do_wyslania is None or do_wyslania > 0:
+                    ile = 256 * 1024 if do_wyslania is None else min(256 * 1024, do_wyslania)
+                    kawalek = resp.read(ile)
+                    if not kawalek:
                         break
-                    self.wfile.write(chunk)
+                    self.wfile.write(kawalek)
+                    if do_wyslania is not None:
+                        do_wyslania -= len(kawalek)
             except (BrokenPipeError, ConnectionResetError):
                 pass
 
@@ -275,6 +331,8 @@ def main():
     ap.add_argument("-t", "--tv", default=os.environ.get("CAST_TV"),
                     help="adres IP telewizora (domyślnie: autowykrywanie)")
     ap.add_argument("-p", "--port", type=int, default=8895, help="port serwera HTTP")
+    ap.add_argument("-d", "--debug", action="store_true",
+                    help="wypisuj żądania, które telewizor wysyła do serwera")
     ap.add_argument("--stop", action="store_true", help="zatrzymaj odtwarzanie i wyjdź")
     ap.add_argument("--list", "--lista", dest="lista", action="store_true",
                     help="pokaż wykryte odbiorniki")
@@ -358,6 +416,7 @@ def main():
     except OSError as e:
         print("Nie mogę zająć portu %d: %s" % (args.port, e))
         return 1
+    RangeHandler.debug = args.debug
     threading.Thread(target=srv.serve_forever, daemon=True).start()
 
     title = os.path.splitext(os.path.basename(path))[0]
