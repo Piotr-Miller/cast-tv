@@ -83,7 +83,9 @@ the first that answers as video wins. Public share links need nothing; private l
 cookie jar.
 
 Both resolvers are written defensively because neither format is documented and both can change
-without notice: when nothing resolves, the command says what it saw instead of failing blind.
+without notice: when nothing resolves, the command says what it saw instead of failing blind. On
+a real share link the page yielded eight candidates, of which `=dv` - the original, not a
+downscaled stream - was the one that answered as video.
 
 ## Limitations
 
@@ -105,5 +107,6 @@ because it carries course-licensed material that must not enter a public reposit
 
 ## Tested on
 
-Samsung QE83S85FAEXXH (83" OLED, Tizen, 2025) and Fedora 44. Any DLNA renderer exposing
+Samsung QE83S85FAEXXH (83" OLED, Tizen, 2025) and Fedora 44, against a live GoPro cloud library
+and a live Google Photos share link. Any DLNA renderer exposing
 `AVTransport:1` should work; the subtitle path is Samsung-specific.

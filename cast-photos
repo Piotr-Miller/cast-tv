@@ -74,6 +74,12 @@ def candidates(html):
     return out
 
 
+def _variant_of(url):
+    """The suffix that decides quality: =dv is the original, =m18 the smallest."""
+    tail = url.split("?")[0].rsplit("=", 1)
+    return "=" + tail[1] if len(tail) == 2 else "direct"
+
+
 def resolve(link, op):
     if MEDIA_HOST.match(link):
         # already a media address - only the right variant is missing
@@ -81,7 +87,8 @@ def resolve(link, op):
         for url in tries:
             info = cc.is_video(url, op)
             if info:
-                print("  match: %s, %s" % (info[0], cc.human(info[1])))
+                print("  match: %s %s, %s" % (_variant_of(url), info[0],
+                                              cc.human(info[1])))
                 return url
         cc.die("That address serves no video - Google answers 403.\n"
                "It is an address from inside a logged-in page, valid only in your\n"
@@ -104,7 +111,8 @@ def resolve(link, op):
     for url in found:
         info = cc.is_video(url, op)
         if info:
-            print("  match: %s, %s" % (info[0], cc.human(info[1])))
+            print("  match: %s %s, %s" % (_variant_of(url), info[0],
+                                          cc.human(info[1])))
             return url
     cc.die("Found %d addresses, none of which serves video - they are probably\n"
            "stills, or Google changed the page format. Send the link over and the\n"
