@@ -1,0 +1,404 @@
+#!/usr/bin/env python3
+"""Wysyła lokalny plik wideo na telewizor Samsung (DLNA/UPnP AVTransport).
+
+    cast-tv film.mkv
+    cast-tv film.mkv -s napisy.srt
+    cast-tv --stop
+"""
+import argparse, http.cookiejar, http.server, os, re, socket, socketserver
+import subprocess, sys, threading, time
+import urllib.parse, urllib.request
+from xml.sax.saxutils import escape, unescape
+
+SSDP_ADDR, SSDP_PORT = "239.255.255.250", 1900
+AVT = "urn:schemas-upnp-org:service:AVTransport:1"
+RC = "urn:schemas-upnp-org:service:RenderingControl:1"
+
+MIME = {".mkv": "video/x-matroska", ".mp4": "video/mp4", ".m4v": "video/mp4",
+        ".avi": "video/x-msvideo", ".mov": "video/quicktime", ".ts": "video/mpeg",
+        ".m2ts": "video/mp2t", ".mpg": "video/mpeg", ".mpeg": "video/mpeg",
+        ".webm": "video/webm", ".wmv": "video/x-ms-wmv", ".mp3": "audio/mpeg",
+        ".flac": "audio/flac", ".m4a": "audio/mp4", ".srt": "application/x-subrip",
+        ".smi": "application/smil", ".ass": "text/plain", ".vtt": "text/vtt"}
+
+
+# ---------------------------------------------------------------- wykrywanie
+def discover(timeout=4):
+    """Zwraca listę (ip, control_url, nazwa) znalezionych rendererów."""
+    msg = ("M-SEARCH * HTTP/1.1\r\nHOST:%s:%d\r\nMAN:\"ssdp:discover\"\r\n"
+           "MX:2\r\nST:urn:schemas-upnp-org:device:MediaRenderer:1\r\n\r\n"
+           % (SSDP_ADDR, SSDP_PORT)).encode()
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    s.settimeout(timeout)
+    s.sendto(msg, (SSDP_ADDR, SSDP_PORT))
+    found, deadline = {}, time.time() + timeout
+    while time.time() < deadline:
+        try:
+            data, addr = s.recvfrom(65507)
+        except socket.timeout:
+            break
+        m = re.search(r"(?i)^location:\s*(\S+)", data.decode("utf-8", "replace"), re.M)
+        if m and addr[0] not in found:
+            found[addr[0]] = m.group(1)
+    out = []
+    for ip, loc in found.items():
+        try:
+            xml = urllib.request.urlopen(loc, timeout=3).read().decode("utf-8", "replace")
+        except Exception:
+            continue
+        ctrl = service_control_url(xml, AVT)
+        if ctrl:
+            name = re.search(r"<friendlyName>(.*?)</friendlyName>", xml, re.S)
+            out.append((ip, urllib.parse.urljoin(loc, ctrl),
+                        unescape(name.group(1), {"&quot;": '"', "&apos;": "'"})
+                        if name else ip))
+    return out
+
+
+def service_control_url(xml, svc_type):
+    for blob in re.findall(r"<service>(.*?)</service>", xml, re.S):
+        if svc_type in blob:
+            m = re.search(r"<controlURL>(.*?)</controlURL>", blob, re.S)
+            if m:
+                return m.group(1).strip()
+    return None
+
+
+def control_urls(ip):
+    """Adresy sterujące AVTransport i RenderingControl telewizora."""
+    for port, path in ((9197, "/dmr"), (7676, "/dmr"), (9197, "/"), (52235, "/dmr")):
+        loc = "http://%s:%d%s" % (ip, port, path)
+        try:
+            xml = urllib.request.urlopen(loc, timeout=3).read().decode("utf-8", "replace")
+        except Exception:
+            continue
+        avt = service_control_url(xml, AVT)
+        if avt:
+            return (urllib.parse.urljoin(loc, avt),
+                    urllib.parse.urljoin(loc, service_control_url(xml, RC) or ""))
+    return None, None
+
+
+# --------------------------------------------------------------------- SOAP
+def soap(url, svc, action, body=""):
+    env = ('<?xml version="1.0"?><s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"'
+           ' s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/"><s:Body>'
+           '<u:{a} xmlns:u="{s}"><InstanceID>0</InstanceID>{b}</u:{a}>'
+           "</s:Body></s:Envelope>").format(a=action, s=svc, b=body)
+    req = urllib.request.Request(url, env.encode(), {
+        "Content-Type": 'text/xml; charset="utf-8"',
+        "SOAPAction": '"%s#%s"' % (svc, action)})
+    return urllib.request.urlopen(req, timeout=10).read().decode("utf-8", "replace")
+
+
+def tag(xml, name):
+    m = re.search(r"<%s>(.*?)</%s>" % (name, name), xml, re.S)
+    return m.group(1) if m else ""
+
+
+# ------------------------------------------------------------ serwer plików
+class RangeHandler(http.server.BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
+    files = {}          # ścieżka URL -> ścieżka na dysku
+    remote = {}         # ścieżka URL -> zdalny URL (tryb proxy)
+    opener = None       # urllib opener z ciasteczkami, dla trybu proxy
+    caption_url = None
+
+    def log_message(self, *a):
+        pass
+
+    def _resolve(self):
+        path = urllib.parse.unquote(self.path.split("?")[0])
+        return self.files.get(path)
+
+    def _headers(self, disk, size, start, end, partial):
+        ext = os.path.splitext(disk)[1].lower()
+        self.send_response(206 if partial else 200)
+        self.send_header("Content-Type", MIME.get(ext, "application/octet-stream"))
+        self.send_header("Content-Length", str(end - start + 1))
+        self.send_header("Accept-Ranges", "bytes")
+        if partial:
+            self.send_header("Content-Range", "bytes %d-%d/%d" % (start, end, size))
+        # nagłówki, których oczekuje DLNA/Samsung
+        self.send_header("transferMode.dlna.org", "Streaming")
+        self.send_header("contentFeatures.dlna.org",
+                         "DLNA.ORG_OP=01;DLNA.ORG_CI=0;DLNA.ORG_FLAGS="
+                         "01700000000000000000000000000000")
+        if self.caption_url and ext not in (".srt", ".smi", ".ass", ".vtt"):
+            self.send_header("CaptionInfo.sec", self.caption_url)
+        self.end_headers()
+
+    def _range(self, size):
+        rng = self.headers.get("Range")
+        if not rng:
+            return 0, size - 1, False
+        m = re.match(r"bytes=(\d*)-(\d*)", rng)
+        if not m:
+            return 0, size - 1, False
+        a, b = m.group(1), m.group(2)
+        if a == "":                       # bytes=-N (ogon pliku)
+            start, end = max(0, size - int(b)), size - 1
+        else:
+            start = int(a)
+            end = int(b) if b else size - 1
+        return start, min(end, size - 1), True
+
+    # ---- tryb proxy: laptop pobiera po HTTPS/z ciasteczkami, TV dostaje HTTP
+    def _remote(self):
+        path = urllib.parse.unquote(self.path.split("?")[0])
+        return self.remote.get(path)
+
+    def _proxy(self, body=True):
+        upstream = self._remote()
+        req = urllib.request.Request(upstream, headers={
+            "User-Agent": "Mozilla/5.0", "Accept": "*/*"})
+        if self.headers.get("Range"):
+            req.add_header("Range", self.headers["Range"])
+        try:
+            resp = (self.opener or urllib.request).urlopen(req, timeout=30)
+        except Exception as e:
+            sys.stderr.write("\n   ! źródło odmówiło: %s\n" % e)
+            self.send_error(502); return
+        with resp:
+            self.send_response(resp.status)
+            for h in ("Content-Type", "Content-Length", "Content-Range", "Accept-Ranges"):
+                if resp.headers.get(h):
+                    self.send_header(h, resp.headers[h])
+            if not resp.headers.get("Accept-Ranges"):
+                self.send_header("Accept-Ranges", "bytes")
+            self.send_header("transferMode.dlna.org", "Streaming")
+            self.send_header("contentFeatures.dlna.org",
+                             "DLNA.ORG_OP=01;DLNA.ORG_CI=0;DLNA.ORG_FLAGS="
+                             "01700000000000000000000000000000")
+            self.end_headers()
+            if not body:
+                return
+            try:
+                while True:
+                    chunk = resp.read(256 * 1024)
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+
+    def do_HEAD(self):
+        if self._remote():
+            self._proxy(body=False); return
+        disk = self._resolve()
+        if not disk:
+            self.send_error(404); return
+        size = os.path.getsize(disk)
+        start, end, partial = self._range(size)
+        self._headers(disk, size, start, end, partial)
+
+    def do_GET(self):
+        if self._remote():
+            self._proxy(); return
+        disk = self._resolve()
+        if not disk:
+            self.send_error(404); return
+        size = os.path.getsize(disk)
+        start, end, partial = self._range(size)
+        self._headers(disk, size, start, end, partial)
+        remaining = end - start + 1
+        try:
+            with open(disk, "rb") as fh:
+                fh.seek(start)
+                while remaining > 0:
+                    chunk = fh.read(min(256 * 1024, remaining))
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+                    remaining -= len(chunk)
+        except (BrokenPipeError, ConnectionResetError):
+            pass          # telewizor przewinął albo zamknął połączenie
+
+
+class Server(socketserver.ThreadingTCPServer):
+    daemon_threads = True
+    allow_reuse_address = True
+
+
+def local_ip(target):
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.connect((target, 9197))
+    ip = s.getsockname()[0]
+    s.close()
+    return ip
+
+
+# ------------------------------------------------------------------ metadane
+def didl(url, title, disk, caption=None):
+    ext = os.path.splitext(disk)[1].lower()
+    mime = MIME.get(ext, "video/mpeg")
+    cap = ('<sec:CaptionInfoEx sec:type="%s">%s</sec:CaptionInfoEx>'
+           % (os.path.splitext(caption[0])[1].lstrip(".").lower(), escape(caption[1]))
+           if caption else "")
+    return ('&lt;DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" '
+            'xmlns:dc="http://purl.org/dc/elements/1.1/" '
+            'xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/" '
+            'xmlns:sec="http://www.sec.co.kr/"&gt;'
+            '&lt;item id="1" parentID="0" restricted="1"&gt;'
+            "&lt;dc:title&gt;%s&lt;/dc:title&gt;"
+            "&lt;upnp:class&gt;object.item.videoItem&lt;/upnp:class&gt;%s"
+            '&lt;res protocolInfo="http-get:*:%s:DLNA.ORG_OP=01;DLNA.ORG_CI=0;'
+            'DLNA.ORG_FLAGS=01700000000000000000000000000000"&gt;%s&lt;/res&gt;'
+            "&lt;/item&gt;&lt;/DIDL-Lite&gt;"
+            % (escape(title), cap.replace("<", "&lt;").replace(">", "&gt;"),
+               mime, escape(url)))
+
+
+def check_codecs(path):
+    """Ostrzega o ścieżkach, których Samsung nie odtworzy (DTS, TrueHD)."""
+    try:
+        out = subprocess.run(["ffprobe", "-v", "error", "-show_entries",
+                              "stream=codec_type,codec_name", "-of", "csv=p=0", path],
+                             capture_output=True, text=True, timeout=20).stdout
+    except Exception:
+        return
+    bad = [l.split(",")[1] for l in out.strip().splitlines()
+           if l.startswith("audio") and l.split(",")[1] in ("dts", "truehd", "mlp")]
+    if bad:
+        print("  ! ścieżka audio %s — Samsung tego nie dekoduje, będzie cisza." % "/".join(bad))
+        print("    Napraw:  ffmpeg -i \"%s\" -c:v copy -c:a eac3 -b:a 640k \"%s\"\n"
+              % (path, os.path.splitext(path)[0] + ".eac3.mkv"))
+
+
+# ---------------------------------------------------------------------- main
+def main():
+    ap = argparse.ArgumentParser(description="Wyślij plik wideo na telewizor Samsung.")
+    ap.add_argument("plik", nargs="?", help="plik wideo albo adres http(s):// do przepuszczenia")
+    ap.add_argument("-s", "--subs", "--napisy", dest="napisy",
+                    help="zewnętrzny plik napisów (.srt)")
+    ap.add_argument("-t", "--tv", default=os.environ.get("CAST_TV"),
+                    help="adres IP telewizora (domyślnie: autowykrywanie)")
+    ap.add_argument("-p", "--port", type=int, default=8895, help="port serwera HTTP")
+    ap.add_argument("--stop", action="store_true", help="zatrzymaj odtwarzanie i wyjdź")
+    ap.add_argument("--list", "--lista", dest="lista", action="store_true",
+                    help="pokaż wykryte odbiorniki")
+    ap.add_argument("-c", "--cookies", "--ciasteczka", dest="ciasteczka", metavar="PLIK",
+                    help="plik cookies w formacie Netscape (do materiałów za logowaniem)")
+    args = ap.parse_args()
+
+    if args.lista:
+        for ip, url, name in discover():
+            print("%-16s %s" % (ip, name))
+        return 0
+
+    ip = args.tv
+    if not ip:
+        print("Szukam telewizora...")
+        devs = discover()
+        if not devs:
+            print("Nie znalazłem odbiornika DLNA. Włącz telewizor i spróbuj ponownie,\n"
+                  "albo podaj adres ręcznie: cast-tv -t 192.168.1.50 plik.mkv")
+            return 1
+        ip, _, name = devs[0]
+        print("Znaleziono: %s (%s)" % (name, ip))
+
+    avt, rc = control_urls(ip)
+    if not avt:
+        print("Telewizor %s nie udostępnia AVTransport (wyłączony?)." % ip)
+        return 1
+
+    if args.stop:
+        soap(avt, AVT, "Stop")
+        print("Zatrzymano.")
+        return 0
+
+    if not args.plik:
+        ap.error("podaj plik lub adres do odtworzenia (albo --stop / --lista)")
+
+    zdalny = args.plik.startswith(("http://", "https://"))
+    host = local_ip(ip)
+    base = "http://%s:%d" % (host, args.port)
+
+    if zdalny:
+        # nic nie ląduje na dysku - laptop tylko przepuszcza strumień do TV
+        name = os.path.basename(urllib.parse.urlparse(args.plik).path) or "strumien"
+        if "." not in name:
+            name += ".mp4"
+        vpath = "/proxy/" + urllib.parse.unquote(name)
+        RangeHandler.remote = {vpath: args.plik}
+        if args.ciasteczka:
+            jar = http.cookiejar.MozillaCookieJar()
+            try:
+                jar.load(os.path.abspath(args.ciasteczka), ignore_discard=True,
+                         ignore_expires=True)
+            except Exception as e:
+                print("Nie wczytałem ciasteczek: %s" % e)
+                return 1
+            RangeHandler.opener = urllib.request.build_opener(
+                urllib.request.HTTPCookieProcessor(jar))
+            print("  ciasteczka: %d z %s" % (len(jar), args.ciasteczka))
+        path = name
+    else:
+        path = os.path.abspath(args.plik)
+        if not os.path.isfile(path):
+            print("Nie ma takiego pliku: %s" % path)
+            return 1
+        check_codecs(path)
+        # klucze trzymamy odkodowane (tak jak po unquote w handlerze), URL-e kodujemy
+        vpath = "/video/" + os.path.basename(path)
+        RangeHandler.files = {vpath: path}
+
+    url = base + urllib.parse.quote(vpath)
+    caption = None
+    if args.napisy:
+        sub = os.path.abspath(args.napisy)
+        subpath = "/sub/" + os.path.basename(sub)
+        RangeHandler.files[subpath] = sub
+        caption = (sub, base + urllib.parse.quote(subpath))
+        RangeHandler.caption_url = caption[1]
+
+    try:
+        srv = Server(("0.0.0.0", args.port), RangeHandler)
+    except OSError as e:
+        print("Nie mogę zająć portu %d: %s" % (args.port, e))
+        return 1
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+
+    title = os.path.splitext(os.path.basename(path))[0]
+
+    try:
+        soap(avt, AVT, "SetAVTransportURI",
+             "<CurrentURI>%s</CurrentURI><CurrentURIMetaData>%s</CurrentURIMetaData>"
+             % (escape(url), didl(url, title, path, caption)))
+        soap(avt, AVT, "Play", "<Speed>1</Speed>")
+    except Exception as e:
+        print("Telewizor odrzucił polecenie: %s" % e)
+        return 1
+
+    print("\n▶  %s" % title)
+    print("   %s %s  →  %s" % ("przepuszczam przez" if zdalny else "serwuję z",
+                              base, ip))
+    print("   Ctrl+C kończy (film na TV też się zatrzyma)\n")
+
+    try:
+        while True:
+            time.sleep(2)
+            try:
+                info = soap(avt, AVT, "GetPositionInfo")
+                state = tag(soap(avt, AVT, "GetTransportInfo"), "CurrentTransportState")
+            except Exception:
+                continue
+            rel, dur = tag(info, "RelTime"), tag(info, "TrackDuration")
+            sys.stdout.write("\r   %-12s %s / %s   " % (state, rel or "-", dur or "-"))
+            sys.stdout.flush()
+            if state == "STOPPED" and rel not in ("", "00:00:00"):
+                print("\n   Koniec.")
+                break
+    except KeyboardInterrupt:
+        print()
+        try:
+            soap(avt, AVT, "Stop")
+        except Exception:
+            pass
+        print("   Zatrzymano.")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
