@@ -5,10 +5,15 @@ __pycache__/
 *.mp4
 cookies.txt
 
-# ai-toolkit: skille instalowane lokalnie, nie publikujemy ich w tym repo.
-# Kanał recovery jest kursowy i licencyjnie nie może tu trafić - dlatego
-# instalujemy tylko `sync` (managed), a i tak nic z tego nie jest śledzone.
+# ai-toolkit installs authoring skills into this checkout. None of it is
+# published from here: the managed skills carry unresolved licences, and the
+# recovery channel is course material that must never be tracked in a public
+# repository. Same list as lumina-clean-ai uses.
 .claude/skills/*/
 .agents/skills/*/
+.claude/prompts/
+.claude/config-templates/
+.claude/.10x-cli-manifest.json
 .claude/settings.local.json
+scripts/local/
 .ai-toolkit/
