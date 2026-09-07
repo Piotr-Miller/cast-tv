@@ -4,6 +4,7 @@ __pycache__/
 *.mkv
 *.mp4
 cookies.txt
+*.log
 
 # ai-toolkit installs authoring skills into this checkout. None of it is
 # published from here: the managed skills carry unresolved licences, and the
