@@ -1,7 +1,7 @@
 ---
 change_id: cloud-source-ui
 title: Pick media from GoPro, Google Photos and OneDrive in a UI, and cast it
-status: new
+status: preparing
 created: 2026-09-07
 updated: 2026-09-08
 archived_at: null
@@ -21,9 +21,10 @@ The three sources are not alike, and that asymmetry is the whole shape of this c
   returns the library, so a tab can list it. It needs a bearer token lifted from a
   logged-in browser, and that token expires after a few hours - the UI has to make
   that visible rather than failing with a bare 401.
-- **Google Photos** cannot be browsed at all. The Library API has only exposed
-  user-picked items since 31 March 2025, so the entry point is a link to one item.
-  A tab here is a paste field plus a history of what has been pasted, not a grid.
+- **Google Photos** cannot be browsed by us. The Library API has only exposed
+  user-picked items since 31 March 2025 - but the **Picker API** that replaced it lets
+  the user pick, multi-select, in Google's own UI and hands us exactly those items. A
+  tab here is "connect, then pick": the grid shows what was picked, not the library.
 - **OneDrive** browses over Microsoft Graph, behind a real login.
 
 Casting itself is solved and verified against the TV; this change is only about
@@ -31,13 +32,16 @@ choosing what to cast, and about the three things that turned out to hang off th
 
 ## Scope, as it grew
 
-Four follow-ups after the first draft, each of which moved the design:
+Five follow-ups after the first draft, each of which moved the design:
 
 1. **OneDrive logs in over the network**, rather than reading the local mirror.
 2. **Photos are cast as well as video** - which reaches deeper into `cast-tv` than
    any of the source work.
 3. **Linux and Windows both**, not Fedora alone.
 4. **Every tab gates on its own connection**: enter the tab, connect, then the list.
+5. **Research** (`research.md`) read the code in full and found two live bugs in the
+   one-item server model, a LAN-exposure problem that is a blocker rather than a
+   footnote, and the Picker API for Google Photos - adopted below.
 
 ## Decisions
 
@@ -100,9 +104,31 @@ root is `%USERPROFILE%\OneDrive` and Files On-Demand leaves 0-byte placeholders 
 like files. Serving from disk when a file happens to be local stays available as a later
 optimisation, not as the design.
 
+### Google Photos over the Picker API
+
+The user picks in Google's UI; we list what was picked. `POST photospicker.googleapis.com/v1/sessions`
+-> `pickerUri` -> the user opens it on any device and selects -> poll `sessions.get` until
+`mediaItemsSet` (honouring `pollingConfig.pollInterval`) -> `GET /v1/mediaItems?sessionId=`,
+paged. Each `PickedMediaItem` carries `type: PHOTO | VIDEO`, `mediaMetadata` (width, height,
+creationTime), `filename` and `mediaFile.baseUrl`.
+
+- Scope `photospicker.mediaitems.readonly`. `sessions.create` takes a `requestId` (UUID v4)
+  explicitly "for applications using the OAuth 2.0 flow for limited-input devices" - the
+  device code flow already chosen for OneDrive. Two sources, one auth pattern, one gate shape.
+- Multi-select in the picker is the slideshow queue, for free.
+- `baseUrl` takes the same `=d` / `=dv` suffixes `cast-photos` already ranks. **Expiry window
+  and whether the fetch needs the bearer header: verify on a live session first.** Delete
+  sessions after use; creating too many returns `RESOURCE_EXHAUSTED`.
+- One-time cost: a Google Cloud project, an OAuth client and a consent screen. Testing mode
+  is enough for personal use.
+- The share-link scraper (`cast-photos:83-119`) stays as the fallback for links from other
+  people's libraries, where no picker session exists. It is no longer the main path.
+
 ### Photos, not just video
 
-Casting a photo does not work today. Four places:
+Casting a photo does not work today. Four places (research found the same table goes one
+level deeper - the two MIME lookups have *different* fallbacks, `transferMode` is always
+`Streaming`, and `<res>` carries no `resolution`/`size`):
 
 | Where | Today | Needed |
 | --- | --- | --- |
@@ -123,9 +149,13 @@ Two of these are features rather than repairs:
   `heif-convert` barely exists on Windows. This is the photo analogue of the DTS warning,
   except it is fixable rather than merely reportable.
 
-**To verify:** `cast-photos` ranks video variants (`=dv`, `=m37`, …, `cast-photos:20`).
-Google serves photos under different suffixes (`=d` for the original, `=w…-h…` for
-scaled). Confirm against a live link the way `=dv` was confirmed.
+**Photos are fetched whole; video is relayed.** HEIC cannot be converted while streaming,
+and a produced body has no size up front - which breaks `Content-Length`, `Content-Range`
+and the HEAD-before-GET this TV does. Materialising the converted image before replying
+keeps every existing serving path untouched, and the decode yields the `resolution` the
+DIDL needs. "Nothing touches the disk" softens to "nothing persists": a bounded, evicted
+cache keyed by source, mtime and size. Video keeps the relay; `_proxy`'s range-trim logic
+is sound and is reused, not rewritten.
 
 ### A connection gate on every tab
 
@@ -135,8 +165,8 @@ same in all three; what sits inside the gate is not:
 - **OneDrive** - a real login. Device code, then the list.
 - **GoPro** - no public OAuth exists. The gate holds the token paste with instructions
   and an expiry countdown. It looks like a login step; it is not one.
-- **Google Photos** - a login would buy nothing, because the library cannot be listed
-  even when authenticated. The gate is the paste field.
+- **Google Photos** - connect (device code), then pick. The gate opens the picker; the
+  picked items land in our grid. A paste field stays for foreign share links.
 
 **A literal "web wrapper" for GoPro is not possible in a browser.** Embedding GoPro's
 login page in an iframe is blocked by `X-Frame-Options`, and same-origin policy would
@@ -218,9 +248,28 @@ IBM Plex Mono. Two decisions embedded there worth flagging: photo selection **pe
 across tabs**, so a slideshow queue can mix GoPro and OneDrive, and `GX010042.MP4` is
 labelled `3840 x 3360`, the frame the README actually recorded at 119 Mbit/s.
 
+### Exposure
+
+The server binds `0.0.0.0` with no `Host` or `Origin` check (`cast-tv:463`). Today that
+exposes one file with a guessable path. Once `/api` can start a cast, browse a folder or
+trigger a resolver, any device on the LAN can drive the TV - and, with no Origin check, **any
+web page open in the user's browser can hit `http://<lan-ip>:8895/api/...`**. This is a
+blocker, not a home-network footnote: validate `Origin`/`Host` on `/api`, and put a
+per-session token in the media URLs handed to the TV. Media paths stay exact-match
+lookups - the property that makes today's server traversal-proof.
+
+## Research
+
+`research.md` - full read of the four files, a git-history pass, and an adversarial pass
+over `RangeHandler` that executed the suspicious paths. Two bugs live today (relay+subs
+mutates the class default dict; a second cast wipes the first mid-stream), seven latent ones
+under concurrency, three `_range` bugs, and seven constraints from history a refactor could
+silently undo - `RelTime` is `0:00:00`, not `00:00:00`, chief among them.
+
 ## Open
 
-- DLNA image flags and profile against this particular Samsung - untested.
-- Google Photos suffixes for stills.
-- Whether the LAN-exposed UI needs a token in the URL. It is a home network, but the tab
-  does list a cloud library to anyone who can reach port 8895.
+- DLNA image profile on this particular Samsung (`Interactive`, `OP=00`, `DLNA.ORG_PN`,
+  `<res resolution size>`) - untested; plan it as the first spike, one evening with `--debug`.
+- Picker `baseUrl` expiry and auth header - verify on a live session.
+- GoPro thumbnails: `/media/search` is not asked for them today; response shape unverified.
+- Google Photos stills via the scraper (`=d` vs `=w…-h…`) - only if the fallback path stays.
