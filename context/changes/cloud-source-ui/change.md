@@ -112,13 +112,23 @@ The user picks in Google's UI; we list what was picked. `POST photospicker.googl
 paged. Each `PickedMediaItem` carries `type: PHOTO | VIDEO`, `mediaMetadata` (width, height,
 creationTime), `filename` and `mediaFile.baseUrl`.
 
-- Scope `photospicker.mediaitems.readonly`. `sessions.create` takes a `requestId` (UUID v4)
-  explicitly "for applications using the OAuth 2.0 flow for limited-input devices" - the
-  device code flow already chosen for OneDrive. Two sources, one auth pattern, one gate shape.
+- Scope `photospicker.mediaitems.readonly`. **Which OAuth flow carries it is unconfirmed.**
+  `sessions.create` takes a `requestId` (UUID v4) "for applications using the OAuth 2.0 flow
+  for limited-input devices", which reads as device code - but Google's limited-input-device
+  documentation allows only selected scopes and does not list the Picker scope, and for
+  Linux/Windows applications Google recommends the desktop (loopback) flow. The two pages
+  disagree. **Spike before planning:** try the scope on the device endpoint; the fallback is
+  desktop loopback. Either way this is a different flow from OneDrive's - the gate shape is
+  shared at the UI level only.
+- **MVP:** Google authorisation runs once, in a browser on the machine hosting the app. The
+  `pickerUri` it yields can still be opened on the phone - picking is device-independent even
+  when the authorisation is not.
 - Multi-select in the picker is the slideshow queue, for free.
-- `baseUrl` takes the same `=d` / `=dv` suffixes `cast-photos` already ranks. **Expiry window
-  and whether the fetch needs the bearer header: verify on a live session first.** Delete
-  sessions after use; creating too many returns `RESOURCE_EXHAUSTED`.
+- `baseUrl` takes the same `=d` / `=dv` suffixes `cast-photos` already ranks. Fetching it
+  **requires `Authorization: Bearer` and the URL expires after 60 minutes** (Google's
+  access-media-items guide). So the resolver keeps the session and item ids and re-lists for a
+  fresh `baseUrl` on demand - the same rule as Graph's `downloadUrl`; never the URL itself.
+  Delete sessions after use; too many returns `RESOURCE_EXHAUSTED`.
 - One-time cost: a Google Cloud project, an OAuth client and a consent screen. Testing mode
   is enough for personal use.
 - The share-link scraper (`cast-photos:83-119`) stays as the fallback for links from other
@@ -165,8 +175,9 @@ same in all three; what sits inside the gate is not:
 - **OneDrive** - a real login. Device code, then the list.
 - **GoPro** - no public OAuth exists. The gate holds the token paste with instructions
   and an expiry countdown. It looks like a login step; it is not one.
-- **Google Photos** - connect (device code), then pick. The gate opens the picker; the
-  picked items land in our grid. A paste field stays for foreign share links.
+- **Google Photos** - connect (OAuth, once, in the host's browser; flow settled by the
+  spike), then pick. The gate opens the picker; the picked items land in our grid. A paste
+  field stays for foreign share links.
 
 **A literal "web wrapper" for GoPro is not possible in a browser.** Embedding GoPro's
 login page in an iframe is blocked by `X-Frame-Options`, and same-origin policy would
@@ -258,6 +269,10 @@ blocker, not a home-network footnote: validate `Origin`/`Host` on `/api`, and pu
 per-session token in the media URLs handed to the TV. Media paths stay exact-match
 lookups - the property that makes today's server traversal-proof.
 
+This is **phase one of the plan, shared by every `/api` endpoint**: no endpoint ships before
+the Origin/Host check and the media-URL token exist. Retrofitting them means auditing every
+route twice.
+
 ## Research
 
 `research.md` - full read of the four files, a git-history pass, and an adversarial pass
@@ -268,8 +283,11 @@ silently undo - `RelTime` is `0:00:00`, not `00:00:00`, chief among them.
 
 ## Open
 
+- **Blocker - which OAuth flow carries the Picker scope.** Does the limited-input-device
+  endpoint accept `photospicker.mediaitems.readonly`? Google's device-flow page restricts
+  scopes and does not list it; its desktop guidance says loopback. One short spike; the
+  fallback is desktop loopback, run once in the host's browser. It decides the Google gate.
 - DLNA image profile on this particular Samsung (`Interactive`, `OP=00`, `DLNA.ORG_PN`,
-  `<res resolution size>`) - untested; plan it as the first spike, one evening with `--debug`.
-- Picker `baseUrl` expiry and auth header - verify on a live session.
+  `<res resolution size>`) - untested; one evening with `--debug` and three JPEGs.
 - GoPro thumbnails: `/media/search` is not asked for them today; response shape unverified.
 - Google Photos stills via the scraper (`=d` vs `=w…-h…`) - only if the fallback path stays.
