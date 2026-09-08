@@ -9,7 +9,7 @@ tags: [research, codebase, range-handler, relay, dlna, didl, castcloud, gopro, g
 status: complete
 last_updated: 2026-09-08
 last_updated_by: Claude (Fable 5.1)
-last_updated_note: "Separated the Picker UX decision from the unconfirmed OAuth flow; recorded baseUrl auth and expiry from Google's docs; retired two open questions"
+last_updated_note: "OAuth spike, documentary half: the device flow's scope allow-list is closed and excludes the Picker scope - desktop loopback is the flow. Spike script added; empirical half awaits a client"
 ---
 
 # Research: Turning the one-shot cast-tv CLI into a long-lived local web UI
@@ -80,11 +80,10 @@ GoPro, Google Photos and OneDrive.
    lists over Graph behind device code (settled in the change notes). Google Photos has, since
    the Library API lockdown, a documented **Picker API**: the user picks - multi-select - in
    Google's own UI (phone included), and the app lists exactly those items with `baseUrl`s.
-   Adopted in `change.md`. **Which OAuth flow carries it is not settled**: `sessions.create`
-   hints at the limited-input-device flow, but Google's device-flow documentation restricts the
-   allowed scopes and does not list the Picker scope, and recommends desktop loopback for
-   Linux/Windows. A short spike decides it before planning; the UX decision does not depend on
-   the outcome.
+   Adopted in `change.md`. It is carried by the **desktop loopback flow**: Google's device-flow
+   page supports "only" a closed list of seven scopes, none of them the Picker's, and sends
+   Linux/Windows applications to the desktop flow (follow-up below). The UX decision did not
+   depend on the outcome; the auth decision now has one.
 
 7. **The git history encodes seven constraints a refactor could silently undo.** The TV reports
    `0:00:00`, not `00:00:00`; `octet-stream` acceptance in the probe is what keeps GoPro casts
@@ -266,10 +265,12 @@ picking experience for applications using the OAuth 2.0 flow for limited-input d
 reads as device code. But Google's limited-input-device documentation
 (developers.google.com/identity/protocols/oauth2/limited-input-device) allows only selected
 scopes and does not list `photospicker.mediaitems.readonly`, and recommends the desktop
-(loopback) flow for Linux/Windows applications. The two pages disagree; only a spike resolves
-it. The UX decision does not depend on the outcome: the Photos tab shows a grid of picked items
-rather than a paste field either way. For the MVP, Google authorisation runs once in a browser on
-the host; the `pickerUri` can still be opened on the phone. Cost: a Google Cloud project, an OAuth client and a consent screen, configured once
+(loopback) flow for Linux/Windows applications. The device-flow page's wording is a closed
+allow-list - "supported only for the following scopes" - so the `requestId` sentence has no
+authorisation path behind it for this scope. Loopback it is (follow-up below). The Photos tab
+shows a grid of picked items rather than a paste field either way. For the MVP, Google
+authorisation runs once in a browser on the host; the `pickerUri` can still be opened on the
+phone. Cost: a Google Cloud project, an OAuth client and a consent screen, configured once
 (testing mode is fine for personal use). Sessions should be deleted after use to stay under the
 quota. This does **not** restore browsing the library in our own UI - it moves the pick into
 Google's UI and brings the result back. It also deprecates the share-link scraper, which the
@@ -414,10 +415,10 @@ in git. Constraints a refactor could silently undo, with the commit that establi
 
 ## Open Questions
 
-1. **Blocker - which OAuth flow carries the Picker scope.** Does the limited-input-device
-   endpoint accept `photospicker.mediaitems.readonly`? Google's device-flow page restricts
-   scopes and does not list it; its desktop guidance says loopback. One short spike; the
-   fallback is the desktop loopback flow, run once in the host's browser.
+1. **Run `spike-picker-oauth.py loopback --pick` with a Desktop-app client.** The flow is
+   settled by documentation; this is the empirical proof that the token opens a session, plus
+   the with/without-Bearer probe of `baseUrl`. Needs a Cloud project with the Picker API
+   enabled and the account as a test user.
 2. **DLNA image profile on this Samsung.** `transferMode: Interactive`, `OP=00`, `DLNA.ORG_PN`
    and `<res resolution size>` are expected per the guidelines and untested here. One evening
    with `--debug` and three JPEGs settles it.
@@ -429,3 +430,32 @@ in git. Constraints a refactor could silently undo, with the commit that establi
 Retired since first write: adopting the Picker API (decided in `change.md`); `baseUrl`
 mechanics (settled by Google's access-media-items guide: Bearer required, 60-minute expiry);
 Origin/Host validation (now phase one of the plan in `change.md`).
+
+## Follow-up Research 2026-09-08T22:52:34+02:00
+
+**OAuth spike, documentary half.** Question: can the limited-input-device (device code) flow
+carry `photospicker.mediaitems.readonly`?
+
+- `developers.google.com/identity/protocols/oauth2/limited-input-device` states: **"The OAuth
+  2.0 flow for devices is supported only for the following scopes"** and lists exactly seven -
+  OpenID Connect `email`, `openid`, `profile`; Drive `drive.appdata`, `drive.file`; YouTube
+  `youtube`, `youtube.readonly`. Google Photos and the Picker are not mentioned on the page. It
+  adds that an app on "Android, iOS, macOS, Linux, or Windows ... that has access to the browser
+  and full input capabilities" should "use the OAuth 2.0 flow for mobile and desktop
+  applications". `client_secret` is required at the token-polling step of the device flow.
+- `developers.google.com/photos/picker/get-started-picker` names no client type or flow at all.
+  The only flow-adjacent sentence anywhere in the Picker docs is `sessions.create`'s `requestId`
+  note "for applications using the OAuth 2.0 flow for limited-input devices". With a closed
+  allow-list on the other page, that sentence has no authorisation path behind it for this
+  scope.
+- **Verdict:** desktop loopback flow, run once in a browser on the host. The `pickerUri` it
+  yields is device-independent and can be opened on the phone.
+
+**Empirical half, pending a client.** `POST https://oauth2.googleapis.com/device/code` was
+probed with a placeholder `client_id` and three scopes (Picker, `drive.file`, `openid email`):
+all three return `401 invalid_client` - Google validates the client before it looks at the
+scope, so nothing about the scope can be learned without a real "TVs and Limited Input
+devices" client. `spike-picker-oauth.py` in this folder runs either flow end to end and ends
+in the proof that matters - `POST /v1/sessions` succeeding - with `--pick` continuing to
+`mediaItems.list` and a one-byte range fetch of `baseUrl` with and without the Bearer header.
+Standard library only; tokens are printed as their last four characters and nothing is stored.

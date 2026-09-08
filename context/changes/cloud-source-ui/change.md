@@ -112,14 +112,15 @@ The user picks in Google's UI; we list what was picked. `POST photospicker.googl
 paged. Each `PickedMediaItem` carries `type: PHOTO | VIDEO`, `mediaMetadata` (width, height,
 creationTime), `filename` and `mediaFile.baseUrl`.
 
-- Scope `photospicker.mediaitems.readonly`. **Which OAuth flow carries it is unconfirmed.**
-  `sessions.create` takes a `requestId` (UUID v4) "for applications using the OAuth 2.0 flow
-  for limited-input devices", which reads as device code - but Google's limited-input-device
-  documentation allows only selected scopes and does not list the Picker scope, and for
-  Linux/Windows applications Google recommends the desktop (loopback) flow. The two pages
-  disagree. **Spike before planning:** try the scope on the device endpoint; the fallback is
-  desktop loopback. Either way this is a different flow from OneDrive's - the gate shape is
-  shared at the UI level only.
+- Scope `photospicker.mediaitems.readonly`, carried by the **desktop loopback flow** - not
+  device code. Google's limited-input-device page is explicit: "The OAuth 2.0 flow for devices
+  is supported *only* for the following scopes", a closed list of seven (`email`, `openid`,
+  `profile`, `drive.appdata`, `drive.file`, `youtube`, `youtube.readonly`), and it sends
+  Linux/Windows applications to the desktop flow. `sessions.create`'s `requestId` note about
+  limited-input devices stands alone; no authorisation path backs it for this scope. So this is
+  a different flow from OneDrive's - the gate shape is shared at the UI level only. The spike
+  script (`spike-picker-oauth.py`) exists to confirm both halves empirically once a client
+  exists; the documentary half is closed.
 - **MVP:** Google authorisation runs once, in a browser on the machine hosting the app. The
   `pickerUri` it yields can still be opened on the phone - picking is device-independent even
   when the authorisation is not.
@@ -175,8 +176,8 @@ same in all three; what sits inside the gate is not:
 - **OneDrive** - a real login. Device code, then the list.
 - **GoPro** - no public OAuth exists. The gate holds the token paste with instructions
   and an expiry countdown. It looks like a login step; it is not one.
-- **Google Photos** - connect (OAuth, once, in the host's browser; flow settled by the
-  spike), then pick. The gate opens the picker; the picked items land in our grid. A paste
+- **Google Photos** - connect (desktop loopback OAuth, once, in the host's browser), then
+  pick. The gate opens the picker; the picked items land in our grid. A paste
   field stays for foreign share links.
 
 **A literal "web wrapper" for GoPro is not possible in a browser.** Embedding GoPro's
@@ -283,10 +284,11 @@ silently undo - `RelTime` is `0:00:00`, not `00:00:00`, chief among them.
 
 ## Open
 
-- **Blocker - which OAuth flow carries the Picker scope.** Does the limited-input-device
-  endpoint accept `photospicker.mediaitems.readonly`? Google's device-flow page restricts
-  scopes and does not list it; its desktop guidance says loopback. One short spike; the
-  fallback is desktop loopback, run once in the host's browser. It decides the Google gate.
+- **Run the loopback spike once a Desktop-app client exists.** The flow question is settled
+  by documentation (loopback); `spike-picker-oauth.py loopback --pick` is the empirical proof
+  that the token opens a Picker session, and it probes whether `baseUrl` really needs the
+  Bearer header. Needs `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` from Cloud Console with the
+  Picker API enabled and the account added as a test user.
 - DLNA image profile on this particular Samsung (`Interactive`, `OP=00`, `DLNA.ORG_PN`,
   `<res resolution size>`) - untested; one evening with `--debug` and three JPEGs.
 - GoPro thumbnails: `/media/search` is not asked for them today; response shape unverified.
