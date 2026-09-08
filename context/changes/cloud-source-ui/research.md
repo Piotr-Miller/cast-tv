@@ -9,6 +9,7 @@ tags: [research, codebase, range-handler, relay, dlna, didl, castcloud, gopro, g
 status: complete
 last_updated: 2026-09-08
 last_updated_by: Claude (Fable 5.1)
+last_updated_note: "Separated the Picker UX decision from the unconfirmed OAuth flow; recorded baseUrl auth and expiry from Google's docs; retired two open questions"
 ---
 
 # Research: Turning the one-shot cast-tv CLI into a long-lived local web UI
@@ -78,9 +79,12 @@ GoPro, Google Photos and OneDrive.
    over its media API behind a pasted token (works today; thumbnails not yet requested). OneDrive
    lists over Graph behind device code (settled in the change notes). Google Photos has, since
    the Library API lockdown, a documented **Picker API**: the user picks - multi-select - in
-   Google's own UI (phone included), and the app lists exactly those items with `baseUrl`s. It is
-   explicitly designed to pair with the limited-input-device OAuth flow, i.e. the device code
-   flow already chosen for OneDrive. This is a decision the change notes should revisit.
+   Google's own UI (phone included), and the app lists exactly those items with `baseUrl`s.
+   Adopted in `change.md`. **Which OAuth flow carries it is not settled**: `sessions.create`
+   hints at the limited-input-device flow, but Google's device-flow documentation restricts the
+   allowed scopes and does not list the Picker scope, and recommends desktop loopback for
+   Linux/Windows. A short spike decides it before planning; the UX decision does not depend on
+   the outcome.
 
 7. **The git history encodes seven constraints a refactor could silently undo.** The TV reports
    `0:00:00`, not `00:00:00`; `octet-stream` acceptance in the probe is what keeps GoPro casts
@@ -255,13 +259,17 @@ layers, and both differ by source.
 | --- | --- | --- | --- | --- |
 | GoPro | bearer token pasted from a browser; expires in hours; no public OAuth | `GET /media/search` with `fields=id,filename,captured_at,content_title,file_size,type,resolution,duration`, paged (`cast-gopro:73-92`) | `GET /media/{id}/download` -> ranked variations (`library_url`, `cast-gopro:114-142`); `type` field already distinguishes photo/video | **not requested today**; API shape for thumbnail URLs unverified - probe the JSON, per the repo's own "send it over and the parser can be adjusted" style |
 | OneDrive | Graph, device code, `Files.Read offline_access`, refresh ~90 days | `/me/drive/root:/<path>:/children?$expand=thumbnails`; `folder`/`file`/`image`/`photo`/`video` facets | `@microsoft.graph.downloadUrl`, pre-authenticated, `Range` OK, **expires ~1 h - resolve on demand** | `$expand=thumbnails` |
-| Google Photos | today: none (share link) or a Netscape cookie jar; **Picker API**: OAuth, scope `photospicker.mediaitems.readonly` | today: cannot list; **Picker**: `POST photospicker.googleapis.com/v1/sessions` -> `pickerUri`; user picks (multi-select, on any device) -> poll `GET /v1/sessions/{id}` until `mediaItemsSet` (honouring `pollingConfig.pollInterval`) -> `GET /v1/mediaItems?sessionId=` (paged, <=100) | today: scrape page, probe candidates with a one-byte range (`cast-photos:83-119`); **Picker**: `PickedMediaItem` with `type: PHOTO/VIDEO`, `mediaMetadata` (width, height, creationTime), `filename`, `mediaFile.baseUrl` - suffix `=d` / `=dv` as in `SUFFIXES` today; **expiry and whether the fetch needs the bearer header: verify on a live session** | Picker: `baseUrl` with `=w…-h…` |
+| Google Photos | today: none (share link) or a Netscape cookie jar; **Picker API**: OAuth, scope `photospicker.mediaitems.readonly` | today: cannot list; **Picker**: `POST photospicker.googleapis.com/v1/sessions` -> `pickerUri`; user picks (multi-select, on any device) -> poll `GET /v1/sessions/{id}` until `mediaItemsSet` (honouring `pollingConfig.pollInterval`) -> `GET /v1/mediaItems?sessionId=` (paged, <=100) | today: scrape page, probe candidates with a one-byte range (`cast-photos:83-119`); **Picker**: `PickedMediaItem` with `type: PHOTO/VIDEO`, `mediaMetadata` (width, height, creationTime), `filename`, `mediaFile.baseUrl` - suffix `=d` / `=dv` as in `SUFFIXES` today; **fetch needs `Authorization: Bearer`; expires after 60 min - re-list, never cache the URL** | Picker: `baseUrl` with `=w…-h…` |
 
 The Picker API's `sessions.create` takes a `requestId` (UUID v4) "to enable the streamlined
-picking experience for applications using the OAuth 2.0 flow for limited-input devices" - the
-device code flow. So OneDrive and Google Photos would share one auth pattern and one gate shape
-("connect", then "pick"), and the Photos tab would show a grid of picked items rather than a
-paste field. Cost: a Google Cloud project, an OAuth client and a consent screen, configured once
+picking experience for applications using the OAuth 2.0 flow for limited-input devices" - which
+reads as device code. But Google's limited-input-device documentation
+(developers.google.com/identity/protocols/oauth2/limited-input-device) allows only selected
+scopes and does not list `photospicker.mediaitems.readonly`, and recommends the desktop
+(loopback) flow for Linux/Windows applications. The two pages disagree; only a spike resolves
+it. The UX decision does not depend on the outcome: the Photos tab shows a grid of picked items
+rather than a paste field either way. For the MVP, Google authorisation runs once in a browser on
+the host; the `pickerUri` can still be opened on the phone. Cost: a Google Cloud project, an OAuth client and a consent screen, configured once
 (testing mode is fine for personal use). Sessions should be deleted after use to stay under the
 quota. This does **not** restore browsing the library in our own UI - it moves the pick into
 Google's UI and brings the result back. It also deprecates the share-link scraper, which the
@@ -406,18 +414,18 @@ in git. Constraints a refactor could silently undo, with the commit that establi
 
 ## Open Questions
 
-1. **Google Photos: adopt the Picker API?** It changes the tab from paste-field to
-   connect-and-pick, unifies auth with OneDrive, enables multi-select for slideshows, and retires
-   the scraper - at the cost of a one-time Google Cloud OAuth setup. The change notes currently
-   say "cannot be browsed; a paste field". Decision needed before planning the Photos tab.
+1. **Blocker - which OAuth flow carries the Picker scope.** Does the limited-input-device
+   endpoint accept `photospicker.mediaitems.readonly`? Google's device-flow page restricts
+   scopes and does not list it; its desktop guidance says loopback. One short spike; the
+   fallback is the desktop loopback flow, run once in the host's browser.
 2. **DLNA image profile on this Samsung.** `transferMode: Interactive`, `OP=00`, `DLNA.ORG_PN`
    and `<res resolution size>` are expected per the guidelines and untested here. One evening
-   with `--debug` and three JPEGs settles it; plan it as the first spike.
-3. **Picker `baseUrl` mechanics.** Expiry window and whether the fetch needs the bearer header -
-   verify on a live session before designing the photo fetch.
-4. **GoPro thumbnails.** `/media/search` is not asked for them today; the response shape for
+   with `--debug` and three JPEGs settles it.
+3. **GoPro thumbnails.** `/media/search` is not asked for them today; the response shape for
    thumbnail URLs is unverified. Probe the JSON.
-5. **Origin/Host validation and media-URL tokens** - now a blocker rather than an open item;
-   `change.md` should be updated to say so.
-6. **Google Photos stills via the scraper** (`=d` vs `=w…-h…`) - only matters if the scraper
-   stays as the fallback path.
+4. **Google Photos stills via the scraper** (`=d` vs `=w…-h…`) - only matters while the
+   scraper stays as the fallback path.
+
+Retired since first write: adopting the Picker API (decided in `change.md`); `baseUrl`
+mechanics (settled by Google's access-media-items guide: Bearer required, 60-minute expiry);
+Origin/Host validation (now phase one of the plan in `change.md`).
