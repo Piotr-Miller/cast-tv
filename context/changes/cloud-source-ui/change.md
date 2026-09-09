@@ -1,9 +1,9 @@
 ---
 change_id: cloud-source-ui
 title: Pick media from GoPro, Google Photos and OneDrive in a UI, and cast it
-status: preparing
+status: plan_reviewed
 created: 2026-09-07
-updated: 2026-09-08
+updated: 2026-09-09
 archived_at: null
 ---
 
