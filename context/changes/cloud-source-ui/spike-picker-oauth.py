@@ -7,8 +7,8 @@ limited-input-device ("device code") flow accept
 Picker session? If not, the desktop loopback flow is the fallback - so both are
 here, and both end in the same proof: `POST /v1/sessions` succeeding.
 
-    export GOOGLE_CLIENT_ID=...apps.googleusercontent.com
-    export GOOGLE_CLIENT_SECRET=...        # Google requires it even for installed apps
+    export GOOGLE_CLIENT_JSON=~/Downloads/client_secret_*.json   # as downloaded from the console
+    # ...or GOOGLE_CLIENT_ID=... GOOGLE_CLIENT_SECRET=... (Google requires the secret even for installed apps)
     ./spike-picker-oauth.py device         # try the device flow
     ./spike-picker-oauth.py loopback       # try the desktop loopback flow
     ./spike-picker-oauth.py device --pick  # ...and wait for a pick, then probe baseUrl
@@ -24,6 +24,8 @@ test user on the consent screen (testing mode is enough; no verification needed)
 """
 import http.server, json, os, secrets, sys, time, urllib.parse, urllib.request, webbrowser
 import base64, hashlib, threading
+
+sys.stdout.reconfigure(line_buffering=True)  # show progress even when piped
 
 SCOPE = "https://www.googleapis.com/auth/photospicker.mediaitems.readonly"
 DEVICE_CODE = "https://oauth2.googleapis.com/device/code"
@@ -59,14 +61,29 @@ def get(url, headers):
             return e.code, {"raw": raw}, dict(e.headers)
 
 
+def probe(url, headers):
+    """HEAD-ish fetch for binary media: status, Content-Type, first bytes."""
+    req = urllib.request.Request(url, headers=headers)
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return r.status, r.headers.get("Content-Type"), r.read(4)
+    except urllib.error.HTTPError as e:
+        return e.code, e.headers.get("Content-Type"), e.read(64)
+
+
 def say(label, status, body):
     print("  %-28s HTTP %s  %s" % (label, status, json.dumps(body)[:300]))
 
 
 def creds():
+    path = os.environ.get("GOOGLE_CLIENT_JSON")
+    if path:  # the client_secret_*.json the console offers for download
+        with open(path) as f:
+            c = next(iter(json.load(f).values()))
+        return c["client_id"], c["client_secret"]
     cid, sec = os.environ.get("GOOGLE_CLIENT_ID"), os.environ.get("GOOGLE_CLIENT_SECRET")
-    if not cid:
-        sys.exit("Set GOOGLE_CLIENT_ID (and GOOGLE_CLIENT_SECRET) - see the docstring.")
+    if not cid or not sec:
+        sys.exit("Set GOOGLE_CLIENT_JSON, or GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET - see the docstring.")
     return cid, sec
 
 
@@ -133,7 +150,9 @@ def loopback_flow():
         "access_type": "offline", "code_challenge": challenge, "code_challenge_method": "S256",
         "state": secrets.token_urlsafe(16)})
     print("\n[1] loopback: opening the consent page (redirect -> %s)" % redirect)
-    print("    %s" % url)
+    print("    If no browser appears, paste this line into a shell - quotes included,")
+    print("    the URL contains '&' and an unquoted paste splits it into background jobs:")
+    print("    xdg-open '%s'" % url)
     webbrowser.open(url)
     for _ in range(600):
         if got: break
@@ -178,16 +197,20 @@ def prove_with_picker(tok, pick=False):
     say("mediaItems.list", status, {"count": len(items.get("mediaItems", []))})
     for it in items.get("mediaItems", [])[:5]:
         mf = it.get("mediaFile", {})
-        print("   - %-6s %s  %s" % (it.get("type"), it.get("filename") or it.get("id"),
-                                   mf.get("mimeType")))
-    first = (items.get("mediaItems") or [{}])[0].get("mediaFile", {}).get("baseUrl")
-    if first:
-        print("\n[4] baseUrl: does the fetch need the Bearer header?")
-        suffix = "=dv" if items["mediaItems"][0].get("type") == "VIDEO" else "=d"
-        for label, h in (("with Bearer", {"Authorization": hdr["Authorization"], "Range": "bytes=0-1"}),
-                         ("without", {"Range": "bytes=0-1"})):
-            st, _, rh = get(first + suffix, h)
-            print("  %-14s HTTP %s  Content-Type=%s" % (label, st, rh.get("Content-Type")))
+        print("   - %-6s %s  %s  %sx%s" % (
+            it.get("type"), mf.get("filename") or it.get("id"), mf.get("mimeType"),
+            mf.get("mediaFileMetadata", {}).get("width"), mf.get("mediaFileMetadata", {}).get("height")))
+    print("\n[4] baseUrl: does the fetch need the Bearer header?")
+    for it in items.get("mediaItems", [])[:2]:
+        base = it.get("mediaFile", {}).get("baseUrl")
+        if not base:
+            continue
+        suffix = "=dv" if it.get("type") == "VIDEO" else "=d"
+        print("  %s %s" % (it.get("type"), it.get("mediaFile", {}).get("filename") or ""))
+        for label, h in (("with Bearer", {"Authorization": hdr["Authorization"], "Range": "bytes=0-3"}),
+                         ("without", {"Range": "bytes=0-3"})):
+            st, ct, head = probe(base + suffix, h)
+            print("    %-12s HTTP %s  Content-Type=%s  first bytes=%s" % (label, st, ct, head[:4].hex()))
     urllib.request.urlopen(urllib.request.Request(
         PICKER + "/sessions/" + sess["id"], method="DELETE", headers=hdr), timeout=15)
     print("  session deleted")
@@ -198,4 +221,8 @@ if __name__ == "__main__":
     pick = "--pick" in sys.argv
     tok = device_flow() if mode == "device" else loopback_flow()
     if tok:
-        prove_with_picker(tok, pick)
+        try:
+            prove_with_picker(tok, pick)
+        except Exception:
+            import traceback; traceback.print_exc()
+            print("  (session left to expire on its own)")

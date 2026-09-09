@@ -7,9 +7,9 @@ repository: Piotr-Miller/cast-tv
 topic: "Turning the one-shot cast-tv CLI into a long-lived local web UI: what the existing server, resolvers and history constrain"
 tags: [research, codebase, range-handler, relay, dlna, didl, castcloud, gopro, google-photos, onedrive, picker-api, photos, heic, packaging]
 status: complete
-last_updated: 2026-09-08
+last_updated: 2026-09-09
 last_updated_by: Claude (Fable 5.1)
-last_updated_note: "OAuth spike, documentary half: the device flow's scope allow-list is closed and excludes the Picker scope - desktop loopback is the flow. Spike script added; empirical half awaits a client"
+last_updated_note: "OAuth spike, empirical half: desktop loopback + PKCE mints a Picker-scoped token, opens a session, lists the pick; baseUrl is 206 with Bearer and 403 without. Retired Open Question 1"
 ---
 
 # Research: Turning the one-shot cast-tv CLI into a long-lived local web UI
@@ -415,21 +415,18 @@ in git. Constraints a refactor could silently undo, with the commit that establi
 
 ## Open Questions
 
-1. **Run `spike-picker-oauth.py loopback --pick` with a Desktop-app client.** The flow is
-   settled by documentation; this is the empirical proof that the token opens a session, plus
-   the with/without-Bearer probe of `baseUrl`. Needs a Cloud project with the Picker API
-   enabled and the account as a test user.
-2. **DLNA image profile on this Samsung.** `transferMode: Interactive`, `OP=00`, `DLNA.ORG_PN`
+1. **DLNA image profile on this Samsung.** `transferMode: Interactive`, `OP=00`, `DLNA.ORG_PN`
    and `<res resolution size>` are expected per the guidelines and untested here. One evening
    with `--debug` and three JPEGs settles it.
-3. **GoPro thumbnails.** `/media/search` is not asked for them today; the response shape for
+2. **GoPro thumbnails.** `/media/search` is not asked for them today; the response shape for
    thumbnail URLs is unverified. Probe the JSON.
-4. **Google Photos stills via the scraper** (`=d` vs `=w…-h…`) - only matters while the
+3. **Google Photos stills via the scraper** (`=d` vs `=w…-h…`) - only matters while the
    scraper stays as the fallback path.
 
 Retired since first write: adopting the Picker API (decided in `change.md`); `baseUrl`
 mechanics (settled by Google's access-media-items guide: Bearer required, 60-minute expiry);
-Origin/Host validation (now phase one of the plan in `change.md`).
+Origin/Host validation (now phase one of the plan in `change.md`); the OAuth spike (both
+halves done - see the 2026-09-09 follow-up below).
 
 ## Follow-up Research 2026-09-08T22:52:34+02:00
 
@@ -459,3 +456,49 @@ devices" client. `spike-picker-oauth.py` in this folder runs either flow end to 
 in the proof that matters - `POST /v1/sessions` succeeding - with `--pick` continuing to
 `mediaItems.list` and a one-byte range fetch of `baseUrl` with and without the Bearer header.
 Standard library only; tokens are printed as their last four characters and nothing is stored.
+
+## Follow-up Research 2026-09-09T22:34:17+02:00
+
+**OAuth spike, empirical half - done.** Run on the host against a fresh Cloud project
+(`cast-tv`, consent screen External/Testing, the account as its only test user, Photos Picker
+API enabled, one "Desktop app" OAuth client). Three runs; the last one clean end to end:
+
+| step | result |
+|---|---|
+| `GET accounts.google.com/o/oauth2/v2/auth` (loopback `127.0.0.1:<random>`, PKCE S256, `access_type=offline`) | consent page rendered for the Picker scope; redirect received |
+| `POST oauth2.googleapis.com/token` (authorization_code + `code_verifier` + `client_secret`) | HTTP 200, `scope` echoed as `photospicker.mediaitems.readonly`, `expires_in 3599`, **refresh_token issued** |
+| `POST photospicker.googleapis.com/v1/sessions` | HTTP 200, `pickerUri` + `pollingConfig.pollInterval 5s` |
+| pick in Google's UI, then `GET /v1/mediaItems?sessionId=` | HTTP 200, one `PHOTO`, `mediaFile.mimeType image/jpeg`, `mediaFile.baseUrl` present |
+| `baseUrl=d`, `Range: bytes=0-3`, **with** `Authorization: Bearer` | **HTTP 206**, `image/jpeg`, bytes `ff d8 ff e0` (JPEG SOI) |
+| `baseUrl=d`, same range, **without** the header | **HTTP 403**, body is a `image/png` error tile (`89 50 4e 47`) |
+| `DELETE /v1/sessions/{id}` | ok |
+
+What this settles for the plan:
+
+- **Loopback is the flow, and it works with a plain Desktop-app client.** No device-code
+  client is needed; nothing about "TVs and Limited Input devices" enters the design. The
+  refresh token means the "connect once" promise in `change.md` holds: with
+  `access_type=offline` the host can mint fresh access tokens without another browser round.
+- **`baseUrl` must be fetched by the host with the Bearer header, and it honours `Range`.**
+  The 403 without the header closes the "hand the URL to the TV or to the browser" option for
+  good - both the still path (fetch whole, materialise) and the video relay go through the
+  host, exactly as `change.md` already assumes. The 206 with `Range` means the relay can pass
+  the TV's range requests straight through, as it does for Graph's `downloadUrl` today.
+- **Video `=dv` was not probed** - only a photo was picked. Google's access-media-items guide
+  gives the same Bearer/expiry rules for both suffixes, and nothing in the plan hinges on the
+  difference, so this is not re-opened as a question.
+- **Field shapes, per the Picker `mediaItems` reference** (`developers.google.com/photos/picker/reference/rest/v1/mediaItems`): `PickedMediaItem{id, createTime, type, mediaFile}` and
+  `mediaFile{baseUrl, mimeType, filename, mediaFileMetadata{width, height, cameraMake,
+  cameraModel, photoMetadata|videoMetadata}}`. These are **not** the Library API names
+  (`mediaMetadata`, `creationTime`, top-level `filename`) that `change.md:113` uses - the plan
+  should read the Picker names. The first two runs printed no filename because the script read
+  it at the top level; fixed in the script, unverified in the run.
+- **Two practical lessons for the real implementation**, learned by tripping over them: the
+  consent URL contains `&`, so anything that prints it for the user to open must quote it or
+  open the browser itself; and the console's "OAuth configuration is incomplete" banner on the
+  Audience page is about publishing (home page, privacy policy, authorized domain), not about
+  Testing mode - a test user authorises fine with it showing.
+
+Console-side facts for whoever repeats this: the OAuth pieces (consent screen, client, Picker
+API) are always-free and need no billing account; the new "Google Auth Platform" wizard renders
+wider than the window on this GNOME/Chrome setup and needs `Ctrl -` to reach the Next button.
