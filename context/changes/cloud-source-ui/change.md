@@ -284,11 +284,12 @@ silently undo - `RelTime` is `0:00:00`, not `00:00:00`, chief among them.
 
 ## Open
 
-- **Run the loopback spike once a Desktop-app client exists.** The flow question is settled
-  by documentation (loopback); `spike-picker-oauth.py loopback --pick` is the empirical proof
-  that the token opens a Picker session, and it probes whether `baseUrl` really needs the
-  Bearer header. Needs `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` from Cloud Console with the
-  Picker API enabled and the account added as a test user.
+- ~~Run the loopback spike once a Desktop-app client exists.~~ **Done 2026-09-09**, clean end
+  to end: loopback + PKCE mints a Picker-scoped token with a refresh token, opens a session,
+  lists the pick; `baseUrl` answers 206 with the Bearer header and 403 without. See the
+  2026-09-09 follow-up in `research.md`. One correction for the plan: the Picker's item shape
+  is `mediaFile.{filename, mimeType, baseUrl, mediaFileMetadata.{width,height}}` plus top-level
+  `createTime`, not the Library API's `mediaMetadata`/`creationTime` used in the design section.
 - DLNA image profile on this particular Samsung (`Interactive`, `OP=00`, `DLNA.ORG_PN`,
   `<res resolution size>`) - untested; one evening with `--debug` and three JPEGs.
 - GoPro thumbnails: `/media/search` is not asked for them today; response shape unverified.
