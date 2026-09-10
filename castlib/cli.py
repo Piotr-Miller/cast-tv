@@ -26,7 +26,7 @@ from castlib.discovery import control_urls, discover, local_ip
 from castlib.dlna import AVT, soap, tag
 from castlib.errors import CastError
 from castlib.items import MediaItem, Upstream
-from castlib.media import MIME, didl, kind_of_extension
+from castlib.media import MIME, didl, is_allowed_photo, kind_of_extension
 from castlib.server import Server
 from castlib.sources import gopro, sharelink
 
@@ -141,9 +141,15 @@ def cast(source, subs=None, tv=None, port=DEFAULT_PORT, title=None, debug=False,
         if not os.path.isfile(path):
             print("No such file: %s" % path)
             return 1
-        check_codecs(path)
         ext = os.path.splitext(path)[1].lower()
-        item = MediaItem(kind=kind_of_extension(ext) or "video",
+        kind = kind_of_extension(ext) or "video"
+        if kind == "photo" and not is_allowed_photo(MIME.get(ext)):
+            print("%s is a %s image; the TV is not sent GIF or raw stills."
+                  % (os.path.basename(path), ext.lstrip(".").upper()))
+            return 1
+        if kind == "video":
+            check_codecs(path)
+        item = MediaItem(kind=kind,
                          title=title or os.path.splitext(os.path.basename(path))[0],
                          mime=MIME.get(ext, "application/octet-stream"), source="local",
                          source_id=path, path=path, size=os.path.getsize(path),
@@ -175,6 +181,19 @@ def _cast_on(srv, ip, avt, item, subs, relaying, source, debug):
                      daemon=True).start()
 
     registry = srv.registry
+    if item.kind == "photo":
+        # order matters: prepare, then publish the route, then tell the TV;
+        # a conversion failure ends here, before any SOAP is sent
+        from castlib import photos      # Pillow is needed for photos only
+        photos.attach(registry)
+        try:
+            prep = photos.prepare(item)
+        except CastError as e:
+            print(e.message)
+            return 1
+        if debug:
+            print("   photo: %s %dx%d, %d bytes, %s" % (
+                prep.mime, prep.width, prep.height, prep.size, prep.profile))
     if subs:
         sub_path = os.path.abspath(subs)
         sub_ext = os.path.splitext(sub_path)[1].lower()

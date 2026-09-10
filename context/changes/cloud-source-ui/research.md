@@ -9,7 +9,7 @@ tags: [research, codebase, range-handler, relay, dlna, didl, castcloud, gopro, g
 status: complete
 last_updated: 2026-09-10
 last_updated_by: Claude (Fable 5.1)
-last_updated_note: "Phase 1 manual verification record (rows 1.5, 1.6): samples, TV, observed output; what the evening did not cover"
+last_updated_note: "Phase 2: the Samsung accepted the DLNA-guideline photo profile unchanged (Interactive, OP=00, JPEG_SM|MED|LRG, PNG_LRG); Open Question 1 retired. Phase 1 manual verification record below it"
 ---
 
 # Research: Turning the one-shot cast-tv CLI into a long-lived local web UI
@@ -525,3 +525,37 @@ that the inherited `opener.urlopen` call had never worked.
 The URL handed to the TV is now `http://<host>:8895/m/<token>/<id>` with no file extension;
 the Samsung accepted it for both the local file and the relay, so the `.mp4` suffix the
 one-shot script appended to extension-less relay names is not needed for playback.
+
+## Follow-up 2026-09-10 — Phase 2: the Samsung's photo profile (Open Question 1, closed)
+
+Manual rows 2.3–2.5 passed on the Samsung `83" OLED` (192.168.50.142) from the Fedora laptop
+(192.168.50.198), photos cast with `.venv/bin/python -m castlib <file> -d`. The values below
+are the DLNA-guideline defaults the plan proposed; **the TV accepted them unchanged**, so no
+iteration over `PHOTO_FEATURES`/`transferMode` was needed. Retire research Open Question 1.
+
+| on the wire | value |
+|---|---|
+| `upnp:class` | `object.item.imageItem.photo` |
+| `protocolInfo` | `http-get:*:<prepared mime>:DLNA.ORG_PN=<profile>;DLNA.ORG_OP=00;DLNA.ORG_CI=0;DLNA.ORG_FLAGS=00900000000000000000000000000000` |
+| `<res>` attributes | `resolution="WxH"` and `size="N"` of the **prepared** file |
+| `transferMode.dlna.org` | `Interactive` |
+| `contentFeatures.dlna.org` | the same `DLNA.ORG_PN…` string as in `protocolInfo` |
+| profile | `JPEG_SM` ≤ 640×480, `JPEG_MED` ≤ 1024×768, `JPEG_LRG` ≤ 4096×4096, `PNG_LRG` for PNG; larger sources are downscaled to fit 4096×4096 first |
+| media URL | `http://<host>:8895/m/<token>/<id>`, no extension, as for video |
+
+What was shown and what the TV did (`--debug`):
+
+| file | prepared as | TV requests | on screen |
+|---|---|---|---|
+| `photo.jpg` 1920×1080 (stored as fetched) | `image/jpeg`, `JPEG_LRG`, 59 788 B | HEAD, then full GETs with no `Range`; no 416, no partial requests; `PLAYING 0:00:00 / 0:00:00` for as long as the process runs | correct |
+| `photo.heic` 1920×1080 | converted to `image/jpeg`, `JPEG_LRG`, 60 862 B | same pattern | correct |
+| `photo.png` 1920×1080 (stored as fetched) | `image/png`, `PNG_LRG` | same pattern | correct |
+| `portrait.jpg` 1600×1200 with EXIF orientation 6 | re-encoded upright `image/jpeg` 1200×1600, `JPEG_LRG` | same pattern | upright, text readable |
+| `smoke.mp4` + `smoke.srt` (row 2.5) | video path untouched | HEAD, GET, ranged GETs, `Finished.` | as in Phase 1 |
+
+Two things worth knowing for Phase 3: the TV reports a still as `PLAYING` with
+`0:00:00 / 0:00:00`, so the supervisor's `started` latch works unchanged for photos and the
+slideshow interval must be the laptop's clock, not the TV's position; and the TV re-fetches
+the whole photo (HEAD + GET, sometimes twice) rather than ranging into it, so a prepared
+file must stay served for as long as the photo is on screen - which is what pinning in
+`photos.py` (Phase 2 review F2) guarantees.
