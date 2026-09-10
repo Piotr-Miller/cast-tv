@@ -1160,29 +1160,29 @@ mocked).
 
 #### Automated
 
-- [x] 2.1 `python -m pytest tests/` passes
-- [x] 2.2 `pip install .` pulls `pillow` and `pillow-heif`
+- [x] 2.1 `python -m pytest tests/` passes — 5d6d25e
+- [x] 2.2 `pip install .` pulls `pillow` and `pillow-heif` — 5d6d25e
 
 #### Manual
 
-- [x] 2.3 JPEG, HEIC, PNG and a portrait photo show correctly on the Samsung
-- [x] 2.4 HEAD and GET agree in `--debug`; photo DLNA values recorded in `research.md`
-- [x] 2.5 `cast-tv film.mkv` unchanged
+- [x] 2.3 JPEG, HEIC, PNG and a portrait photo show correctly on the Samsung — 5d6d25e
+- [x] 2.4 HEAD and GET agree in `--debug`; photo DLNA values recorded in `research.md` — 5d6d25e
+- [x] 2.5 `cast-tv film.mkv` unchanged — 5d6d25e
 
 ### Phase 3: Long-lived server, cast supervisor, slideshow, UI shell
 
 #### Automated
 
-- [ ] 3.1 `python -m pytest tests/` passes
-- [ ] 3.2 `cast-tv` with no arguments prints two addresses and exits cleanly on Ctrl+C
+- [x] 3.1 `python -m pytest tests/` passes
+- [x] 3.2 `cast-tv` with no arguments prints two addresses and exits cleanly on Ctrl+C
 
 #### Manual
 
-- [ ] 3.3 UI opens on laptop and phone with the TV in the header
-- [ ] 3.4 CLI slideshow with photos and a video plays to the end
-- [ ] 3.5 Stop from UI, replace from UI, no 404 on the replaced cast
-- [ ] 3.6 Firewall block yields the zero-bytes diagnosis with the command
-- [ ] 3.7 TV unplugged shows unreachable; retry recovers
+- [x] 3.3 UI opens on laptop and phone with the TV in the header
+- [x] 3.4 CLI slideshow with photos and a video plays to the end
+- [x] 3.5 Stop from UI, replace from UI, no 404 on the replaced cast
+- [x] 3.6 Firewall block yields the zero-bytes diagnosis with the command
+- [x] 3.7 TV unplugged shows unreachable; retry recovers
 
 ### Phase 4: GoPro tab
 

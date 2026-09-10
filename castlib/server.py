@@ -27,6 +27,14 @@ CHUNK = 256 * 1024
 MEDIA_TIMEOUT = 600        # a paused TV may hold a transfer open this long
 MAX_DRAIN = 1 << 20        # request bodies we read and discard before answering
 
+# The UI is four files served from an exact-match map: no directory listing,
+# no path traversal, nothing else under /ui/ exists.
+UI_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ui")
+UI_FILES = {"/ui/": ("index.html", "text/html; charset=utf-8"),
+            "/ui/app.js": ("app.js", "application/javascript; charset=utf-8"),
+            "/ui/style.css": ("style.css", "text/css; charset=utf-8"),
+            "/ui/alpine.min.js": ("alpine.min.js", "application/javascript; charset=utf-8")}
+
 
 def parse_range(header, size):
     """``(start, end, partial)`` for a ``Range`` header against ``size`` bytes.
@@ -174,7 +182,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if not self._check_origin():
                 return
             self._drain()
-            self._json_error(404, "not_found", "Not found.")
+            self._static(path, body)
             return
         self._drain()
         if path == "/" and self.command != "POST":
@@ -189,6 +197,35 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             return
         self._json_error(404, "not_found", "Not found.")
+
+    # --------------------------------------------------------------- static
+    def _static(self, path, body):
+        if self.command == "POST":
+            self._json_error(404, "not_found", "Not found.")
+            return
+        if path == "/ui":
+            self.send_response(302)
+            self.send_header("Location", "/ui/")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        entry = UI_FILES.get(path)
+        if entry is None:
+            self._json_error(404, "not_found", "Not found.")
+            return
+        try:
+            with open(os.path.join(UI_DIR, entry[0]), "rb") as fh:
+                data = fh.read()
+        except OSError:
+            self._json_error(404, "not_found", "Not found.")
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", entry[1])
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "no-cache")
+        self.end_headers()
+        if body:
+            self.wfile.write(data)
 
     # ---------------------------------------------------------------- media
     def _media(self, item, body):

@@ -559,3 +559,18 @@ slideshow interval must be the laptop's clock, not the TV's position; and the TV
 the whole photo (HEAD + GET, sometimes twice) rather than ranging into it, so a prepared
 file must stay served for as long as the photo is on screen - which is what pinning in
 `photos.py` (Phase 2 review F2) guarantees.
+
+## Follow-up 2026-09-10 — Phase 3: two SOAP faults the Samsung answers with
+
+Seen during manual rows 3.4 and 3.6 on the `83" OLED` (192.168.50.142) from the Fedora laptop,
+with the supervisor sending `SetAVTransportURI` then `Play` exactly as the one-shot script did.
+Both are HTTP 500 on the SOAP call; the UPnP code sits in the fault body, and the supervisor now
+reports it (`describe_soap_error`).
+
+| when | the TV answers | what it means | supervisor |
+|---|---|---|---|
+| `Play` for a still, after the TV already HEAD+GET the photo during `SetAVTransportURI` | `701 Transition not available` | the transport is already `PLAYING`; there is no transition to make. Not deterministic: the same photo sometimes gets `Play` accepted (the fetch had not finished yet), which is what Phase 2 saw | on 701, ask `GetTransportInfo`; `PLAYING`/`TRANSITIONING`/`PAUSED_PLAYBACK` means the cast is fine, anything else is a refusal |
+| `SetAVTransportURI` with port 8895 rejected by firewalld | `716 Resource not found`, immediately, no request ever reaches the server | the TV probes the URL inside `SetAVTransportURI` and gives up when the port is closed; the "wait the budget, then see zero requests" path never runs | 716 with `item.requests == 0` is the `tv_fetched_nothing` diagnosis with the firewall command; 716 after a request is `tv_rejected` |
+
+The `requests == 0` budget path stays for renderers that accept the URI and never come for it.
+

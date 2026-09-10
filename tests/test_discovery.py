@@ -33,3 +33,63 @@ def test_allowed_hosts_cover_every_interface_address():
 
 def test_local_addresses_always_include_loopback_names():
     assert {"localhost", "127.0.0.1", "::1"} <= local_addresses()
+
+
+def test_select_and_persist(app, monkeypatch, tmp_path):
+    import json
+    import os
+    from castlib import app as app_module
+    from castlib.app import Settings
+    from tests.test_api import _json
+    monkeypatch.setattr(app_module, "control_urls",
+                        lambda ip: ("http://%s:9197/avt" % ip, "") if ip != "192.0.2.1" else (None, None))
+    monkeypatch.setattr(app_module, "local_ip", lambda ip: "127.0.0.1")
+    monkeypatch.setattr(app_module, "renderer_name", lambda ip: "Described")
+    app.tvs = [{"ip": "192.0.2.9", "name": "Bedroom", "avt": "http://192.0.2.9:9197/avt"}]
+    status, _, d = _json(app.base_url, "POST", "/api/tv/select", {"ip": "192.0.2.9"})
+    assert status == 200
+    assert d["tv"] == {"ip": "192.0.2.9", "name": "Bedroom", "state": "ready"}
+    assert app.tv_control() == "http://192.0.2.9:9197/avt"
+    settings = os.path.join(str(tmp_path / "config"), "settings.json")
+    with open(settings, encoding="utf-8") as fh:
+        assert json.load(fh)["tv"] == "192.0.2.9"
+    assert Settings(settings).get("tv") == "192.0.2.9"        # a restart reads it back
+    status, _, d = _json(app.base_url, "POST", "/api/tv/select", {"ip": "192.0.2.1"})
+    assert status == 503 and d["error"]["code"] == "tv_no_avtransport"
+    assert app.tv["ip"] == "192.0.2.9"                        # a failed select changes nothing
+    status, _, d = _json(app.base_url, "POST", "/api/tv/select", {"ip": ""})
+    assert status == 400
+    # an address discovery never listed gets its name from the device description
+    app.tvs = []
+    status, _, d = _json(app.base_url, "POST", "/api/tv/select", {"ip": "192.0.2.7"})
+    assert status == 200 and d["tv"]["name"] == "Described"
+
+
+def test_discover_keeps_the_preferred_tv(app, monkeypatch):
+    from castlib import app as app_module
+    from tests.test_api import _json
+    found = [("192.0.2.5", "http://192.0.2.5/avt", "Kitchen"), ("127.0.0.1", "http://127.0.0.1:1/avt", "Fake TV")]
+    monkeypatch.setattr(app_module, "discover", lambda: found)
+    monkeypatch.setattr(app_module, "local_ip", lambda ip: "127.0.0.1")
+    status, _, d = _json(app.base_url, "POST", "/api/tv/discover")
+    assert status == 200
+    assert [t["ip"] for t in d["tvs"]] == ["192.0.2.5", "127.0.0.1"]
+    assert d["tv"]["ip"] == "127.0.0.1"                        # the one already selected stays
+    monkeypatch.setattr(app_module, "discover", lambda: [])
+    app.tv = None
+    status, _, d = _json(app.base_url, "POST", "/api/tv/discover")
+    assert d["tvs"] == [] and d["tv"]["state"] == "none"
+
+
+def test_addrinuse_attaches_to_running_instance(app, monkeypatch, upstream):
+    from castlib.app import AlreadyRunning, App
+    opened = []
+    monkeypatch.setattr("webbrowser.open", lambda url: opened.append(url))
+    with pytest.raises(AlreadyRunning) as info:
+        App.start(app.server.port, browser=True)
+    assert info.value.url == "http://127.0.0.1:%d/ui/" % app.server.port
+    # a port held by something that is not cast-tv is a plain bind failure
+    other = upstream(b"<html>", ctype="text/html")
+    with pytest.raises(OSError) as err:
+        App.start(other.server_address[1], browser=False)
+    assert not isinstance(err.value, AlreadyRunning)
