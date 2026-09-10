@@ -1146,15 +1146,15 @@ mocked).
 
 #### Automated
 
-- [ ] 1.1 `python -m pytest tests/` passes on Fedora
-- [ ] 1.2 `python -m pyflakes castlib tests` reports nothing
-- [ ] 1.3 `./cast-tv --list` prints the TV; `./cast-tv --stop` stops it
-- [ ] 1.4 Two items in one server both serve; neither replaces the other
+- [x] 1.1 `python -m pytest tests/` passes on Fedora
+- [x] 1.2 `python -m pyflakes castlib tests` reports nothing
+- [x] 1.3 `./cast-tv --list` prints the TV; `./cast-tv --stop` stops it
+- [x] 1.4 Two items in one server both serve; neither replaces the other
 
 #### Manual
 
-- [ ] 1.5 `cast-tv film.mkv -s film.srt`, relay, and `--debug` behave as before
-- [ ] 1.6 Foreign Origin → 403 JSON; wrong media token → 404
+- [x] 1.5 `cast-tv film.mkv -s film.srt`, relay, and `--debug` behave as before
+- [x] 1.6 Foreign Origin → 403 JSON; wrong media token → 404
 
 ### Phase 2: Photos — kind-aware serving and the materialised pipeline
 
