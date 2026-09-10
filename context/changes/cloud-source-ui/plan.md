@@ -1173,16 +1173,16 @@ mocked).
 
 #### Automated
 
-- [x] 3.1 `python -m pytest tests/` passes
-- [x] 3.2 `cast-tv` with no arguments prints two addresses and exits cleanly on Ctrl+C
+- [x] 3.1 `python -m pytest tests/` passes — 57d012f
+- [x] 3.2 `cast-tv` with no arguments prints two addresses and exits cleanly on Ctrl+C — 57d012f
 
 #### Manual
 
-- [x] 3.3 UI opens on laptop and phone with the TV in the header
-- [x] 3.4 CLI slideshow with photos and a video plays to the end
-- [x] 3.5 Stop from UI, replace from UI, no 404 on the replaced cast
-- [x] 3.6 Firewall block yields the zero-bytes diagnosis with the command
-- [x] 3.7 TV unplugged shows unreachable; retry recovers
+- [x] 3.3 UI opens on laptop and phone with the TV in the header — 57d012f
+- [x] 3.4 CLI slideshow with photos and a video plays to the end — 57d012f
+- [x] 3.5 Stop from UI, replace from UI, no 404 on the replaced cast — 57d012f
+- [x] 3.6 Firewall block yields the zero-bytes diagnosis with the command — 57d012f
+- [x] 3.7 TV unplugged shows unreachable; retry recovers — 57d012f
 
 ### Phase 4: GoPro tab
 
