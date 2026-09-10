@@ -7,9 +7,9 @@ repository: Piotr-Miller/cast-tv
 topic: "Turning the one-shot cast-tv CLI into a long-lived local web UI: what the existing server, resolvers and history constrain"
 tags: [research, codebase, range-handler, relay, dlna, didl, castcloud, gopro, google-photos, onedrive, picker-api, photos, heic, packaging]
 status: complete
-last_updated: 2026-09-09
+last_updated: 2026-09-10
 last_updated_by: Claude (Fable 5.1)
-last_updated_note: "OAuth spike, empirical half: desktop loopback + PKCE mints a Picker-scoped token, opens a session, lists the pick; baseUrl is 206 with Bearer and 403 without. Retired Open Question 1"
+last_updated_note: "Phase 1 manual verification record (rows 1.5, 1.6): samples, TV, observed output; what the evening did not cover"
 ---
 
 # Research: Turning the one-shot cast-tv CLI into a long-lived local web UI
@@ -502,3 +502,26 @@ What this settles for the plan:
 Console-side facts for whoever repeats this: the OAuth pieces (consent screen, client, Picker
 API) are always-free and need no billing account; the new "Google Auth Platform" wizard renders
 wider than the window on this GNOME/Chrome setup and needs `Ctrl -` to reach the Next button.
+
+## Follow-up 2026-09-10 — Phase 1 manual verification (plan rows 1.5, 1.6)
+
+Recorded here because the Phase 1 implementation review (F7) asked for observable evidence
+behind the ticked manual rows. Machine: the Fedora laptop at `192.168.50.198`; renderer:
+Samsung `83" OLED` at `192.168.50.142`; code: `31d715d` plus the review fixes.
+
+| check | material | observed |
+|---|---|---|
+| local file with subtitles, `--debug` (row 1.5) | `~/Videos/cast-tv-smoke/smoke.mp4` (ffmpeg `testsrc` 1280x720, 15 s, libopenh264 + AAC, 1 026 026 bytes) and `smoke.srt` (one cue, 1-5 s) | `[tv] HEAD` then `GET` of the video, `GET` of the subtitle item (51 bytes), four ranged `GET`s (`bytes=0-`, `1025898-`, `1015082-`, `98352-`), `PLAYING` ticks through `0:00:14`, `STOPPED`, `Finished.`; the caption rendered on screen |
+| relay, `--debug` (row 1.5) | `https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_1MB.mp4` (969 201 bytes) | `upstream: 200 video/mp4` on the TV's rangeless HEAD/GET, `upstream: 206` on `bytes=0-`, `bytes=969073-` (128 bytes) and two more `bytes=0-`; `relaying through http://192.168.50.198:8895 -> 192.168.50.142`; played to `Finished.` |
+| foreign Origin (row 1.6) | `curl -i -H 'Origin: http://evil' http://localhost:8895/api/status` while the smoke clip played | `HTTP/1.1 403 Forbidden`, `Content-Type: application/json; charset=utf-8`, `Content-Length: 127`, body `{"error": {"code": "forbidden", ...}}` |
+| wrong media token (row 1.6) | `curl -i http://localhost:8895/m/zlytoken/cokolwiek` | `HTTP/1.1 404 Not Found`, JSON body `{"error": {"code": "not_found", "message": "Not found.", "hint": null}}` |
+
+Two things the rows promise that this evening did **not** cover: the Origin/token curls ran
+on the laptop itself (`localhost`), not from a second machine on the LAN, and the relay was
+not exercised with a cookie jar (`-c`). The cookie path is covered by
+`test_relay.py::test_cookie_opener_is_used_for_upstream` after review finding F5, which found
+that the inherited `opener.urlopen` call had never worked.
+
+The URL handed to the TV is now `http://<host>:8895/m/<token>/<id>` with no file extension;
+the Samsung accepted it for both the local file and the relay, so the `.mp4` suffix the
+one-shot script appended to extension-less relay names is not needed for playback.

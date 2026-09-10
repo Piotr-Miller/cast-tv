@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import re
 import socket
+import sys
 import time
 import urllib.parse
 import urllib.request
@@ -79,13 +80,52 @@ def local_ip(target):
     return ip
 
 
+def interface_addresses() -> set[str]:
+    """Every IPv4 address configured on this machine's interfaces, loopback included.
+
+    Uses ``ifaddr`` when installed (Phase 7 makes it a dependency, for
+    Windows); otherwise asks the kernel per interface over ``SIOCGIFADDR``,
+    which is Linux-only and needs no dependency.
+    """
+    addrs: set[str] = set()
+    try:
+        import ifaddr
+    except ImportError:
+        ifaddr = None
+    if ifaddr is not None:
+        for adapter in ifaddr.get_adapters():
+            for ip in adapter.ips:
+                if isinstance(ip.ip, str):
+                    addrs.add(ip.ip)
+        return addrs
+    if sys.platform.startswith("linux"):
+        import fcntl
+        import struct
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            for _index, name in socket.if_nameindex():
+                try:
+                    res = fcntl.ioctl(s.fileno(), 0x8915,   # SIOCGIFADDR
+                                      struct.pack("256s", name.encode()[:15]))
+                except OSError:
+                    continue                # no IPv4 on this interface
+                addrs.add(socket.inet_ntoa(res[20:24]))
+        finally:
+            s.close()
+    return addrs
+
+
 def local_addresses() -> set[str]:
     """Names and IPv4 addresses a browser may put in ``Host`` when it means this machine.
 
-    Loopback plus every address the hostname resolves to and the one on the
-    default route. Phase 7 enumerates interfaces properly.
+    Loopback, every interface address, everything the hostname resolves to and
+    the address on the default route.
     """
     addrs = {"localhost", "127.0.0.1", "::1"}
+    try:
+        addrs |= interface_addresses()
+    except OSError:
+        pass
     try:
         for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
             addrs.add(info[4][0])

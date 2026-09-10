@@ -86,3 +86,21 @@ def test_generic_upstream_type_is_overridden_by_item_mime(server, upstream):
     assert status == 200
     assert headers["Content-Type"] == "video/mp4"
     assert headers["transferMode.dlna.org"] == "Streaming"
+
+
+def test_cookie_opener_is_used_for_upstream(server, upstream, tmp_path):
+    import http.cookiejar
+    import urllib.request
+    srv, base = server
+    up = upstream(BODY)
+    jar_file = tmp_path / "cookies.txt"
+    jar_file.write_text("# Netscape HTTP Cookie File\n"
+                        "127.0.0.1\tFALSE\t/\tFALSE\t2000000000\tsession\tabc123\n", encoding="utf-8")
+    jar = http.cookiejar.MozillaCookieJar()
+    jar.load(str(jar_file), ignore_discard=True, ignore_expires=True)
+    opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
+    item = _relayed(srv, lambda: Upstream(up.base + "/clip", opener=opener))
+    status, _, body, _ = request(base, "GET", "/m/%s/%s" % (srv.media_token, item.id))
+    assert status == 200
+    assert body == BODY
+    assert "session=abc123" in up.requests[0]["headers"].get("Cookie", "")

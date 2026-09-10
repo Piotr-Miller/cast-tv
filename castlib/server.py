@@ -92,7 +92,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
 
     def _drain(self):
-        """Consume a request body we are not going to use, so keep-alive stays in sync."""
+        """Consume a request body we are not going to use, so keep-alive stays in sync.
+
+        Safe to call more than once per request: only the first call reads.
+        """
+        if getattr(self, "_drained", False):
+            return
+        self._drained = True
         length = self.headers.get("Content-Length", "")
         if not length.isdigit():
             return
@@ -140,6 +146,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self._dispatch(body=True)
 
     def _dispatch(self, body):
+        self._drained = False
         raw_path, _, query = self.path.partition("?")
         path = urllib.parse.unquote(raw_path)
         if path.startswith("/m/"):
@@ -163,12 +170,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return
             app.api(self, path, query)
             return
-        self._drain()
         if path == "/ui" or path.startswith("/ui/"):
             if not self._check_origin():
                 return
+            self._drain()
             self._json_error(404, "not_found", "Not found.")
             return
+        self._drain()
         if path == "/" and self.command != "POST":
             self.send_response(302)
             self.send_header("Location", "/ui/")
@@ -195,6 +203,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self._serve_file(item, item.path, item.mime, body)
         finally:
             registry.end(item.id)
+            try:
+                self.connection.settimeout(self.timeout)   # back to the idle budget
+            except OSError:
+                pass
 
     def _serve_file(self, item, disk, mime, body):
         if not disk:
