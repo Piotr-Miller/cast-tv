@@ -30,6 +30,7 @@ class MediaItem:
     mime: str
     source: str               # "local" | "link" | "gopro" | "onedrive" | "gphotos"
     source_id: str            # identity within the source; (source, source_id) is unique
+    version: str | None = None   # etag or id the source gives the bytes; local files use mtime+size
     path: str | None = None   # local file, or None
     resolve: Callable[[], Upstream] | None = None   # for remote items
     size: int | None = None
@@ -54,6 +55,15 @@ class Registry:
     def __init__(self):
         self._items: dict[str, MediaItem] = {}
         self._lock = threading.Lock()
+        self.on_remove: Callable[[MediaItem], None] | None = None   # e.g. photos.release
+
+    def _removed(self, items):
+        if self.on_remove is not None:
+            for item in items:
+                try:
+                    self.on_remove(item)
+                except Exception:
+                    pass
 
     def add(self, item: MediaItem) -> MediaItem:
         """Assign an id and publish the item atomically; returns the same object."""
@@ -74,7 +84,10 @@ class Registry:
 
     def remove(self, item_id: str) -> MediaItem | None:
         with self._lock:
-            return self._items.pop(item_id, None)
+            item = self._items.pop(item_id, None)
+        if item is not None:
+            self._removed([item])
+        return item
 
     def items(self) -> list[MediaItem]:
         with self._lock:
@@ -104,7 +117,8 @@ class Registry:
                     and now - i.last_request > idle_seconds]
             for i in gone:
                 del self._items[i.id]
-            return gone
+        self._removed(gone)
+        return gone
 
     def touch(self, item_id: str) -> None:
         with self._lock:

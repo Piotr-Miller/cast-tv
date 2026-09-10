@@ -20,3 +20,5 @@ scripts/local/
 .ai-toolkit/
 
 .venv/
+build/
+*.egg-info/

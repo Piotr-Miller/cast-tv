@@ -197,7 +197,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
         registry.begin(item.id)
         try:
             self.connection.settimeout(MEDIA_TIMEOUT)
-            if item.path is None and item.resolve is not None:
+            if item.kind == "photo":
+                # the route never converts: a photo is prepared before the TV
+                # is told about it, or it is not served
+                prep = item.prepared
+                if prep is None:
+                    self._json_error(404, "not_found", "Not found.")
+                else:
+                    self._serve_file(item, prep.path, prep.mime, body)
+            elif item.path is None and item.resolve is not None:
                 relay.proxy(self, item, body)
             else:
                 self._serve_file(item, item.path, item.mime, body)

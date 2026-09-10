@@ -1160,14 +1160,14 @@ mocked).
 
 #### Automated
 
-- [ ] 2.1 `python -m pytest tests/` passes
-- [ ] 2.2 `pip install .` pulls `pillow` and `pillow-heif`
+- [x] 2.1 `python -m pytest tests/` passes
+- [x] 2.2 `pip install .` pulls `pillow` and `pillow-heif`
 
 #### Manual
 
-- [ ] 2.3 JPEG, HEIC, PNG and a portrait photo show correctly on the Samsung
-- [ ] 2.4 HEAD and GET agree in `--debug`; photo DLNA values recorded in `research.md`
-- [ ] 2.5 `cast-tv film.mkv` unchanged
+- [x] 2.3 JPEG, HEIC, PNG and a portrait photo show correctly on the Samsung
+- [x] 2.4 HEAD and GET agree in `--debug`; photo DLNA values recorded in `research.md`
+- [x] 2.5 `cast-tv film.mkv` unchanged
 
 ### Phase 3: Long-lived server, cast supervisor, slideshow, UI shell
 
