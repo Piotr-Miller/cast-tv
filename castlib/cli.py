@@ -154,10 +154,25 @@ def cast(source, subs=None, tv=None, port=DEFAULT_PORT, title=None, debug=False,
     except OSError as e:
         print("Cannot bind port %d: %s" % (port, e))
         return 1
+    try:
+        return _cast_on(srv, ip, avt, item, subs, relaying, source, debug)
+    finally:
+        # the CLI owns this server: retire what it registered and free the
+        # port, whatever the exit path (SOAP failure, Ctrl+C, end of playback)
+        for registered in srv.registry.items():
+            srv.registry.retire(registered.id)
+        srv.shutdown()
+        srv.server_close()
+        config.remove_photo_tmp_dir()
+
+
+def _cast_on(srv, ip, avt, item, subs, relaying, source, debug):
+    port = srv.port
     host = local_ip(ip)
     srv.set_host(host)
     base = "http://%s:%d" % (host, port)
-    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    threading.Thread(target=srv.serve_forever, kwargs={"poll_interval": 0.25},
+                     daemon=True).start()
 
     registry = srv.registry
     if subs:
@@ -206,7 +221,7 @@ def cast(source, subs=None, tv=None, port=DEFAULT_PORT, title=None, debug=False,
                 if waited >= (40 if state == "TRANSITIONING" else 24):
                     print("\n   The TV never started playing.")
                     if item.kind == "video":
-                        explain_failure(source if relaying else path)
+                        explain_failure(source if relaying else item.source_id)
                     break
                 continue
             if state == "STOPPED" and started:
@@ -219,8 +234,6 @@ def cast(source, subs=None, tv=None, port=DEFAULT_PORT, title=None, debug=False,
         except Exception:
             pass
         print("   Stopped.")
-    finally:
-        config.remove_photo_tmp_dir()
     return 0
 
 
@@ -289,7 +302,8 @@ def main_gopro(argv=None):
     ap.add_argument("-n", "--count", type=int, default=25, help="how many entries to list")
     ap.add_argument("-q", "--quality", choices=("auto", "source", "proxy"), default="auto",
                     help="auto takes the best variant, proxy a lighter preview")
-    ap.add_argument("-t", "--tv", help="TV address")
+    ap.add_argument("-t", "--tv", default=os.environ.get("CAST_TV"),
+                    help="TV address (default: $CAST_TV, else discover it)")
     ap.add_argument("-p", "--port", type=int, help="HTTP port for cast-tv to serve on")
     ap.add_argument("--url-only", action="store_true",
                     help="print the address instead of casting it")
@@ -326,7 +340,8 @@ def main_photos(argv=None):
                                  description="Play a Google Photos video on a TV.")
     ap.add_argument("link", help="link to a video in Google Photos")
     ap.add_argument("-c", "--cookies", help="Netscape cookie jar (for private links)")
-    ap.add_argument("-t", "--tv", help="TV address")
+    ap.add_argument("-t", "--tv", default=os.environ.get("CAST_TV"),
+                    help="TV address (default: $CAST_TV, else discover it)")
     ap.add_argument("-p", "--port", type=int, help="HTTP port for cast-tv to serve on")
     ap.add_argument("--url-only", action="store_true",
                     help="print the address instead of casting it")

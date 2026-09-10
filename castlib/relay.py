@@ -32,7 +32,9 @@ def _open(item, wanted, handler):
         if wanted:
             req.add_header("Range", wanted)
         try:
-            return up, (up.opener or urllib.request).urlopen(req, timeout=30)
+            if up.opener is not None:
+                return up, up.opener.open(req, timeout=30)
+            return up, urllib.request.urlopen(req, timeout=30)
         except urllib.error.HTTPError as e:
             last = e
             if e.code in RERESOLVE_ON and attempt == 1:

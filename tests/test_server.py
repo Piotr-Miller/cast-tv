@@ -117,3 +117,32 @@ def test_host_only():
     assert _host_only("192.168.1.5") == "192.168.1.5"
     assert _host_only("[::1]:8895") == "::1"
     assert _host_only("") == ""
+
+
+def test_rejected_ui_post_drains_body_once(server):
+    srv, base = server
+    host = base.split("://", 1)[1]
+    conn = http.client.HTTPConnection(host, timeout=5)
+    conn.request("POST", "/ui/x", body=b"{}",
+                 headers={"Content-Type": "application/json", "Origin": "http://evil"})
+    resp = conn.getresponse()
+    resp.read()
+    assert resp.status == 403
+    conn.request("GET", "/favicon.ico")
+    resp = conn.getresponse()
+    resp.read()
+    assert resp.status == 204
+
+
+def test_idle_timeout_restored_after_media_transfer(server, local_file, monkeypatch):
+    import time
+    from castlib import server as server_module
+    monkeypatch.setattr(server_module, "MEDIA_TIMEOUT", 1)
+    srv, base = server
+    item, data = local_file(srv)
+    status, _, body, conn = request(base, "HEAD", "/m/%s/%s" % (srv.media_token, item.id))
+    assert status == 200
+    time.sleep(1.5)     # longer than the transfer budget, shorter than the idle one
+    status, _, body, _ = request(base, "GET", "/m/%s/%s" % (srv.media_token, item.id),
+                                 conn=conn)
+    assert status == 200 and body == data
