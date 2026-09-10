@@ -117,3 +117,122 @@ def upstream():
     for srv in servers:
         srv.shutdown()
         srv.server_close()
+
+
+# ---------------------------------------------------------------- Phase 3
+class FakeTV:
+    """A scripted renderer behind ``dlna.soap``: records every action, answers transport states.
+
+    Each ``SetAVTransportURI`` starts a fresh script chosen by the item's
+    kind: a photo reports ``PLAYING`` for ever (as the Samsung does), a video
+    walks ``video_script`` one state per ``GetTransportInfo`` and repeats the
+    last one. ``fail`` makes every call raise, as an unplugged TV would.
+    """
+
+    def __init__(self, registry_getter):
+        self._registry = registry_getter
+        self.video_script = ["TRANSITIONING", "PLAYING", "PLAYING", "STOPPED"]
+        self.photo_script = ["PLAYING"]
+        self.play_delay = 0.0
+        self.faults = {}         # action -> UPnP error code to answer with, e.g. {"Play": "701"}
+        self.fail = False
+        self.calls = []          # (action, body, t_start, t_end)
+        self.uris = []
+        self._script = []
+        self._index = 0
+        self._lock = threading.Lock()
+
+    def soap(self, url, svc, action, body=""):
+        import re
+        import time
+        from xml.sax.saxutils import unescape
+        if self.fail:
+            raise OSError("unreachable")
+        t0 = time.monotonic()
+        answer = ""
+        with self._lock:
+            if action == "SetAVTransportURI":
+                m = re.search(r"<CurrentURI>(.*?)</CurrentURI>", body)
+                uri = unescape(m.group(1)) if m else ""
+                self.uris.append(uri)
+                item = self._registry().get(uri.rsplit("/", 1)[-1])
+                self._script = list(self.photo_script if item is not None and item.kind == "photo"
+                                    else self.video_script)
+                self._index = 0
+            elif action == "GetTransportInfo":
+                if self._script:
+                    state = self._script[min(self._index, len(self._script) - 1)]
+                    self._index += 1
+                else:
+                    state = "STOPPED"
+                answer = "<CurrentTransportState>%s</CurrentTransportState>" % state
+            elif action == "GetPositionInfo":
+                answer = "<RelTime>0:00:01</RelTime><TrackDuration>0:00:10</TrackDuration>"
+        if action == "Play" and self.play_delay:
+            time.sleep(self.play_delay)
+        with self._lock:
+            self.calls.append((action, body, t0, time.monotonic()))
+        if action in self.faults:
+            import io
+            import urllib.error
+            code = self.faults[action]
+            desc = {"701": "Transition not available", "716": "Resource not found"}.get(code, "Fault")
+            fault = ("<s:Envelope><s:Body><s:Fault><detail><UPnPError>"
+                     "<errorCode>%s</errorCode><errorDescription>%s</errorDescription>"
+                     "</UPnPError></detail></s:Fault></s:Body></s:Envelope>" % (code, desc)).encode()
+            raise urllib.error.HTTPError(url, 500, "Internal Server Error", {}, io.BytesIO(fault))
+        return answer
+
+    def actions(self):
+        with self._lock:
+            return [c[0] for c in self.calls]
+
+    def times(self, action):
+        """``[(t_start, t_end)]`` for every call of ``action``."""
+        with self._lock:
+            return [(c[2], c[3]) for c in self.calls if c[0] == action]
+
+    def uri_ids(self):
+        with self._lock:
+            return [u.rsplit("/", 1)[-1] for u in self.uris]
+
+
+@pytest.fixture
+def fast_supervisor(monkeypatch):
+    """Poll and budget constants scaled so a whole cast lifecycle takes well under a second."""
+    from castlib import supervisor
+    monkeypatch.setattr(supervisor, "POLL_INTERVAL", 0.02)
+    monkeypatch.setattr(supervisor, "BUDGET_TRANSITIONING", 0.6)
+    monkeypatch.setattr(supervisor, "BUDGET_OTHER", 0.3)
+    monkeypatch.setattr(supervisor, "TICK", 0.02)
+    monkeypatch.setattr(supervisor, "check_codecs", lambda path: ([], None))
+
+
+@pytest.fixture
+def app(server, monkeypatch, tmp_path, fast_supervisor):
+    """An ``App`` on the in-process server, talking to a ``FakeTV``; yields the app (``app.tv_fake`` is the TV)."""
+    from castlib import config, dlna
+    from castlib.app import App
+    monkeypatch.setattr(config, "_CONFIG", str(tmp_path / "config"))
+    srv, base = server
+    a = App(srv)
+    tv = FakeTV(lambda: srv.registry)
+    monkeypatch.setattr(dlna, "soap", tv.soap)
+    a.use_tv("127.0.0.1", "http://127.0.0.1:1/avt", "Fake TV")
+    a.tv_fake = tv
+    a.base_url = base
+    try:
+        yield a
+    finally:
+        a.close()
+
+
+def wait_for(predicate, timeout=5.0, step=0.01):
+    """Poll ``predicate`` until true; fail loudly otherwise."""
+    import time
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if predicate():
+            return True
+        time.sleep(step)
+    raise AssertionError("condition not met within %.1fs" % timeout)

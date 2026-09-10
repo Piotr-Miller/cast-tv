@@ -219,10 +219,10 @@ def test_conversion_failure_sends_no_soap(tmp_path, monkeypatch, capsys):
     from castlib import cli
     bad = tmp_path / "broken.jpg"
     bad.write_bytes(b"\xff\xd8 definitely not a jpeg")
+    from castlib import dlna
     calls = []
-    monkeypatch.setattr(cli, "soap", lambda *a, **kw: calls.append(a))
-    monkeypatch.setattr(cli, "find_tv", lambda tv: ("127.0.0.1", "http://127.0.0.1:1/avt"))
-    monkeypatch.setattr(cli, "local_ip", lambda ip: "127.0.0.1")
+    monkeypatch.setattr(dlna, "soap", lambda *a, **kw: calls.append(a))
+    monkeypatch.setattr(cli, "find_tv", lambda tv: ("127.0.0.1", "http://127.0.0.1:1/avt", "Fake"))
     import socket
     s = socket.socket(); s.bind(("127.0.0.1", 0)); port = s.getsockname()[1]; s.close()
     assert cli.cast(str(bad), tv="127.0.0.1", port=port) == 1
@@ -234,7 +234,7 @@ def test_cli_refuses_gif(tmp_path, monkeypatch, capsys):
     from castlib import cli
     path = tmp_path / "anim.gif"
     path.write_bytes(make.gif())
-    monkeypatch.setattr(cli, "find_tv", lambda tv: ("127.0.0.1", "http://127.0.0.1:1/avt"))
+    monkeypatch.setattr(cli, "find_tv", lambda tv: ("127.0.0.1", "http://127.0.0.1:1/avt", "Fake"))
     assert cli.cast(str(path), tv="127.0.0.1", port=0) == 1
     assert "GIF" in capsys.readouterr().out
 
@@ -349,10 +349,10 @@ def test_bomb_sends_no_soap(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(Image, "MAX_IMAGE_PIXELS", 1000)
     path = tmp_path / "bomb.jpg"
     path.write_bytes(make.jpeg())
+    from castlib import dlna
     calls = []
-    monkeypatch.setattr(cli, "soap", lambda *a, **kw: calls.append(a))
-    monkeypatch.setattr(cli, "find_tv", lambda tv: ("127.0.0.1", "http://127.0.0.1:1/avt"))
-    monkeypatch.setattr(cli, "local_ip", lambda ip: "127.0.0.1")
+    monkeypatch.setattr(dlna, "soap", lambda *a, **kw: calls.append(a))
+    monkeypatch.setattr(cli, "find_tv", lambda tv: ("127.0.0.1", "http://127.0.0.1:1/avt", "Fake"))
     import socket
     s = socket.socket(); s.bind(("127.0.0.1", 0)); port = s.getsockname()[1]; s.close()
     assert cli.cast(str(path), tv="127.0.0.1", port=port) == 1

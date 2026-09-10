@@ -71,6 +71,20 @@ def control_urls(ip):
     return None, None
 
 
+def renderer_name(ip):
+    """The ``friendlyName`` from the device description at ``ip``, or ``None``."""
+    for port, path in ((9197, "/dmr"), (7676, "/dmr"), (9197, "/"), (52235, "/dmr")):
+        try:
+            xml = urllib.request.urlopen("http://%s:%d%s" % (ip, port, path),
+                                         timeout=3).read().decode("utf-8", "replace")
+        except Exception:
+            continue
+        m = re.search(r"<friendlyName>(.*?)</friendlyName>", xml, re.S)
+        if m:
+            return unescape(m.group(1), {"&quot;": '"', "&apos;": "'"})
+    return None
+
+
 def local_ip(target):
     """The address of the interface that routes to ``target``; no packet is sent."""
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
