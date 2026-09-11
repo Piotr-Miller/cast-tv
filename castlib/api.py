@@ -18,7 +18,9 @@ import urllib.request
 from castlib.errors import AuthError, CastError, ConfigError, NotMedia, TVError, UpstreamError
 
 MAX_BODY = 1 << 20
+MAX_SHOW_ITEMS = 500          # checked before the first resolve(), which from Phase 4 is an upstream call
 THUMB_LIMIT = 8 * 1024 * 1024
+THUMB_TYPES = ("image/jpeg", "image/png", "image/webp", "image/gif")   # raster only: SVG can script
 SHOW_CONTROLS = ("pause", "resume", "next", "prev", "stop")
 _SOURCE = re.compile(r"^/api/sources/([A-Za-z0-9_-]+)(?:/(status|connect|disconnect|list|thumb))?(?:/(.+))?$")
 
@@ -125,6 +127,8 @@ def _route(app, handler, method: str, path: str, params: dict) -> None:
             wanted = body.get("items")
             if not isinstance(wanted, list) or not wanted:
                 raise BadRequest("Give a non-empty list of items.")
+            if len(wanted) > MAX_SHOW_ITEMS:
+                raise BadRequest("A show holds at most %d items." % MAX_SHOW_ITEMS, "show_too_large")
             items = [app.resolve(_field(entry, "source"), _field(entry, "id"),
                                  str(entry.get("quality") or "auto"))
                      for entry in wanted if isinstance(entry, dict)]
@@ -156,7 +160,7 @@ def _route(app, handler, method: str, path: str, params: dict) -> None:
     if path == "/api/errors":
         if _method(handler, method, ("GET",)):
             handler._drain()
-            handler._json(200, {"errors": app.errors.list()})
+            handler._json(200, {"errors": app.errors.list(), "seq": app.errors.seq})
         return
     if path == "/api/settings":
         if not _method(handler, method, ("GET", "POST")):
@@ -193,7 +197,7 @@ def _source_route(app, handler, method, name, action, rest, params) -> None:
     if action == "thumb" and rest:
         if _method(handler, method, ("GET",)):
             handler._drain()
-            _thumb(handler, src, urllib.parse.unquote(rest))
+            _thumb(handler, src, rest)        # the dispatcher already unquoted the path once
         return
     if rest is not None:
         handler._drain()
@@ -207,8 +211,7 @@ def _source_route(app, handler, method, name, action, rest, params) -> None:
     if action == "connect":
         if _method(handler, method, ("POST",)):
             body = _body(handler)
-            handler._json(200, src.connect(**{k: v for k, v in body.items()
-                                              if isinstance(k, str)}))
+            handler._json(200, src.connect(body))   # one dict: every key is data, none a parameter name
         return
     if action == "disconnect":
         if _method(handler, method, ("POST",)):
@@ -238,13 +241,19 @@ def _thumb(handler, src, source_id: str) -> None:
     try:
         with (up.opener.open(req, timeout=20) if up.opener is not None
               else urllib.request.urlopen(req, timeout=20)) as resp:
-            ctype = (resp.headers.get("Content-Type") or "image/jpeg").split(";")[0].strip()
-            data = resp.read(THUMB_LIMIT + 1)
+            ctype = (resp.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+            data = resp.read(THUMB_LIMIT + 1) if ctype in THUMB_TYPES else b""
     except urllib.error.HTTPError as e:
         handler._json_error(502, "thumb_refused", "The source answered %d for the thumbnail." % e.code)
         return
     except Exception as e:
         handler._json_error(502, "thumb_failed", "Could not fetch the thumbnail: %s" % e)
+        return
+    if ctype not in THUMB_TYPES:
+        # Whatever it is, it must not become a same-origin document: HTML or SVG
+        # served from /api would run in the UI's origin and pass the Origin check.
+        handler._json_error(502, "thumb_not_image",
+                            "The source did not answer with a raster image (%s)." % (ctype or "no type"))
         return
     if len(data) > THUMB_LIMIT:
         handler._json_error(502, "thumb_too_large", "The thumbnail is unreasonably large.")
@@ -252,6 +261,7 @@ def _thumb(handler, src, source_id: str) -> None:
     handler.send_response(200)
     handler.send_header("Content-Type", ctype)
     handler.send_header("Content-Length", str(len(data)))
+    handler.send_header("X-Content-Type-Options", "nosniff")
     handler.send_header("Cache-Control", "private, max-age=3600")
     handler.end_headers()
     if handler.command != "HEAD":

@@ -65,6 +65,43 @@ def test_select_and_persist(app, monkeypatch, tmp_path):
     assert status == 200 and d["tv"]["name"] == "Described"
 
 
+def test_select_rejects_anything_but_ipv4_before_any_request(app, monkeypatch):
+    from castlib import app as app_module
+    from tests.test_api import _json
+    asked = []
+    monkeypatch.setattr(app_module, "control_urls", lambda ip: asked.append(ip) or (None, None))
+    monkeypatch.setattr(app_module, "renderer_name", lambda ip: asked.append(ip) or None)
+    before = app.tv
+    for bad in ("example.com/x?", "192.0.2.9:9197", "http://192.0.2.9", "::1", "fe80::1", "192.0.2"):
+        status, _, d = _json(app.base_url, "POST", "/api/tv/select", {"ip": bad})
+        assert status == 400 and d["error"]["code"] == "bad_ip", bad
+    assert asked == []                                        # nothing was fetched
+    assert app.tv == before and app.settings.get("tv") is None   # nothing was saved
+
+
+def test_rediscovery_keeps_saved_tv(app, monkeypatch):
+    from castlib import app as app_module
+    from tests.test_api import _json
+    monkeypatch.setattr(app_module, "local_ip", lambda ip: "127.0.0.1")
+    app.settings.set("tv", "192.0.2.9")                       # an explicit choice, now switched off
+    app.tv = None
+    monkeypatch.setattr(app_module, "discover", lambda: [("192.0.2.5", "http://192.0.2.5/avt", "Kitchen")])
+    status, _, d = _json(app.base_url, "POST", "/api/tv/discover")
+    assert status == 200 and d["tv"]["ip"] == "192.0.2.5"     # usable now
+    assert app.settings.get("tv") == "192.0.2.9"              # but the saved choice survives
+    app.tv = None
+    monkeypatch.setattr(app_module, "discover", lambda: [("192.0.2.5", "http://192.0.2.5/avt", "Kitchen"),
+                                                          ("192.0.2.9", "http://192.0.2.9/avt", "Bedroom")])
+    status, _, d = _json(app.base_url, "POST", "/api/tv/discover")
+    assert d["tv"]["ip"] == "192.0.2.9"                       # back on: preferred again
+    assert app.settings.get("tv") == "192.0.2.9"
+    # with nothing saved yet, the first discovered TV is remembered as before
+    app.settings.set("tv", None)
+    app.tv = None
+    status, _, d = _json(app.base_url, "POST", "/api/tv/discover")
+    assert d["tv"]["ip"] == "192.0.2.5" and app.settings.get("tv") == "192.0.2.5"
+
+
 def test_discover_keeps_the_preferred_tv(app, monkeypatch):
     from castlib import app as app_module
     from tests.test_api import _json

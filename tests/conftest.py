@@ -86,7 +86,8 @@ class _StubHandler(http.server.BaseHTTPRequestHandler):
         else:
             chunk = data
             self.send_response(200)
-        self.send_header("Content-Type", spec["ctype"])
+        if spec["ctype"] is not None:          # None: no Content-Type header at all
+            self.send_header("Content-Type", spec["ctype"])
         self.send_header("Content-Length", str(len(chunk)))
         self.end_headers()
         if body:
@@ -127,6 +128,9 @@ class FakeTV:
     kind: a photo reports ``PLAYING`` for ever (as the Samsung does), a video
     walks ``video_script`` one state per ``GetTransportInfo`` and repeats the
     last one. ``fail`` makes every call raise, as an unplugged TV would.
+    ``hooks[action]`` is a callable run once, on the calling thread, after that
+    action is recorded and before it answers: the deterministic way to land an
+    ``app.stop()`` or a second cast *during* a SOAP round-trip.
     """
 
     def __init__(self, registry_getter):
@@ -135,6 +139,7 @@ class FakeTV:
         self.photo_script = ["PLAYING"]
         self.play_delay = 0.0
         self.faults = {}         # action -> UPnP error code to answer with, e.g. {"Play": "701"}
+        self.hooks = {}          # action -> callable, run once during that action
         self.fail = False
         self.calls = []          # (action, body, t_start, t_end)
         self.uris = []
@@ -172,6 +177,9 @@ class FakeTV:
             time.sleep(self.play_delay)
         with self._lock:
             self.calls.append((action, body, t0, time.monotonic()))
+            hook = self.hooks.pop(action, None)
+        if hook is not None:
+            hook()
         if action in self.faults:
             import io
             import urllib.error

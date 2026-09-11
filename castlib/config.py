@@ -38,21 +38,32 @@ def _bare(name: str) -> str:
     return name
 
 
-def cache_write(name: str, data) -> None:
-    """Write JSON to the cache atomically: a temp file in the same directory, then rename."""
-    _bare(name)
-    os.makedirs(_CACHE, exist_ok=True)
-    fd, tmp = tempfile.mkstemp(prefix=name + ".", dir=_CACHE)
+def write_json(path: str, data) -> None:
+    """Write JSON to ``path`` atomically: a temp file in the same directory, then rename.
+
+    The file at ``path`` is untouched until the rename; on any failure the
+    temp file is removed and the exception propagates. Every JSON file
+    cast-tv keeps (settings, cache entries) is written through here.
+    """
+    directory = os.path.dirname(path) or "."
+    os.makedirs(directory, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(prefix=os.path.basename(path) + ".", dir=directory)
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as fh:
             json.dump(data, fh)
-        os.replace(tmp, os.path.join(_CACHE, name))
+        os.replace(tmp, path)
     except BaseException:
         try:
             os.unlink(tmp)
         except OSError:
             pass
         raise
+
+
+def cache_write(name: str, data) -> None:
+    """Write a JSON cache entry atomically (see ``write_json``)."""
+    _bare(name)
+    write_json(os.path.join(_CACHE, name), data)
 
 
 def cache_read(name: str):

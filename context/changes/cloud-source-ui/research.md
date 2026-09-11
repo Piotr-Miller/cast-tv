@@ -574,3 +574,15 @@ reports it (`describe_soap_error`).
 
 The `requests == 0` budget path stays for renderers that accept the URI and never come for it.
 
+### Manual rows 3.3, 3.5 and 3.7 — evidence (written 2026-09-11, Phase 3 review F9)
+
+Run on 2026-09-10 from the Fedora laptop (192.168.50.198) against the `83" OLED`
+(192.168.50.142), together with rows 3.4 and 3.6 above; confirmed by Piotr on 2026-09-11 when
+this note was written, one day after the run.
+
+| row | material | observed |
+|---|---|---|
+| 3.3 | laptop browser and phone, `http://192.168.50.198:8895/ui/` | the UI opened on both; the header showed `83" OLED` (192.168.50.142) |
+| 3.5 | a CLI cast running, server started with `--debug` | Stop from the UI stopped it; a replace from the UI (a session item) took over; `--debug` showed no 404 for the replaced item's URL |
+| 3.7 | the TV switched off / disconnected while selected | the header flipped to unreachable; retry (Search again, the TV back on) recovered it |
+

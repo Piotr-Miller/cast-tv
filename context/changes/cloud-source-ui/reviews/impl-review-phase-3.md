@@ -45,7 +45,7 @@ All 22 named Phase 3 tests exist by exact name; `test_thumb_route_proxies_and_40
   - Tradeoff: One more lock read per cast; a stop that lands between the re-check and `_promote` still slips through (sub-millisecond).
   - Confidence: HIGH — the probe reproduced it against the real `App` and `FakeTV`.
   - Blind spot: A stop during `SetAVTransportURI` means the TV shows the item for a moment before the second `Stop`; acceptable.
-- **Decision**: PENDING
+- **Decision**: FIXED differently (2026-09-11). The generation check and the promotion are one step under `app.lock`: `App._promote` returns `promoted` / `stopped` / `superseded`; a stale task ends `cancelled`, and sends one more `Stop` only when nothing owns playback (`stopped`), never when a newer cast or show does or the app is closing. Deterministic tests via `FakeTV.hooks` (a callable run during a SOAP action) and a wrapped `_promote`: `test_stop_during_set_uri_is_not_undone`, `test_stop_during_play_is_not_undone`, `test_stop_just_before_promotion_is_not_undone`, `test_superseded_before_promotion_sends_no_stop`.
 
 ### F2 — Prepared photo stays pinned when the task never registers it
 
@@ -55,7 +55,7 @@ All 22 named Phase 3 tests exist by exact name; `test_thumb_route_proxies_and_40
 - **Location**: castlib/supervisor.py:112-120, :256-257
 - **Detail**: `_prepare` calls `photos.prepare(item)`, which pins the converted file. The stale-generation branch (`_finish("cancelled")`) and the no-TV branch (`_finish("failed", TVError("no_tv"))`) return before `_register()`. `_finish` only does `if self.item.id: registry.retire(...)`, so the registry's `on_remove → photos.release` hook never fires for an item with no id. Reproduced: `pinned=True` after the stale skip and still `True` after evicting the whole registry. Every superseded photo cast (a fast user ticking through a grid) and every cast attempted without a TV leaks retained bytes against the 256 MB budget for the life of the process. This is the ownership contract from the Phase 2 review (F2).
 - **Fix**: In `_finish`, `if not self.item.id and self.item.prepared is not None: photos.release(self.item)`; add `test_supervisor.py::test_stale_task_releases_prepared_photo`.
-- **Decision**: PENDING
+- **Decision**: FIXED (2026-09-11). `Cast._finish` calls `photos.release` for an item that never got an id; `test_stale_task_releases_prepared_photo` covers the stale and the no-TV branch. `photos` now tracks which items hold a pin (`_holders`), so one item holds exactly one pin and a `prepare` after `release` pins again.
 
 ### F3 — `prev` re-casts a retired item that can be evicted while on screen
 
@@ -65,7 +65,7 @@ All 22 named Phase 3 tests exist by exact name; `test_thumb_route_proxies_and_40
 - **Location**: castlib/supervisor.py:178-185, castlib/items.py:68-79, :96-121
 - **Detail**: `Show.run` reuses the same `MediaItem` object for `prev`. Its previous `Cast` was `replace()`d, so `registry.retire` set `retired_at`, and nothing clears it: `_register` skips `add` when the item is still registered, and `Registry.add` does not reset `retired_at` if it was evicted meanwhile. `evict` removes anything with `retired_at` set, `in_flight == 0` and 60 s idle, so a photo held past 60 s after `prev` (the interval allows 600 s) or a paused video is evicted while on the TV, and `photos.release` unpins its file. Reproduced: after `next`, `prev`, `registry.evict(0.0)` returned the item in state `playing`. The Definitions table says the item being played is never evicted.
 - **Fix**: Clear `retired_at` (and children's) whenever an item re-enters playback: `Registry.add` resets it, and `_register` calls a new `registry.revive(item.id)` when the item is already registered; test `test_registry.py::test_readd_clears_retired` and `test_supervisor.py::test_prev_item_is_not_evictable`.
-- **Decision**: PENDING
+- **Decision**: FIXED (2026-09-11). `Registry.revive(id)` clears `retired_at` on the item and its subtitle; `Cast._register` calls it for an already-registered item and `Registry.add` resets it on re-add. Also closed the sibling gap found on the way: an evicted item re-added by `prev` was unpinned while playing (the old `prepare` early-return skipped the pin); with per-item pin tracking it pins again. Tests: `test_readd_clears_retired`, `test_revive_clears_retired_for_item_and_subtitle`, `test_prev_item_is_not_evictable`, `test_prev_after_eviction_re_registers_and_pins`.
 
 ### F4 — CLI files are listed and castable from the API as `session`
 
@@ -84,7 +84,7 @@ All 22 named Phase 3 tests exist by exact name; `test_thumb_route_proxies_and_40
   - Tradeoff: Until Phase 4 there is nothing to cast from the UI, so row 3.5 can only be re-verified after GoPro lands.
   - Confidence: MEDIUM — `index.html` and `app.js` reference `session`; removal is mechanical but touches three files.
   - Blind spot: Not checked whether any test asserts on `session`.
-- **Decision**: PENDING
+- **Decision**: FIXED via Fix A (2026-09-11). `LocalSource.remember` mints an opaque token and makes it the item's `source_id`, `resolve` accepts tokens only (a path answers `unknown_item`) and re-raises a vanished file without its path; plan addendum 2026-09-11 records `session` as listable-not-browsable. `test_cast_and_stop_over_api` asserts the tmp path never appears in `/api/status` or the cast answer; `test_cli.py` follows.
 
 ### F5 — Thumb proxy replays the upstream Content-Type on a same-origin URL
 
@@ -94,7 +94,7 @@ All 22 named Phase 3 tests exist by exact name; `test_thumb_route_proxies_and_40
 - **Location**: castlib/api.py:241-258
 - **Detail**: `ctype = resp.headers.get("Content-Type") …; send_header("Content-Type", ctype)`. A source, captive portal or stale URL answering 200 `text/html` makes `/api/sources/<n>/thumb/<id>` a same-origin HTML document; opened as a navigation it runs in the UI's origin and passes the Origin/Host check for every mutation. No source is wired yet, so nothing is exploitable in this commit, but Phases 4–6 route arbitrary cloud responses through exactly this path.
 - **Fix**: Accept only `image/*` (else 502 `thumb_not_image`) and add `X-Content-Type-Options: nosniff` to the response; extend `test_thumb_route_proxies_and_404s` with an HTML upstream.
-- **Decision**: PENDING
+- **Decision**: FIXED differently (2026-09-11): raster types only. `THUMB_TYPES = image/jpeg, image/png, image/webp, image/gif`; anything else, including a missing or empty `Content-Type` (the `image/jpeg` default is gone) and `image/svg+xml`, answers `502 thumb_not_image` and the body is not even read; the 200 carries `X-Content-Type-Options: nosniff`. `test_thumb_route_serves_raster_images_only` covers HTML, SVG, no type, empty type, octet-stream (all 502) and the four raster types plus a mixed-case `IMAGE/JPEG; charset=` (200); the JPEG proxy test stays.
 
 ### F6 — Re-discovery overwrites the saved TV choice
 
@@ -104,7 +104,7 @@ All 22 named Phase 3 tests exist by exact name; `test_thumb_route_proxies_and_40
 - **Location**: castlib/app.py:283-285, :300-306
 - **Detail**: `pick = next((t for t in tvs if t["ip"] == preferred), tvs[0]); self._use_tv(...)` persists by default. If the saved TV is off and the user presses "Search again", the first other renderer becomes selected and `settings["tv"]` is rewritten to it; the explicit choice is gone after restart. The plan makes "first discovered" the default, not a replacement for a saved selection.
 - **Fix**: `_use_tv(..., persist=(pick["ip"] == preferred or self.settings.get("tv") is None))`; test `test_discovery.py::test_rediscovery_keeps_saved_tv`.
-- **Decision**: PENDING
+- **Decision**: FIXED (2026-09-11). `App.discover` persists its pick only when nothing is saved yet or the pick is the saved TV; `test_rediscovery_keeps_saved_tv` covers the fallback pick (settings untouched), the saved TV coming back (picked again) and the no-saved-TV case (first discovered remembered, as before). Plan addendum 2026-09-11.
 
 ### F7 — API input hardening: TV address, show size, connect kwargs, double unquote
 
@@ -114,7 +114,7 @@ All 22 named Phase 3 tests exist by exact name; `test_thumb_route_proxies_and_40
 - **Location**: castlib/app.py:288-301, castlib/api.py:125-132, :196, :210
 - **Detail**: Four small boundary gaps, all behind the Origin/Host check so none is remotely exploitable: (a) `select_tv` only strips the string; `{"ip": "example.com/x?"}` makes the server GET `http://example.com/x?:9197/dmr` on four ports and, on a matching XML answer, writes that host to `settings.json`; (b) `/api/show` resolves an unbounded list synchronously on the handler thread — ~30 k entries fit in the 1 MiB body, and from Phase 4 each `resolve` is an upstream call; (c) `src.connect(**body)` with a body key `"self"` raises `TypeError` → 500 with a traceback; (d) `_thumb(handler, src, unquote(rest))` decodes a path the dispatcher already unquoted, mangling ids containing `%25`.
 - **Fix**: `ipaddress.ip_address(ip)` (or a strict hostname regex) in `select_tv` → `ConfigError("bad_ip")`; `MAX_SHOW_ITEMS = 500` check in `/api/show`; pass the body as one dict to `connect(params)`; drop the second `unquote`.
-- **Decision**: PENDING
+- **Decision**: FIXED (2026-09-11), with the clarifications: (a) `select_tv` validates with `ipaddress.ip_address` before any request and accepts IPv4 only (`400 bad_ip`; IPv6 is refused rather than half-supported, SSDP discovery is IPv4) — `test_select_rejects_anything_but_ipv4_before_any_request` asserts zero `control_urls`/`renderer_name` calls and nothing saved; (b) `MAX_SHOW_ITEMS = 500` checked before the first `resolve()` — `test_show_size_is_checked_before_any_resolve` sends 501 entries and asserts the fake source resolved nothing (it bounds cost, not latency: 500 upstream resolves still run on the handler thread); (c) `Source.connect(params: dict)` in `base.py`, `LocalSource`, the API and the test double — `test_connect_body_is_one_dict` sends `{"self": 1}`; plan contract text updated; (d) the second `unquote` is gone — the proxy test sends `a%2525b%252Fc` and `x%2Fy` and asserts the source sees `a%25b%2Fc` and `x/y`.
 
 ### F8 — Settings persistence bypasses the config helpers
 
@@ -124,7 +124,7 @@ All 22 named Phase 3 tests exist by exact name; `test_thumb_route_proxies_and_40
 - **Location**: castlib/app.py:93-104
 - **Detail**: `Settings.set` reimplements temp-file-then-`os.replace` inline and swallows `OSError` without unlinking the temp file, so a failed `json.dump` or `replace` leaves `~/.config/cast-tv/settings.XXXXXX` files behind. `config.cache_write` (the sibling) unlinks on failure and is where the plan says config writes live ("Config writes go through castlib/config.py helpers").
 - **Fix**: Add `config.config_write(name, data)` next to `cache_write` (same temp-then-rename with cleanup, utf-8) and call it from `Settings.set`.
-- **Decision**: PENDING
+- **Decision**: FIXED (2026-09-11), as clarified: one atomic writer `config.write_json(path, data)` (temp file next to the target, rename, temp removed on any failure, exception propagated) used by both `cache_write` and `Settings.set`; `Settings(path=...)` kept; `Settings.set` still swallows `OSError` only. Tests force `json.dump` and `os.replace` failures separately (`test_write_json_cleans_up_when_dump_fails`, `..._when_replace_fails`) and `test_settings_set_keeps_memory_and_the_last_good_file`: no temp file left, previous file intact, memory updated, a `TypeError` still propagates.
 
 ### F9 — Manual rows 3.3, 3.5 and 3.7 are ticked without written evidence
 
@@ -134,7 +134,7 @@ All 22 named Phase 3 tests exist by exact name; `test_thumb_route_proxies_and_40
 - **Location**: context/changes/cloud-source-ui/plan.md:1181-1185, research.md (Follow-up 2026-09-10 — Phase 3)
 - **Detail**: The research note records rows 3.4 and 3.6 (the 701 and 716 faults were "seen during manual rows 3.4 and 3.6"). Nothing records the phone opening the UI (3.3), stop/replace from the UI with no 404 in `--debug` (3.5), or the unplugged TV showing unreachable and retry recovering (3.7). The Phase 1 review (F7) raised the same gap and it was fixed by a verification note; this is the second occurrence, which makes it a candidate for `lessons.md`.
 - **Fix**: Append a short table to the Phase 3 follow-up in `research.md` (row, material, observed) for 3.3, 3.5 and 3.7, or untick the rows that were not actually exercised.
-- **Decision**: PENDING
+- **Decision**: FIXED + ACCEPTED-AS-RULE: A ticked manual row needs a written observation (2026-09-11). Piotr confirmed all three rows were exercised as written on 2026-09-10; the observations are recorded in `research.md` ("Manual rows 3.3, 3.5 and 3.7 — evidence"). The rule, in Piotr's wording, is the first entry in `context/foundation/lessons.md`.
 
 ### F10 — UI: Google Fonts fetched at runtime, poll loop without overlap guard, error badge stuck at 50
 
@@ -144,7 +144,7 @@ All 22 named Phase 3 tests exist by exact name; `test_thumb_route_proxies_and_40
 - **Location**: castlib/ui/index.html:8-9, castlib/ui/app.js:75-89
 - **Detail**: (a) The LAN UI preconnects to and loads Archivo and IBM Plex Mono from `fonts.googleapis.com` on every page open, the only external runtime dependency in an otherwise self-contained design (Alpine is vendored). (b) `setInterval(refresh, 1500)` has no in-flight guard, so a slow `/api/status` lets an older answer overwrite a newer one, and it keeps polling at full rate while `offline`. (c) Errors are reloaded only when `s.errors !== this.errors.length`; `ErrorRing.__len__` caps at 50, so once the ring is full new errors no longer refresh the closed-panel badge and list.
 - **Fix**: Vendor the two faces (or use a system stack); add an `_inflight` flag and a slower interval while offline; have `/api/status` report a monotonically increasing error sequence number instead of the count.
-- **Decision**: PENDING
+- **Decision**: FIXED (2026-09-11), as clarified: (a) the Google Fonts stylesheet and preconnect are gone, system font stacks in `style.css`, `test_ui_is_self_contained` asserts no `http(s)://` or `preconnect` in the three UI files; (b) `refresh()` allows one request in flight (`_refreshing`, released in `finally`), polls with an 8 s `AbortController` timeout, and waits 5 s between retries while offline; (c) `errors` stays the entry count and `/api/status` gains `errors_seq` (`ErrorRing.seq`, uncapped), `/api/errors` answers `{errors, seq}`, and the UI compares `errors_seq` with the `seq` of the list it last fetched successfully, so a failed list fetch is retried on the next poll. `test_errors_ring_buffer` covers the count capping at 50 while the sequence reaches 61. Plan addendum 2026-09-11.
 
 ## Noted, not raised
 
@@ -157,3 +157,17 @@ All 22 named Phase 3 tests exist by exact name; `test_thumb_route_proxies_and_40
 ## Verified clean
 
 Every `/api` and `/ui` answer carries an exact `Content-Length` and nothing new calls `send_error`; `/ui` is an exact-match map on the unquoted path (traversal, `%2e%2e`, case and trailing slash all 404); bodies are bounded at 1 MiB; every SOAP, upstream and subprocess call has a timeout; `App.lock` is held only for field swaps and no network call runs under it; there are no joins, so `close()` from a handler thread cannot deadlock; previous casts are replaced and never removed from the registry; the CLI keeps `cast-tv film.mkv`, `--stop`, `--list`, `-s`, `--debug`, `-c` behaviour including retire-in-finally and the restored keep-alive timeout from the Phase 1 review; `RelTime` passes through unparsed; the UI uses `x-text` everywhere (no `x-html`/`innerHTML`) and POSTs every mutation with a JSON body.
+
+## Triage (2026-09-11)
+
+| Outcome | Findings |
+|---|---|
+| Fixed | F2, F3, F4 (Fix A), F6, F7 |
+| Fixed differently | F1 (atomic check-and-promote under `app.lock`), F5 (raster types only), F8 (one `write_json`), F10 (`errors_seq` next to `errors`) |
+| Fixed + rule | F9 (evidence written, lesson recorded) |
+| Skipped / accepted / dismissed | none |
+
+Suite after triage: 134 passed (116 before; 18 new tests), `pyflakes` clean. Plan addenda
+2026-09-11 record the API and contract changes (`session` ids, `connect(params)`, raster
+thumbnails, show size, discovery persistence, `errors_seq`, `write_json`).
+

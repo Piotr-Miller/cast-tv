@@ -304,17 +304,25 @@ def _submit(item) -> Future:
     return fut
 
 
+_holders: dict[int, object] = {}     # id(item) -> item, for every item holding one pin
+_holders_lock = threading.Lock()
+
+
 def prepare(item) -> Prepared:
     """Fetch, decode, convert and materialise; sets ``item.prepared`` and returns it.
 
     The item's own ``mime``, ``size``, ``width`` and ``height`` stay as the
     source reported them. The prepared file is pinned for this item until
-    ``release(item)`` - which the registry calls when the item leaves it - so
-    cache pressure never deletes a file the TV may still fetch. Raises
-    ``NotMedia``, ``UpstreamError`` or ``ConfigError``.
+    ``release(item)`` - which the registry calls when the item leaves it, and
+    the supervisor when a task ends before registering it - so cache pressure
+    never deletes a file the TV may still fetch. One item holds one pin: a
+    second ``prepare`` while it holds one is a no-op, one after ``release``
+    pins again. Raises ``NotMedia``, ``UpstreamError`` or ``ConfigError``.
     """
     key = cache_key(item)
-    if item.prepared is not None and cache.get(key) is item.prepared:
+    with _holders_lock:
+        holds = id(item) in _holders
+    if holds and item.prepared is not None and cache.get(key) is item.prepared:
         return item.prepared             # already prepared and pinned for this item
     cache.pin(key)                       # before the file exists: no window for eviction
     try:
@@ -326,14 +334,17 @@ def prepare(item) -> Prepared:
         cache.unpin(key)
         raise
     item.prepared = prep
+    with _holders_lock:
+        _holders[id(item)] = item        # the reference keeps id(item) from being reused
     return prep
 
 
 def release(item) -> None:
     """The item no longer needs its prepared file; the cache may drop it under pressure."""
-    if item.prepared is None:
-        return
-    cache.unpin(cache_key(item))
+    with _holders_lock:
+        held = _holders.pop(id(item), None) is not None
+    if held:
+        cache.unpin(cache_key(item))
 
 
 def attach(registry) -> None:

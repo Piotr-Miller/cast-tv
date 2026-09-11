@@ -624,7 +624,9 @@ Stay-awake hooks are called on start/stop (no-op until Phase 7).
 | `GET /api/sources/<name>/status`, `POST .../connect`, `POST .../disconnect`, `GET .../list?path=&page=` | delegated to the source (Phases 4–6) |
 | `GET /api/sources/<name>/thumb/<source_id>` | calls `Source.thumb()` on every request (so the upstream URL is always fresh) and proxies the bytes with `Cache-Control: private, max-age=3600`; 404 when the source returns `None`, 502 when the upstream refuses; behind the Origin/Host check like every `/api` route, since only the UI asks for it |
 
-A `local` source exists for CLI-registered items only; it is not listable from the API.
+A `local` source exists for CLI-registered items only; it is not listable from the API
+(browsable, that is: its CLI-given entries ride on `/api/status` as `session` under opaque
+ids, see addendum 2026-09-11).
 
 #### 4. Static UI
 
@@ -717,7 +719,7 @@ with the "too heavy" warning, thumbnails probed and used when present.
 class Source(Protocol):
     name: str
     def status(self) -> dict          # {state: "disconnected"|"connecting"|"connected"|"expired", detail: {...}}
-    def connect(self, **params) -> dict   # returns status, or a step for multi-step flows
+    def connect(self, params: dict) -> dict   # the POST body as one dict (addendum 2026-09-11); returns status, or a step for multi-step flows
     def disconnect(self) -> None
     def list(self, path: str | None, page: str | None) -> Listing   # Listing(items: [Entry], folders: [Folder], next: str|None, crumbs: [...])
     def resolve(self, source_id: str, quality: str = "auto") -> MediaItem  # unregistered; resolve callable inside
@@ -737,7 +739,7 @@ the grid shows a placeholder tile. `AuthError` from any method flips
 **Intent**: `token()`, `save_token()`, `api()`, `list_media()`, `_rank()`, `library_url()`
 and `share_url()` from `cast-gopro`, on the contract, without exits.
 
-**Contract**: `connect(token=...)` saves (de-duplicating a double paste as today, mode 0600)
+**Contract**: `connect({"token": ...})` saves (de-duplicating a double paste as today, mode 0600)
 and verifies with `/media/search?per_page=1`; `status()` reports `stored_at` (file mtime)
 and `verified_at`. `list(page)` requests the existing fields plus whatever the probe below
 finds for thumbnails and dimensions; kind maps `type` values case-insensitively: video-like
@@ -1235,3 +1237,45 @@ mocked).
 
 - [ ] 7.3 Windows: pipx install, UI opens, firewall accepted, TV found, cast plays, 30-min slideshow without sleep
 - [ ] 7.4 Fedora: 30-min slideshow without sleep; Ctrl+C releases the inhibitor
+
+## Addenda
+
+Decisions taken after the plan was reviewed, recorded here so later phases and reviews read
+the plan as the source of truth. Each names the review finding that raised it.
+
+### 2026-09-11 — Phase 3 review
+
+- **`session` on `/api/status` (p3 F4, Fix A).** The files given on the command line are
+  listed on `/api/status` as `session` and castable through `POST /api/cast` /
+  `POST /api/show` with `source: "local"`. This is not folder browsing (the "no browsing a
+  local folder" rule stands and `GET /api/sources/local/*` stays 404); it is what lets the UI
+  re-cast or slideshow what the CLI was given before any cloud source exists (manual row 3.5).
+  The ids are opaque tokens minted by `LocalSource.remember`, never paths: the token becomes
+  the item's `source_id`, so the status, the error ring and the photo cache key carry it, and
+  an id that is a path answers `404 unknown_item`. Phase 4's `Entry` shape therefore already
+  has one source in production: `local`.
+- **`Source.connect(params: dict)` (p3 F7c).** The POST body reaches the source as one dict
+  instead of keyword arguments, so a body key such as `"self"` is data to validate rather than
+  a parameter-name collision. Phase 4–6 contracts read `connect({"token": ...})` /
+  `connect({})` accordingly.
+- **Thumbnails are raster only (p3 F5).** `/api/sources/<name>/thumb/<id>` passes through
+  `image/jpeg`, `image/png`, `image/webp` and `image/gif` and answers `502 thumb_not_image`
+  for anything else, including a missing `Content-Type`; the answer carries
+  `X-Content-Type-Options: nosniff`. HTML or SVG proxied under `/api` would be a same-origin
+  document and pass the Origin check for every mutation.
+- **Show size (p3 F7b).** `POST /api/show` refuses more than 500 items
+  (`400 show_too_large`) before the first `resolve()`.
+- **Discovery never overwrites a saved TV (p3 F6).** A fallback pick while the saved TV is
+  off is used for the session but not written to `settings.json`; `POST /api/tv/select`
+  remains the only way to change the saved choice, and it accepts IPv4 addresses only
+  (`400 bad_ip`, validated before any request goes out).
+- **Error sequence on the API (p3 F10).** `/api/status` carries `errors` (entries in the
+  ring, capped at 50) and `errors_seq` (the sequence number of the newest error, uncapped);
+  `/api/errors` answers `{errors, seq}`. The UI fetches the list when `errors_seq` differs from
+  the `seq` of the list it last fetched successfully, so a new error after the ring is full,
+  or one that arrived during a failed fetch, is never missed. The UI is self-contained: no
+  runtime font or preconnect to the internet (system font stacks), one status request in
+  flight at a time with an 8 s timeout, 5 s between retries while the server is away.
+- **JSON writes (p3 F8).** `config.write_json(path, data)` is the one atomic JSON writer
+  (temp file next to the target, rename, temp removed on failure, exception propagated);
+  `cache_write` and `Settings.set` go through it.
