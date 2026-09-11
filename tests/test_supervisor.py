@@ -1,4 +1,5 @@
 """The cast supervisor and the slideshow engine, against a scripted ``soap()``."""
+import threading
 import time
 
 from castlib.platform import firewall_hint
@@ -73,6 +74,88 @@ def test_replace_keeps_old_item(app, tmp_path):
     assert status == 200 and len(body) == 512             # the TV can still fetch it
     assert tv.uri_ids() == [a.item.id, b.item.id]
     assert "Stop" not in tv.actions()                     # replacing never sends Stop
+
+
+def test_stop_during_set_uri_is_not_undone(app, tmp_path):
+    tv = app.tv_fake
+    tv.video_script = ["PLAYING"]
+    tv.hooks["SetAVTransportURI"] = app.stop      # lands while the TV is being addressed
+    c = app.cast(_video(tmp_path))
+    assert c.done.wait(5)
+    assert c.state == "cancelled" and not c.promoted
+    assert app.current is None and app.owner is None
+    assert tv.actions() == ["SetAVTransportURI", "Stop", "Play", "Stop"]
+    assert c.item.retired_at is not None
+
+
+def test_stop_during_play_is_not_undone(app, tmp_path):
+    tv = app.tv_fake
+    tv.video_script = ["PLAYING"]
+    tv.hooks["Play"] = app.stop
+    c = app.cast(_video(tmp_path))
+    assert c.done.wait(5)
+    assert c.state == "cancelled" and not c.promoted
+    assert app.current is None
+    assert tv.actions() == ["SetAVTransportURI", "Play", "Stop", "Stop"]
+
+
+def test_stop_just_before_promotion_is_not_undone(app, tmp_path, monkeypatch):
+    tv = app.tv_fake
+    tv.video_script = ["PLAYING"]
+    real = app._promote
+
+    def stop_then_promote(cast):
+        app.stop()                                # the last instant before the seat is taken
+        return real(cast)
+    monkeypatch.setattr(app, "_promote", stop_then_promote)
+    c = app.cast(_video(tmp_path))
+    assert c.done.wait(5)
+    assert c.state == "cancelled" and not c.promoted
+    assert app.current is None
+    assert tv.actions() == ["SetAVTransportURI", "Play", "Stop", "Stop"]
+
+
+def test_superseded_before_promotion_sends_no_stop(app, tmp_path):
+    tv = app.tv_fake
+    tv.video_script = ["PLAYING"]
+    later = {}
+    b_item = _video(tmp_path, "b.mp4")
+    tv.hooks["Play"] = lambda: later.update(b=app.cast(b_item))   # a newer owner, mid-Play
+    a = app.cast(_video(tmp_path, "a.mp4"))
+    assert a.done.wait(5)
+    assert a.state == "cancelled" and not a.promoted
+    b = later["b"]
+    assert b.sent.wait(5)
+    wait_for(lambda: b.state == "playing")
+    assert app.current is b
+    assert tv.uri_ids() == [a.item.id, b.item.id]
+    assert "Stop" not in tv.actions()                     # the newer cast replaces on the TV
+
+
+def test_stale_task_releases_prepared_photo(app, tmp_path, monkeypatch):
+    from castlib import photos
+    real = photos.prepare
+    gate = threading.Event()
+
+    def held(item):
+        prep = real(item)
+        gate.wait(5)                              # the second cast is accepted meanwhile
+        return prep
+    monkeypatch.setattr(photos, "prepare", held)
+    a = app.cast(_photo(tmp_path))
+    b = app.cast(_video(tmp_path))
+    gate.set()
+    assert a.done.wait(5)
+    assert a.state == "cancelled" and not a.item.id
+    assert a.item.prepared is not None
+    assert not photos.cache.pinned(photos.cache_key(a.item))   # nothing else will unpin it
+    assert b.sent.wait(5)
+    monkeypatch.setattr(photos, "prepare", real)
+    app.tv = None                                 # and the no-TV branch
+    c = app.cast(_photo(tmp_path, "q.jpg"))
+    assert c.done.wait(5)
+    assert c.state == "failed" and c.reason.code == "no_tv"
+    assert not photos.cache.pinned(photos.cache_key(c.item))
 
 
 def test_stale_task_skipped_after_prepare(app, tmp_path, monkeypatch):
@@ -273,6 +356,46 @@ def test_show_pause_freezes_the_interval(app, tmp_path):
     sh.resume()
     assert sh.done.wait(10)
     assert len(app.tv_fake.uris) == 2
+
+
+def test_prev_item_is_not_evictable(app, tmp_path):
+    from castlib import photos
+    items = [_photo(tmp_path, "p%d.jpg" % i) for i in range(2)]
+    sh = app.show(items, interval=2)
+    wait_for(lambda: sh.current is not None and sh.current.sent.is_set())
+    sh.next()
+    wait_for(lambda: sh.index == 1 and sh.current.sent.is_set())
+    assert items[0].retired_at is not None                # replaced, so retired
+    sh.prev()
+    wait_for(lambda: len(app.tv_fake.uris) == 3 and sh.current.promoted)
+    assert sh.current.item is items[0]
+    assert items[0].retired_at is None                    # playing again: revived
+    gone = app.registry.evict(0.0)
+    assert items[0] not in gone and items[1] in gone
+    assert app.registry.get(items[0].id) is items[0]
+    assert photos.cache.pinned(photos.cache_key(items[0]))
+    app.stop()
+    assert sh.done.wait(5)
+
+
+def test_prev_after_eviction_re_registers_and_pins(app, tmp_path):
+    from castlib import photos
+    items = [_photo(tmp_path, "p%d.jpg" % i) for i in range(2)]
+    sh = app.show(items, interval=2)
+    wait_for(lambda: sh.current is not None and sh.current.sent.is_set())
+    sh.next()
+    wait_for(lambda: sh.index == 1 and sh.current.sent.is_set())
+    old_id = items[0].id
+    assert items[0] in app.registry.evict(0.0)             # idle long enough, gone
+    assert not photos.cache.pinned(photos.cache_key(items[0]))
+    sh.prev()
+    wait_for(lambda: len(app.tv_fake.uris) == 3 and sh.current.promoted)
+    assert items[0].id != old_id                           # re-added under a fresh id
+    assert app.registry.get(items[0].id) is items[0]
+    assert items[0].retired_at is None
+    assert photos.cache.pinned(photos.cache_key(items[0]))   # pinned again for the TV
+    app.stop()
+    assert sh.done.wait(5)
 
 
 def test_show_next_and_prev(app, tmp_path):

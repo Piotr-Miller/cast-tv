@@ -41,6 +41,17 @@ def test_ui_needs_a_local_host_header(server):
     assert status == 403
 
 
+def test_ui_is_self_contained():
+    """The LAN UI loads nothing from the internet: no fonts, no preconnect, no CDN."""
+    from castlib.server import UI_DIR
+    import os
+    for name in ("index.html", "style.css", "app.js"):
+        with open(os.path.join(UI_DIR, name), encoding="utf-8") as fh:
+            text = fh.read()
+        assert "https://" not in text and "http://" not in text, name
+        assert "preconnect" not in text, name
+
+
 def open_ui_bytes():
     from castlib.server import UI_DIR
     import os

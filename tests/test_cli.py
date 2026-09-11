@@ -100,7 +100,8 @@ def test_cast_follows_playback_to_the_end(cli_env, tmp_path, capsys):
     clip.write_bytes(b"\0" * 100)
     assert cli.cast(str(clip), tv="127.0.0.1", port=_free_port()) == 0
     (srv,) = servers
-    assert [e.id for e in srv.app.local.entries()] == [str(clip)]   # the UI can re-cast it
+    (entry,) = srv.app.local.entries()                    # the UI can re-cast it, by an opaque id
+    assert entry.name == "clip" and entry.id != str(clip) and "/" not in entry.id
     out = capsys.readouterr().out
     assert ">  clip" in out and "serving from http://127.0.0.1:" in out
     assert "Finished." in out

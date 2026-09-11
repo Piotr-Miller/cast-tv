@@ -4,11 +4,13 @@ Nothing on disk is browsable from the UI (that is the exposure rule); the
 only local items the API can cast are the ones ``cast-tv <files>`` named
 when it started, remembered here so the UI can re-cast them or put them in
 a show. The source is not listable through ``/api/sources``; its entries
-ride on ``/api/status`` as ``session``.
+ride on ``/api/status`` as ``session`` under opaque ids, so no filesystem
+path leaves the process (plan addendum 2026-09-11).
 """
 from __future__ import annotations
 
 import os
+import secrets
 import threading
 
 from castlib.errors import NotMedia
@@ -42,9 +44,17 @@ class LocalSource:
         self._lock = threading.Lock()
 
     def remember(self, item: MediaItem) -> None:
-        """An item the CLI registered; from now on the API may cast it by ``source_id``."""
+        """An item the CLI registered; from now on the API may cast it by an opaque ``source_id``.
+
+        The item's ``source_id`` (the path until now) becomes the token, so the
+        status, the error ring and the photo cache key all carry the token.
+        """
         with self._lock:
-            self._known[item.source_id] = item
+            token = secrets.token_urlsafe(9)
+            while token in self._known:
+                token = secrets.token_urlsafe(9)
+            item.source_id = token
+            self._known[token] = item
 
     def entries(self) -> list[Entry]:
         with self._lock:
@@ -57,7 +67,7 @@ class LocalSource:
     def status(self) -> dict:
         return {"state": "connected", "detail": {"items": len(self._known)}}
 
-    def connect(self, **params) -> dict:
+    def connect(self, params: dict) -> dict:
         return self.status()
 
     def disconnect(self) -> None:
@@ -73,7 +83,13 @@ class LocalSource:
         if known is None:
             raise NotMedia("unknown_item", "That file was not given to this cast-tv.",
                            source="local", item=source_id)
-        return item_for_path(known.path, title=known.title, debug=known.debug)
+        try:
+            item = item_for_path(known.path, title=known.title, debug=known.debug)
+        except NotMedia as e:                # the file went away: say so without the path
+            raise NotMedia(e.code, "%s is not castable any more." % known.title,
+                           source="local", item=source_id)
+        item.source_id = source_id
+        return item
 
     def thumb(self, source_id: str):
         return None

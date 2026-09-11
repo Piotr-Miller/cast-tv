@@ -8,10 +8,13 @@ PLAYING/PAUSED_PLAYBACK only; TRANSITIONING gets the longer budget), and the
 
 Ownership is the app's: every ``App.cast()`` / ``App.show()`` bumps a
 generation, and a task checks it is still current *after* preparing its
-material and *before* sending anything to the TV. Tasks run on a
-single-worker executor, so two requests accepted a second apart are ordered:
-the second wins, the first is skipped (not yet sent) or replaced (already
-playing). A replaced item stays registered until the registry evicts it.
+material and *before* sending anything to the TV, then once more, under the
+app's lock, when it takes the seat (``App._promote``): a stop or a newer owner
+that landed during the SOAP round-trips wins, and the task ends cancelled
+instead of undoing it. Tasks run on a single-worker executor, so two
+requests accepted a second apart are ordered: the second wins, the first is
+skipped (not yet sent) or replaced (already playing). A replaced item stays
+registered until the registry evicts it.
 """
 from __future__ import annotations
 
@@ -147,7 +150,17 @@ class Cast:
         with self._lock:
             self.play_at = time.time()
             self.state = "starting"
-        app._promote(self)
+        verdict = app._promote(self)
+        if verdict != "promoted":
+            if verdict == "stopped":
+                # The stop's own Stop went out before our Play; send another
+                # so the TV does not keep playing what the user just stopped.
+                try:
+                    dlna.soap(avt, AVT, "Stop")
+                except Exception:
+                    pass
+            self._finish("cancelled")
+            return
         self.sent.set()
         self.thread = threading.Thread(target=self._poll, name="cast-poll", daemon=True)
         self.thread.start()
@@ -181,6 +194,8 @@ class Cast:
             self.item.caption = (sub.path, srv.media_url(sub))
         if not self.item.id or reg.get(self.item.id) is not self.item:
             reg.add(self.item)
+        else:
+            reg.revive(self.item.id)         # a show's prev: retired when replaced, playing again now
         if sub is not None:
             sub.parent = self.item.id
 
@@ -255,6 +270,8 @@ class Cast:
             self.app.errors.push(reason)
         if self.item.id:
             self.app.registry.retire(self.item.id)   # served until idle, never yanked
+        else:
+            photos.release(self.item)        # never registered: no eviction will unpin it
         self.sent.set()
         self.done.set()
         for ev in self.watchers:

@@ -10,10 +10,10 @@ from __future__ import annotations
 
 import collections
 import errno
+import ipaddress
 import json
 import os
 import sys
-import tempfile
 import threading
 import time
 import urllib.request
@@ -68,6 +68,12 @@ class ErrorRing:
         with self._lock:
             return len(self._items)
 
+    @property
+    def seq(self) -> int:
+        """Sequence number of the newest error; grows past the ring's size, unlike ``len``."""
+        with self._lock:
+            return self._n
+
 
 class Settings:
     """``config_dir()/settings.json``: the slideshow interval and the chosen TV."""
@@ -95,11 +101,7 @@ class Settings:
             self.data[key] = value
             snapshot = dict(self.data)
         try:
-            os.makedirs(os.path.dirname(self.path) or ".", exist_ok=True)
-            fd, tmp = tempfile.mkstemp(prefix="settings.", dir=os.path.dirname(self.path) or ".")
-            with os.fdopen(fd, "w", encoding="utf-8") as fh:
-                json.dump(snapshot, fh)
-            os.replace(tmp, self.path)
+            config.write_json(self.path, snapshot)
         except OSError:
             pass                                    # a read-only config dir loses nothing but memory
 
@@ -280,9 +282,13 @@ class App:
             if self.tv is None or not self.tv.get("avt"):
                 self.tv = {"ip": None, "name": None, "avt": None, "state": "none"}
             return self.public_tvs()
-        preferred = (self.tv or {}).get("ip") or self.settings.get("tv")
+        saved = self.settings.get("tv")
+        preferred = (self.tv or {}).get("ip") or saved
         pick = next((t for t in tvs if t["ip"] == preferred), tvs[0])
-        self._use_tv(pick["ip"], pick["name"], pick["avt"])
+        # "first discovered" is a default, never a replacement for a saved choice:
+        # a fallback pick while the saved TV is off leaves settings.json alone
+        self._use_tv(pick["ip"], pick["name"], pick["avt"],
+                     persist=(saved is None or pick["ip"] == saved))
         return self.public_tvs()
 
     def select_tv(self, ip: str) -> dict:
@@ -290,6 +296,12 @@ class App:
         ip = (ip or "").strip()
         if not ip:
             raise ConfigError("bad_ip", "Give the TV's address.")
+        try:                                  # validated before any request goes out:
+            version = ipaddress.ip_address(ip).version   # a host or path here would be fetched and saved
+        except ValueError:
+            raise ConfigError("bad_ip", "Give the TV's IPv4 address, like 192.168.1.20.")
+        if version != 4:
+            raise ConfigError("bad_ip", "Only IPv4 addresses are supported (SSDP discovery is IPv4).")
         avt, _rc = control_urls(ip)
         if not avt:
             raise TVError("tv_no_avtransport",
@@ -372,14 +384,27 @@ class App:
         show.start()
         return show
 
-    def _promote(self, cast: Cast) -> None:
-        """``cast`` is on the TV now; the one before it is replaced, its item left registered."""
+    def _promote(self, cast: Cast) -> str:
+        """Make ``cast`` the one on the TV, atomically with the generation check.
+
+        Returns ``"promoted"``; or, when the generation moved on while the task
+        was talking to the TV, ``"stopped"`` (a stop landed and nothing owns
+        playback now, so the TV needs another Stop after the Play that went
+        out) or ``"superseded"`` (a newer cast or show owns playback, or the app
+        is closing; it will address the TV itself). The one before a promoted
+        cast is replaced, its item left registered.
+        """
         with self.lock:
+            if not self.is_current(cast.generation):
+                if self.owner is None and not self._closed.is_set():
+                    return "stopped"
+                return "superseded"
             previous, self.current = self.current, cast
             cast.promoted = True
         if previous is not None and previous is not cast:
             previous.replace()
         self.stay_awake.start()
+        return "promoted"
 
     def _cast_ended(self, cast: Cast) -> None:
         if cast.promoted:
@@ -444,7 +469,8 @@ class App:
                 "show": show.as_dict() if show else None,
                 "sources": sources, "addresses": list(self.addresses),
                 "session": [e.as_dict() for e in self.local.entries()],
-                "errors": len(self.errors), "settings": self.settings.as_dict(),
+                "errors": len(self.errors), "errors_seq": self.errors.seq,
+                "settings": self.settings.as_dict(),
                 "firewall_hint": firewall_hint(self.server.port),
                 "uptime": round(time.time() - self.started_at)}
 

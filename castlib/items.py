@@ -75,6 +75,7 @@ class Registry:
             item.id = new_id
             item.created = now
             item.last_request = now
+            item.retired_at = None           # an evicted item re-added is in playback again
             self._items[new_id] = item
             return item
 
@@ -107,6 +108,17 @@ class Registry:
             for other in self._items.values():
                 if other.parent == item_id:
                     other.retired_at = now
+
+    def revive(self, item_id: str) -> None:
+        """The item is back in playback (a show's ``prev``); it and its subtitle stop being evictable."""
+        with self._lock:
+            item = self._items.get(item_id)
+            if item is None:
+                return
+            item.retired_at = None
+            for other in self._items.values():
+                if other.parent == item_id:
+                    other.retired_at = None
 
     def evict(self, idle_seconds: float) -> list[MediaItem]:
         """Remove retired items nobody has asked for in ``idle_seconds`` and with no open transfer."""

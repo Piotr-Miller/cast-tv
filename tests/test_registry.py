@@ -62,6 +62,28 @@ def test_in_flight_blocks_eviction():
     assert reg.evict(60) == [item]
 
 
+def test_readd_clears_retired():
+    reg = Registry()
+    item = reg.add(_item())
+    reg.retire(item.id)
+    reg.remove(item.id)
+    reg.add(item)
+    assert item.retired_at is None
+    assert reg.evict(0.0) == []
+
+
+def test_revive_clears_retired_for_item_and_subtitle():
+    reg = Registry()
+    video = reg.add(_item())
+    sub = reg.add(_item("subtitle", parent=video.id))
+    reg.retire(video.id)
+    assert video.retired_at is not None and sub.retired_at is not None
+    reg.revive(video.id)
+    assert video.retired_at is None and sub.retired_at is None
+    assert reg.evict(0.0) == []
+    reg.revive("missing")                                  # unknown ids are ignored
+
+
 def test_retire_video_retires_subtitle():
     reg = Registry()
     sub = reg.add(_item(kind="subtitle"))

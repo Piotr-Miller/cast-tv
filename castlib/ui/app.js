@@ -1,7 +1,10 @@
-/* cast-tv UI: one Alpine component over /api. Polls /api/status every 1.5 s.
-   The selection lives here only, in memory, in the order it was ticked. */
+/* cast-tv UI: one Alpine component over /api. Polls /api/status every 1.5 s
+   (one request in flight at a time, 5 s between retries while the server is
+   away). The selection lives here only, in memory, in the order it was ticked. */
 
 const POLL_MS = 1500;
+const OFFLINE_POLL_MS = 5000;
+const POLL_TIMEOUT_MS = 8000;
 const SOURCES = [
   { name: 'gopro', label: 'GoPro' },
   { name: 'onedrive', label: 'OneDrive' },
@@ -29,7 +32,7 @@ const GATES = {
 };
 const ACTIVE = ['preparing', 'starting', 'playing', 'paused'];
 
-async function api(method, path, body) {
+async function api(method, path, body, opts) {
   const init = { method, headers: { 'Accept': 'application/json' }, credentials: 'same-origin' };
   if (body !== undefined) {
     init.headers['Content-Type'] = 'application/json';
@@ -38,7 +41,14 @@ async function api(method, path, body) {
     init.headers['Content-Type'] = 'application/json';
     init.body = '{}';
   }
-  const r = await fetch(path, init);
+  let timer = null;
+  if (opts && opts.timeout) {              // the polls give up; user actions (discover, cast) wait
+    const ctl = new AbortController();
+    init.signal = ctl.signal;
+    timer = setTimeout(() => ctl.abort(), opts.timeout);
+  }
+  let r;
+  try { r = await fetch(path, init); } finally { if (timer) clearTimeout(timer); }
   let data = null;
   try { data = await r.json(); } catch (e) { data = null; }
   if (!r.ok) {
@@ -69,29 +79,43 @@ function castTv() {
     sourceTabs: SOURCES,
     _timer: null,
     _toastTimer: null,
+    _refreshing: false,
+    _retryAt: 0,
+    _errorsSeq: 0,           // errors_seq of the list last fetched successfully
 
     async init() {
       await this.refresh();
-      this._timer = setInterval(() => { if (document.visibilityState !== 'hidden') this.refresh(); }, POLL_MS);
+      this._timer = setInterval(() => {
+        if (document.visibilityState === 'hidden') return;
+        if (this.offline && Date.now() < this._retryAt) return;   // slower while the server is away
+        this.refresh();
+      }, POLL_MS);
       document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') this.refresh(); });
     },
 
     async refresh() {
+      if (this._refreshing) return;         // one status request in flight: an old answer never lands on a newer one
+      this._refreshing = true;
       try {
-        const s = await api('GET', '/api/status');
+        const s = await api('GET', '/api/status', undefined, { timeout: POLL_TIMEOUT_MS });
         this.status = s;
         this.offline = false;
         if (s.settings && typeof s.settings.interval === 'number') this.interval = s.settings.interval;
-        if (this.panel || (s.errors || 0) !== this.errors.length) await this.loadErrors();
+        // errors_seq grows past the ring's size; a failed list fetch leaves _errorsSeq behind, so it is retried
+        if (this.panel || (s.errors_seq || 0) !== this._errorsSeq) await this.loadErrors();
       } catch (e) {
         this.offline = true;
+        this._retryAt = Date.now() + OFFLINE_POLL_MS;
+      } finally {
+        this._refreshing = false;
       }
     },
 
     async loadErrors() {
       try {
-        const d = await api('GET', '/api/errors');
+        const d = await api('GET', '/api/errors', undefined, { timeout: POLL_TIMEOUT_MS });
         this.errors = (d.errors || []).slice().reverse();
+        this._errorsSeq = d.seq || 0;
       } catch (e) { /* the status poll reports the outage */ }
     },
 
