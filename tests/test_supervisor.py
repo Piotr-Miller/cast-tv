@@ -47,6 +47,24 @@ def test_started_latch_and_budget(app, tmp_path):
     assert not c2.started
 
 
+def test_never_started_probes_a_relayed_item_by_its_fresh_address(app, monkeypatch):
+    from castlib import supervisor
+    from castlib.items import MediaItem, Upstream
+    probed = []
+    monkeypatch.setattr(supervisor, "explain_failure",
+                        lambda target: probed.append(target) or ("hevc 3840x3360, 118 Mbit/s",
+                                                                 ["118 Mbit/s - DLNA players usually top out near 60"]))
+    app.tv_fake.video_script = ["STOPPED"]
+    item = MediaItem(kind="video", title="heavy", mime="video/mp4", source="gopro", source_id="vid-1",
+                     resolve=lambda: Upstream("https://cdn.test/vid-1/source.mp4?sig=%d" % (len(probed) + 1)))
+    item.requests = 1                                         # the TV did fetch; it just never played
+    c = app.cast(item)
+    assert c.done.wait(5)
+    assert c.state == "failed" and c.reason.code == "tv_never_started"
+    assert probed == ["https://cdn.test/vid-1/source.mp4?sig=1"]      # the address, not the id
+    assert "Try a lighter variant" in c.reason.hint and c.media_line.startswith("hevc")
+
+
 def test_zero_requests_is_firewall_diagnosis(app, tmp_path):
     app.tv_fake.video_script = ["STOPPED"]
     c = app.cast(_video(tmp_path))

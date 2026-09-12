@@ -1,0 +1,10 @@
+{
+  "_comment": "/media/{id}/download?labels=large for a Video, recorded 2026-09-12: one JPEG still, served by the CDN without auth (sometimes as binary/octet-stream).",
+  "filename": "GX011767.MP4",
+  "_embedded": {
+    "variations": [
+      {"label": "large", "type": "jpg", "width": 1280, "height": 1120, "url": "https://cdn.test/u-test/vid-heavy/large/default/1.jpg?sig=1"}
+    ],
+    "files": [], "sidecar_files": [], "sprites": []
+  }
+}

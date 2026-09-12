@@ -1,0 +1,12 @@
+{
+  "_comment": "SYNTHETIC: the probed library holds no LivePhoto (2026-09-12). Modelled on the Video and Photo shapes: a clip plus stills; the source stays a still, as the plan requires. Replace with a recording when one exists.",
+  "filename": "GOPR0009.JPG",
+  "_embedded": {
+    "variations": [
+      {"label": "source", "type": "mp4", "width": 1920, "height": 1080, "url": "https://cdn.test/u-test/live-1/clip/default/1.mp4?sig=1"},
+      {"label": "large", "type": "jpg", "width": 2048, "height": 1536, "url": "https://cdn.test/u-test/live-1/large/default/1.jpg?sig=1"},
+      {"label": "medium", "type": "jpg", "width": 1024, "height": 768, "url": "https://cdn.test/u-test/live-1/medium/default/1.jpg?sig=1"}
+    ],
+    "files": [], "sidecar_files": [], "sprites": []
+  }
+}

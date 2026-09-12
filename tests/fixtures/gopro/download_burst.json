@@ -1,0 +1,18 @@
+{
+  "_comment": "/media/{id}/download for a Burst, recorded 2026-09-12 (30 frames in the library; 3 kept here): the source is the frame the library shows, files are every frame by item_number, the zip sidecar holds them all.",
+  "filename": "G0020191.JPG",
+  "_embedded": {
+    "variations": [
+      {"label": "source", "type": "jpg", "width": 5568, "height": 4872, "url": "https://cdn.test/u-test/burst-1/source/default/1.jpg?sig=1"}
+    ],
+    "files": [
+      {"item_number": 1, "width": 5568, "height": 4872, "url": "https://cdn.test/u-test/burst-1/source/default/1.jpg?sig=1"},
+      {"item_number": 2, "width": 5568, "height": 4872, "url": "https://cdn.test/u-test/burst-1/source/default/2.jpg?sig=1"},
+      {"item_number": 3, "width": 5568, "height": 4872, "url": "https://cdn.test/u-test/burst-1/source/default/3.jpg?sig=1"}
+    ],
+    "sidecar_files": [
+      {"label": "zip", "type": "zip", "url": "https://cdn.test/u-test/burst-1/zip/default/1.zip?sig=1"}
+    ],
+    "sprites": []
+  }
+}

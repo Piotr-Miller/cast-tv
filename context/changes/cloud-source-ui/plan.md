@@ -1190,14 +1190,14 @@ mocked).
 
 #### Automated
 
-- [ ] 4.1 `python -m pytest tests/` passes
-- [ ] 4.2 `cast-gopro` listing and `--url-only` work with a live token
+- [x] 4.1 `python -m pytest tests/` passes
+- [x] 4.2 `cast-gopro` listing and `--url-only` work with a live token
 
 #### Manual
 
-- [ ] 4.3 Token paste shows the list with thumbnails or placeholders and the token age
-- [ ] 4.4 Heavy clip preselects proxy; source choice reports the refusal
-- [ ] 4.5 Expired token shows the banner over the list; re-paste restores it
+- [x] 4.3 Token paste shows the list with thumbnails or placeholders and the token age
+- [x] 4.4 Heavy clip preselects proxy; source choice reports the refusal
+- [x] 4.5 Expired token shows the banner over the list; re-paste restores it
 - [ ] 4.6 Paste and cast from the phone
 
 ### Phase 5: OneDrive tab
@@ -1279,3 +1279,24 @@ the plan as the source of truth. Each names the review finding that raised it.
 - **JSON writes (p3 F8).** `config.write_json(path, data)` is the one atomic JSON writer
   (temp file next to the target, rename, temp removed on failure, exception propagated);
   `cache_write` and `Settings.set` go through it.
+
+### 2026-09-12 — Phase 4 implementation
+
+- **Thumbnail proxy types from the bytes (amends p3 F5).** GoPro's CDN serves JPEG stills as
+  `binary/octet-stream` (probe in `research.md`), so "raster `Content-Type` or 502" alone would
+  drop every GoPro thumbnail. The rule is now two-sided: the declared type must be raster *or*
+  absent / `application|binary/octet-stream`, **and** the body must start with a JPEG, PNG,
+  WebP or GIF signature; the answer carries the sniffed type and `nosniff`. HTML or SVG under
+  any label, and any document under a raster label, still answer `502 thumb_not_image`.
+- **GoPro stills have no thumbnail.** The listing marks every item `thumbnail_available`, but
+  only videos have a lighter image (`?labels=large`); a photo's only image is its multi-MB
+  source, so photo and burst tiles show the placeholder. `Source.thumb()` returns `None` for them.
+- **Photo probe accepts octet-stream by extension**, mirroring the video probe's acceptance
+  from `223eca1`; `photos.prepare` decodes the bytes anyway, so a mislabelled non-image still
+  fails safely there.
+- **A bare media id resolves without a listing** (`cast-gopro <id>`): `GoProSource.resolve`
+  falls back to one `GET /media/{id}` lookup; an unknown id answers `404 unknown_item`.
+- **Heavy clips.** `warn` and `variants` come from `file_size × 8 / source_duration`;
+  `quality: "auto"` on such an item resolves the proxy, the UI shows the two-button choice on
+  the tile, and `cast-gopro <n>` takes the proxy unless `-q source` says otherwise.
+

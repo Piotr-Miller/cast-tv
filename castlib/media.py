@@ -175,13 +175,15 @@ def didl(item, url: str) -> str:
                attrs, escape(url)))
 
 
-def probe_media(url: str, headers=None, opener=None):
+def probe_media(url: str, headers=None, opener=None, kinds=("video",)):
     """Ask for one byte to find out whether an address really serves media.
 
     HEAD is often refused on googleusercontent, hence the range request.
     Returns ``(kind, content_type, size_or_None)``, or ``None`` when the
-    address answers but not with media. A network failure raises
-    ``UpstreamError`` instead of being mistaken for "not media".
+    address answers but not with one of ``kinds`` (``"video"`` by default, so
+    the share-link scrapers keep skipping stills; ``("photo",)`` accepts JPEG,
+    PNG and WebP answers). A network failure raises ``UpstreamError``
+    instead of being mistaken for "not media".
     """
     req = urllib.request.Request(url, headers=dict(
         {"User-Agent": UA, "Range": "bytes=0-1"}, **(headers or {})))
@@ -202,7 +204,12 @@ def probe_media(url: str, headers=None, opener=None):
     # CDNs label video inconsistently - GoPro serves its source files as
     # binary/octet-stream - so Content-Type alone cannot be trusted.
     path = urllib.parse.urlparse(url).path.lower()
-    if (ctype.startswith("video/")
+    if "photo" in kinds and (is_allowed_photo(ctype) or (
+            ctype.endswith("/octet-stream")          # GoPro's CDN labels its JPEGs so (probed 2026-09-12)
+            and path.endswith((".jpg", ".jpeg", ".png", ".webp")))):
+        return "photo", ctype, size
+    if "video" in kinds and (
+            ctype.startswith("video/")
             or ctype.endswith("/octet-stream")
             or ctype == "application/mp4"
             or path.endswith((".mp4", ".m4v", ".mov", ".mkv", ".ts"))):

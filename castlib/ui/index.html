@@ -188,7 +188,7 @@
   </section>
 
   <!-- the active tab: a gate until its source is connected -->
-  <template x-if="!connected(tab)">
+  <template x-if="!listVisible(tab)">
     <section class="gate">
       <div class="box">
         <div class="glyph">
@@ -196,16 +196,45 @@
         </div>
         <h3 x-text="gate(tab).title"></h3>
         <p x-text="gate(tab).body"></p>
-        <div class="cta">
-          <button class="primary" @click="connect(tab)" :disabled="busy.connect" x-text="gate(tab).cta"></button>
-        </div>
+        <template x-if="gate(tab).paste">
+          <div>
+            <ol class="steps">
+              <template x-for="(step, i) in gate(tab).steps" :key="i"><li x-text="step"></li></template>
+            </ol>
+            <form class="paste" @submit.prevent="saveToken(tab)">
+              <input type="text" x-model="tokenInput" placeholder="eyJhbGc…" autocomplete="off" spellcheck="false" aria-label="GoPro token">
+              <button type="submit" class="primary" :disabled="busy.connect || !tokenInput.trim()" x-text="busy.connect ? 'Checking…' : gate(tab).cta"></button>
+            </form>
+            <div class="later" x-show="expired(tab)">The stored token was rejected (401). Paste a fresh one.</div>
+          </div>
+        </template>
+        <template x-if="!gate(tab).paste">
+          <div class="cta">
+            <button class="primary" @click="connect(tab)" :disabled="busy.connect" x-text="gate(tab).cta"></button>
+          </div>
+        </template>
         <div class="note" x-text="gate(tab).note"></div>
         <div class="later" x-show="gateNote[tab]" x-text="gateNote[tab]"></div>
       </div>
     </section>
   </template>
-  <template x-if="connected(tab)">
+  <template x-if="listVisible(tab)">
     <section class="section">
+      <!-- an expired token: the banner sits over the list that was fetched last -->
+      <div class="banner warn expired" x-show="expired(tab)" x-cloak>
+        <div class="text"><div class="title">The GoPro token expired</div><div class="small muted">This list is what was fetched last. Paste a fresh token to keep going; nothing else changes.</div></div>
+        <form class="paste" @submit.prevent="saveToken(tab)">
+          <input type="text" x-model="tokenInput" placeholder="eyJhbGc…" autocomplete="off" spellcheck="false" aria-label="GoPro token">
+          <button type="submit" class="primary" :disabled="busy.connect || !tokenInput.trim()" x-text="busy.connect ? 'Checking…' : 'Save token'"></button>
+        </form>
+        <div class="later" x-show="gateNote[tab]" x-text="gateNote[tab]"></div>
+      </div>
+      <h2>
+        <span x-text="(sourceTabs.find(s => s.name === tab) || {label: tab}).label"></span>
+        <span class="n" x-text="items(tab).length"></span>
+        <button class="ghost tiny" @click="loadList(tab)" :disabled="listOf(tab).loading || expired(tab)" title="Fetch the list again">Refresh</button>
+        <span class="age" x-text="tokenAge(tab)"></span>
+      </h2>
       <div class="grid" x-show="visible(items(tab)).length">
         <template x-for="it in visible(items(tab))" :key="it.source + ':' + it.id">
           <div class="tile" :class="{on: isSelected(it)}">
@@ -214,7 +243,7 @@
                 <template x-if="it.thumb"><img :src="it.thumb" :alt="it.name" loading="lazy"></template>
                 <span class="kind" x-text="it.kind"></span>
                 <button class="tick" @click.stop="toggle(it)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg></button>
-                <button class="play" @click.stop="castNow(it)" title="Cast now"><svg width="16" height="16" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"></path></svg></button>
+                <button class="play" @click.stop="castNow(it)" :title="it.variants ? 'Choose a variant' : 'Cast now'"><svg width="16" height="16" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"></path></svg></button>
                 <span class="dur" x-show="it.duration" x-text="fmtDur(it.duration)"></span>
                 <span class="warn" x-show="it.warn"><span x-text="it.warn"></span></span>
               </div>
@@ -222,11 +251,25 @@
                 <div class="name" x-text="it.name" :title="it.name"></div>
                 <div class="sub"><span x-text="metaOf(it)"></span></div>
               </div>
+              <!-- a heavy clip: the variant choice covers the card until one is picked -->
+              <div class="chooser" x-show="chooser === key(it)" x-cloak @click.stop @click.outside="chooser = null">
+                <div class="t">Cast which variant?</div>
+                <template x-for="v in (it.variants || [])" :key="v.quality">
+                  <button :class="{rec: v.default}" @click.stop="castNow(it, v.quality)">
+                    <span class="vl" x-text="v.label"></span><span class="vn" x-text="v.note"></span>
+                  </button>
+                </template>
+              </div>
             </div>
           </div>
         </template>
       </div>
-      <div class="empty" x-show="!visible(items(tab)).length">Nothing castable here.</div>
+      <div class="empty" x-show="listOf(tab).loading && !items(tab).length">Fetching the list…</div>
+      <div class="empty" x-show="!listOf(tab).loading && listOf(tab).loaded && !visible(items(tab)).length">Nothing castable here.</div>
+      <div class="empty bad" x-show="listOf(tab).error && !expired(tab)" x-text="listOf(tab).error"></div>
+      <div class="more" x-show="listOf(tab).next && !expired(tab)">
+        <button @click="loadList(tab, true)" :disabled="listOf(tab).loading" x-text="listOf(tab).loading ? 'Loading…' : 'Load more'"></button>
+      </div>
     </section>
   </template>
 </main>

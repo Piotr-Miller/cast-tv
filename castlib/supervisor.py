@@ -250,7 +250,14 @@ class Cast:
             return self._fetched_nothing()
         reasons: list[str] = []
         if item.kind == "video":
-            self.media_line, reasons = explain_failure(item.path or item.source_id)
+            target = item.path
+            if target is None and item.resolve is not None:
+                try:
+                    target = item.resolve().url     # ffprobe reads over HTTP(S), as the CLI always did
+                except Exception:
+                    target = None
+            if target:
+                self.media_line, reasons = explain_failure(target)
         self.reasons = reasons
         hint = None
         if reasons:

@@ -21,6 +21,7 @@ MAX_BODY = 1 << 20
 MAX_SHOW_ITEMS = 500          # checked before the first resolve(), which from Phase 4 is an upstream call
 THUMB_LIMIT = 8 * 1024 * 1024
 THUMB_TYPES = ("image/jpeg", "image/png", "image/webp", "image/gif")   # raster only: SVG can script
+THUMB_LOOSE = ("", "application/octet-stream", "binary/octet-stream")   # CDNs that do not name the type
 SHOW_CONTROLS = ("pause", "resume", "next", "prev", "stop")
 _SOURCE = re.compile(r"^/api/sources/([A-Za-z0-9_-]+)(?:/(status|connect|disconnect|list|thumb))?(?:/(.+))?$")
 
@@ -229,6 +230,19 @@ def _source_route(app, handler, method, name, action, rest, params) -> None:
     handler._json_error(404, "not_found", "Not found.")
 
 
+def raster_type(data: bytes) -> str | None:
+    """The MIME of a JPEG, PNG, WebP or GIF from its first bytes; ``None`` for anything else."""
+    if data.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if data.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "image/webp"
+    if data.startswith((b"GIF87a", b"GIF89a")):
+        return "image/gif"
+    return None
+
+
 def _thumb(handler, src, source_id: str) -> None:
     """Fetch the thumbnail through the source's fresh ``Upstream`` and hand the bytes over."""
     up = src.thumb(source_id)
@@ -242,19 +256,24 @@ def _thumb(handler, src, source_id: str) -> None:
         with (up.opener.open(req, timeout=20) if up.opener is not None
               else urllib.request.urlopen(req, timeout=20)) as resp:
             ctype = (resp.headers.get("Content-Type") or "").split(";")[0].strip().lower()
-            data = resp.read(THUMB_LIMIT + 1) if ctype in THUMB_TYPES else b""
+            data = resp.read(THUMB_LIMIT + 1) if ctype in THUMB_TYPES or ctype in THUMB_LOOSE else b""
     except urllib.error.HTTPError as e:
         handler._json_error(502, "thumb_refused", "The source answered %d for the thumbnail." % e.code)
         return
     except Exception as e:
         handler._json_error(502, "thumb_failed", "Could not fetch the thumbnail: %s" % e)
         return
-    if ctype not in THUMB_TYPES:
-        # Whatever it is, it must not become a same-origin document: HTML or SVG
-        # served from /api would run in the UI's origin and pass the Origin check.
+    # Whatever it is, it must not become a same-origin document: HTML or SVG
+    # served from /api would run in the UI's origin and pass the Origin check.
+    # The declared type must be raster (or absent / octet-stream, as GoPro's
+    # CDN labels its JPEGs), and the bytes must carry a raster signature; the
+    # answer is typed from the signature, never from the upstream's word.
+    sniffed = raster_type(data)
+    if (ctype not in THUMB_TYPES and ctype not in THUMB_LOOSE) or sniffed is None:
         handler._json_error(502, "thumb_not_image",
                             "The source did not answer with a raster image (%s)." % (ctype or "no type"))
         return
+    ctype = sniffed
     if len(data) > THUMB_LIMIT:
         handler._json_error(502, "thumb_too_large", "The thumbnail is unreasonably large.")
         return

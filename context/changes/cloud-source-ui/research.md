@@ -586,3 +586,76 @@ this note was written, one day after the run.
 | 3.5 | a CLI cast running, server started with `--debug` | Stop from the UI stopped it; a replace from the UI (a session item) took over; `--debug` showed no 404 for the replaced item's URL |
 | 3.7 | the TV switched off / disconnected while selected | the header flipped to unreachable; retry (Search again, the TV back on) recovered it |
 
+## Follow-up 2026-09-12 — Phase 4: the GoPro API, probed
+
+Both probes the plan asked for, run with a fresh browser token against the live library
+(1 503 items, `HERO11 Black`), from `castlib.sources.gopro.api` on the Fedora laptop. The
+recorded shapes are the fixtures under `tests/fixtures/gopro/` (ids and the user id replaced).
+
+### Listing: `GET /media/search`
+
+- Without a `fields` filter an entry has 69 keys. The ones that matter: `id`, `filename`,
+  `content_title` (often `null`), `captured_at`, `file_size`, `type`, `width`, `height`,
+  `source_duration`, `thumbnail_available`, `play_as`, `item_count`, `available_labels`.
+- **There is no `duration` field** (the old `fields=…,duration` was silently ignored).
+  `source_duration` is **milliseconds as a string** (`"9280"` for a 9.28 s clip of 136 MB, which
+  is the README's 117 Mbit/s 5.3K case; `"0"` for a burst; `null` for a photo).
+- `resolution` is `"3360p"` or `"12000000"` and is useless; `width`/`height` carry the frame.
+- `_pages` is `{current_page, per_page, total_items, total_pages}`; `per_page=100` works.
+- Types seen: `Video`, `Photo`, `Burst`, `TimeLapseVideo`, `MultiClipEdit` (an edit: no
+  `file_size`, empty `filename`). **No `LivePhoto` in this library**, so the livephoto fixture
+  is synthetic and marked so; `Audio`-like kinds were not seen either.
+- **Thumbnails**: `thumbnail_available: true` on every item, but no URL anywhere in the entry
+  (`thumbnail_url`, `image_url`, `_links`, `sprites` are absent or empty) and
+  `/media/{id}/thumbnails` is 404. What exists: `GET /media/{id}/download?labels=large`
+  answers one `large` **JPEG still for videos** (1280×1120 / 96 KB for the 5.3K clip,
+  3840×2160 / 338 KB for a timelapse), on the CDN, **no auth needed**. For photos and bursts
+  the only image is the multi-MB `source`, so the grid shows a placeholder for stills.
+- `GET /media/{id}` returns the full entry (200), so a bare id from the command line resolves
+  without a listing.
+
+### Download: `GET /media/{id}/download`
+
+| type | `variations` (label · type · size) | `files` | `sidecar_files` |
+|---|---|---|---|
+| Video | `edit_proxy` mp4 1024×896, `audio_proxy` m4a 0×0, `source` mp4 3840×3360, `high_res_proxy_mp4` mp4 1280×1120 | the proxy again, `item_number: 1` | `gpmf`, `gpx`, `mediainfo` |
+| TimeLapseVideo | same four | same | `gpmf` |
+| MultiClipEdit | `baked_source` mp4 2880×2160 | same | `edl_mce` json |
+| Photo | `source` jpg 4000×3000 | the same jpg | `mediainfo` |
+| Burst | `source` jpg 5568×4872 | **30 frames**, `item_number` 1..30 | `zip` |
+
+- The `label` names the ranking knows (`source`, `high_res_proxy_mp4`, `edit_proxy`) are all
+  there; `baked_source` is new and ranks with `source`; `audio_proxy` (`m4a`) and the sidecars
+  are never candidates.
+- **The CDN labels JPEGs `binary/octet-stream`** (a photo's `source`, a timelapse's `large`);
+  a video's `large` came back `image/jpeg`. So the still probe accepts octet-stream by
+  extension, exactly as the video probe has since `223eca1`, and the thumbnail proxy types its
+  answer from the bytes (JPEG/PNG/WebP/GIF signature), never from the upstream's word.
+- A burst's `source` is the frame the library shows; frames 2..n are not stand-ins for it.
+
+### Row 4.2, live (2026-09-12)
+
+`cast-gopro -n 5` listed five 3840×3360 clips with sizes and dates; `cast-gopro 1 --url-only`
+printed `quality: high_res_proxy_mp4 (binary/octet-stream, 9 MB)` and the signed proxy address
+(the clip is 117 Mbit/s, so proxy is the default); `-q source` printed the 130 MB source
+address. `cast-gopro 6984c6c105a9120ae811790b --url-only` (a `Photo` named by its bare id,
+never listed in that process) printed the signed `source/default/1.jpg` address through the
+`GET /media/{id}` fallback.
+
+### Manual rows 4.3, 4.4 and 4.5 — evidence (2026-09-12, run by Claude at Piotr's request)
+
+Laptop only (Fedora, Chrome driven through the extension, navigated same-site so the
+Origin/Host check let it in); the real server (`.venv/bin/python -m castlib --no-browser
+--debug`, port 8895), the real GoPro API with a token pasted that morning, and the `83" OLED`
+(192.168.50.142). **The phone was not exercised** (no phone in the loop); that part stays open.
+
+| row | material | observed |
+|---|---|---|
+| 4.3 | the stored token; the gate with the paste field | On entering the tab the stored token was verified (`connect {}`) and the list appeared: 100 tiles per page, "Load more" for page 2, real JPEG stills on all 74 videos (loaded through the proxy from the CDN's octet-stream), placeholders on the 26 photos, "too heavy: 118–122 Mbit/s" on every HERO11 clip; tab hint and list header read "token stored 14 min ago". The paste itself: garbage pasted in the gate answered "GoPro rejected the token (401)" under the field, saved nothing, and the tab stayed "not connected"; a valid paste through the same field was exercised earlier the same day against the scripted API (demo server) with the list appearing straight after. |
+| 4.4 | `GX011767.MP4`, 9 s, 3840×3360, 130 MB, 118 Mbit/s | The play button opened the two-button choice with Proxy marked recommended. Proxy: the TV fetched the 9.2 MB `high_res_proxy_mp4` (HEAD, GET, ranged GETs in `--debug`), `started` latched, `duration 0:00:09`, played to the end and stopped. Source: the TV fetched the 136 MB source in ranged GETs (10 requests), never left `STOPPED`, and `tv_never_started` was reported after the 24 s budget in the bottom bar ("GX011767.MP4: The TV never started playing.", Details, Diagnostics badge 1). The hint was empty at that point; `_never_started` now probes a relayed item by its fresh address, so the "118 Mbit/s … try a lighter variant" hint appears (unit-tested, not re-run on the TV). |
+| 4.5 | a garbage token written into `gopro-token`, then Refresh | The real 401 flipped the tab to "token expired" and the banner ("The GoPro token expired … paste a fresh token") sat above the list, which stayed on screen with its thumbnails. Recovery: the real token restored on disk and `POST connect {}` sent from the page (a paste of the real token was not typed, to keep it out of the transcript): the banner went, the list stayed, the header read "token stored 19 min ago". The literal banner paste was exercised against the scripted API earlier the same day. |
+
+Two changes came out of the run: a pasted token is verified before it is saved (a bad paste
+used to overwrite a working stored token), and the never-started probe reads the relayed
+address instead of the media id.
+

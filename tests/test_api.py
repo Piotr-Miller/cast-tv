@@ -35,7 +35,8 @@ def test_status_shape(app):
     assert d["app"] == "cast-tv" and d["version"]
     assert d["tv"] == {"ip": "127.0.0.1", "name": "Fake TV", "state": "ready"}
     assert d["tvs"] == [] and d["cast"] is None and d["show"] is None
-    assert d["sources"] == {} and d["session"] == []
+    assert d["sources"] == {"gopro": {"state": "disconnected", "detail": {"stored": False}}}
+    assert d["session"] == []
     assert isinstance(d["addresses"], list) and d["errors"] == 0 and d["errors_seq"] == 0
     assert d["settings"]["interval"] == 8
     assert "firewall_hint" in d
@@ -102,14 +103,18 @@ def test_bad_bodies_are_400(app):
 
 
 def test_cast_unknown_source_is_404(app):
-    status, _, d = _json(app.base_url, "POST", "/api/cast", {"source": "gopro", "id": "x"})
+    status, _, d = _json(app.base_url, "POST", "/api/cast", {"source": "onedrive", "id": "x"})
     assert status == 404 and d["error"]["code"] == "unknown_source"
+    status, _, d = _json(app.base_url, "POST", "/api/cast", {"source": "gopro", "id": "x"})
+    assert status == 401 and d["error"]["code"] == "no_token"          # wired; nothing to look it up with
     status, _, d = _json(app.base_url, "POST", "/api/cast", {"source": "local", "id": "/nope"})
     assert status == 404 and d["error"]["code"] == "unknown_item"
     status, _, d = _json(app.base_url, "GET", "/api/sources/local/list")
     assert status == 404
-    status, _, d = _json(app.base_url, "GET", "/api/sources/gopro/status")
+    status, _, d = _json(app.base_url, "GET", "/api/sources/onedrive/status")
     assert status == 404 and d["error"]["code"] == "unknown_source"
+    status, _, d = _json(app.base_url, "GET", "/api/sources/gopro/status")
+    assert status == 200 and d["state"] == "disconnected"
 
 
 def test_cast_and_stop_over_api(app, tmp_path):
@@ -224,11 +229,11 @@ class _FakeSource:
 
 
 def test_thumb_route_proxies_and_404s(app, upstream):
-    up = upstream(b"\xff\xd8thumb-bytes", ctype="image/jpeg", statuses={"/gone": 403})
+    up = upstream(b"\xff\xd8\xffthumb-bytes", ctype="image/jpeg", statuses={"/gone": 403})
     app.sources["fake"] = _FakeSource(up.base)
     status, headers, body, conn = request(app.base_url, "GET", "/api/sources/fake/thumb/ok")
     assert status == 200
-    assert body == b"\xff\xd8thumb-bytes"
+    assert body == b"\xff\xd8\xffthumb-bytes"
     assert headers["Content-Type"] == "image/jpeg"
     assert headers["X-Content-Type-Options"] == "nosniff"
     assert headers["Cache-Control"] == "private, max-age=3600"
@@ -248,25 +253,42 @@ def test_thumb_route_proxies_and_404s(app, upstream):
     status, _, body, _ = request(app.base_url, "GET", "/api/sources/fake/list", conn=conn)
     assert status == 200 and json.loads(body) == {"items": [], "folders": [], "next": None, "crumbs": []}
     status, _, body, _ = request(app.base_url, "GET", "/api/status", conn=conn)
-    assert json.loads(body)["sources"] == {"fake": {"state": "connected", "detail": {}}}
+    assert json.loads(body)["sources"]["fake"] == {"state": "connected", "detail": {}}
+
+
+PNG = b"\x89PNG\r\n\x1a\n" + b"\0" * 8
+JPEG = b"\xff\xd8\xff\xe0" + b"\0" * 8
+WEBP = b"RIFF\x10\0\0\0WEBPVP8 "
+GIF = b"GIF89a" + b"\0" * 8
 
 
 def test_thumb_route_serves_raster_images_only(app, upstream):
-    """HTML or SVG proxied under /api would be a same-origin document; only raster types pass."""
-    for ctype, body in (("text/html", b"<script>1</script>"), ("image/svg+xml", b"<svg/>"),
-                        (None, b"\x89PNG"), ("", b"\x89PNG"), ("application/octet-stream", b"x")):
+    """HTML or SVG proxied under /api would be a same-origin document: the declared type must
+    be raster (or absent / octet-stream, as GoPro's CDN labels its JPEGs - Phase 4 probe), the
+    bytes must carry a raster signature, and the answer is typed from the signature."""
+    refused = (("text/html", b"<script>1</script>"), ("image/svg+xml", b"<svg/>"),
+               ("text/html", PNG),                     # a raster body under a document type
+               ("image/jpeg", b"<html>not a jpeg"),    # a document under a raster type
+               ("image/svg+xml", JPEG),                # SVG is never accepted, whatever the bytes
+               (None, b"<svg/>"), ("", b"x"), ("application/octet-stream", b"<html>"))
+    for ctype, body in refused:
         up = upstream(body, ctype=ctype)
         app.sources["fake"] = _FakeSource(up.base)
         status, headers, out, _ = request(app.base_url, "GET", "/api/sources/fake/thumb/x")
-        assert status == 502, ctype
-        assert json.loads(out)["error"]["code"] == "thumb_not_image", ctype
+        assert status == 502, (ctype, body)
+        assert json.loads(out)["error"]["code"] == "thumb_not_image", (ctype, body)
         assert headers["Content-Type"].startswith("application/json")
-    for ctype in ("image/png", "image/webp", "image/gif", "IMAGE/JPEG; charset=binary"):
-        up = upstream(b"\x89PNG", ctype=ctype)
+    accepted = (("image/png", PNG, "image/png"), ("image/webp", WEBP, "image/webp"),
+                ("image/gif", GIF, "image/gif"), ("IMAGE/JPEG; charset=binary", JPEG, "image/jpeg"),
+                ("binary/octet-stream", JPEG, "image/jpeg"), ("application/octet-stream", PNG, "image/png"),
+                (None, JPEG, "image/jpeg"), ("", PNG, "image/png"),
+                ("image/png", JPEG, "image/jpeg"))         # the bytes win over the label
+    for ctype, body, expect in accepted:
+        up = upstream(body, ctype=ctype)
         app.sources["fake"] = _FakeSource(up.base)
         status, headers, out, _ = request(app.base_url, "GET", "/api/sources/fake/thumb/x")
-        assert status == 200 and out == b"\x89PNG", ctype
-        assert headers["Content-Type"] == ctype.split(";")[0].lower()
+        assert status == 200 and out == body, (ctype, expect)
+        assert headers["Content-Type"] == expect and headers["X-Content-Type-Options"] == "nosniff"
 
 
 def test_connect_body_is_one_dict(app):

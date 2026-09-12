@@ -1,0 +1,21 @@
+{
+  "_comment": "Shape of /media/{id}/download for a Video, recorded 2026-09-12; urls point at the test CDN, signatures replaced by sig=1.",
+  "filename": "GX011767.MP4",
+  "_embedded": {
+    "variations": [
+      {"label": "edit_proxy", "type": "mp4", "width": 1024, "height": 896, "url": "https://cdn.test/u-test/vid-heavy/edit_proxy/default/1.mp4?sig=1"},
+      {"label": "audio_proxy", "type": "m4a", "width": 0, "height": 0, "url": "https://cdn.test/u-test/vid-heavy/audio_proxy/default/1.m4a?sig=1"},
+      {"label": "source", "type": "mp4", "width": 3840, "height": 3360, "url": "https://cdn.test/u-test/vid-heavy/source/default/1.mp4?sig=1"},
+      {"label": "high_res_proxy_mp4", "type": "mp4", "width": 1280, "height": 1120, "url": "https://cdn.test/u-test/vid-heavy/high_res_proxy_mp4/default/1.mp4?sig=1"}
+    ],
+    "files": [
+      {"item_number": 1, "width": 1280, "height": 1120, "url": "https://cdn.test/u-test/vid-heavy/high_res_proxy_mp4/default/1.mp4?sig=1"}
+    ],
+    "sidecar_files": [
+      {"label": "gpmf", "type": "mp4", "url": "https://cdn.test/u-test/vid-heavy/gpmf/default/1.mp4?sig=1"},
+      {"label": "gpx", "type": "gpx", "url": "https://cdn.test/u-test/vid-heavy/gpx/default/1.gpx?sig=1"},
+      {"label": "mediainfo", "type": "json", "url": "https://cdn.test/u-test/vid-heavy/mediainfo/default/1.json?sig=1"}
+    ],
+    "sprites": []
+  }
+}

@@ -275,3 +275,25 @@ main { flex: 1; display: flex; flex-direction: column; padding-bottom: 96px; }
   main { padding-bottom: 140px; }
   .panel { width: 100vw; }
 }
+
+/* ---- Phase 4: the token gate, the expired banner, the variant chooser */
+.gate ol.steps { margin: 18px 0 0; padding-left: 22px; text-align: left; font-size: 13px; line-height: 1.5; color: var(--ink-2); }
+.gate ol.steps li { margin: 6px 0; }
+.gate form.paste { margin-top: 18px; display: flex; gap: 8px; }
+.gate form.paste input { flex: 1; font-family: var(--mono); font-size: 12px; }
+.banner.expired { margin: 0 0 16px; }
+.banner form.paste { display: flex; gap: 8px; flex: 1 1 320px; }
+.banner form.paste input { flex: 1; font-family: var(--mono); font-size: 12px; }
+.banner .later { flex-basis: 100%; font-size: 12.5px; color: var(--warn); }
+.section h2 .age { margin-left: auto; font-family: var(--mono); text-transform: none; letter-spacing: 0; color: var(--ink-4); }
+.tile .card { position: relative; }
+.tile .chooser { position: absolute; inset: 0; z-index: 2; padding: 10px; border-radius: inherit; background: rgba(0,0,0,.9); display: flex; flex-direction: column; justify-content: center; gap: 6px; }
+.tile .chooser .t { font-size: 11px; color: var(--ink-3); }
+.tile .chooser button { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; text-align: left; height: auto; padding: 5px 8px; white-space: normal; }
+.tile .chooser .vl { font-size: 12px; font-weight: 600; }
+.tile .chooser .vn { font-size: 10.5px; color: var(--ink-3); line-height: 1.2; }
+.tile .chooser button.rec { border-color: var(--accent); }
+.more { display: flex; justify-content: center; padding: 18px 0 4px; }
+.empty.bad { color: var(--warn); }
+
+.section h2 button.ghost { height: 22px; font-size: 11px; text-transform: none; letter-spacing: 0; }

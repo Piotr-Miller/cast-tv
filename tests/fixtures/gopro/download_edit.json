@@ -1,0 +1,16 @@
+{
+  "_comment": "/media/{id}/download for a MultiClipEdit, recorded 2026-09-12: one baked_source mp4 and an edl sidecar.",
+  "filename": "",
+  "_embedded": {
+    "variations": [
+      {"label": "baked_source", "type": "mp4", "width": 2880, "height": 2160, "url": "https://cdn.test/u-test/edit-1/baked_source/default/1.mp4?sig=1"}
+    ],
+    "files": [
+      {"item_number": 1, "width": 2880, "height": 2160, "url": "https://cdn.test/u-test/edit-1/baked_source/default/1.mp4?sig=1"}
+    ],
+    "sidecar_files": [
+      {"label": "edl_mce", "type": "json", "url": "https://cdn.test/u-test/edit-1/edl_mce/default/1.json?sig=1"}
+    ],
+    "sprites": []
+  }
+}

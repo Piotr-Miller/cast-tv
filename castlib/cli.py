@@ -114,7 +114,13 @@ def cast(source, subs=None, tv=None, port=DEFAULT_PORT, title=None, debug=False,
         subtitle = MediaItem(kind="subtitle", title=os.path.basename(sub_path),
                              mime=MIME.get(sub_ext, "text/plain"), source="local",
                              source_id=sub_path, path=sub_path, debug=debug)
+    return _cast_item(item, (ip, avt, name), port, debug, subtitle=subtitle)
 
+
+def _cast_item(item, tv, port, debug, subtitle=None):
+    """Serve ``item`` from a fresh server to the TV ``(ip, avt, name)`` and follow playback."""
+    ip, avt, name = tv
+    relaying = item.path is None
     srv = _bind(port)
     if srv is None:
         return 1
@@ -359,22 +365,32 @@ def main_gopro(argv=None):
             return 0
 
         if args.what and args.what.startswith(("http://", "https://")):
-            url, title = gopro.share_url(args.what), None
-        elif args.what:
-            tok = gopro.token()
-            item = gopro.pick(args.what)
-            print("Resolving: %s" % item["name"])
-            url, title = gopro.library_url(item["id"], tok, args.quality), item["name"]
-        else:
+            url = gopro.share_url(args.what)
+            if args.url_only:
+                print(url)
+                return 0
+            return cast(url, tv=args.tv, port=args.port or DEFAULT_PORT)
+        if not args.what:
             show_gopro(gopro.list_media(gopro.token(), args.count))
+            return 0
+
+        # a library entry: the same Source the UI uses, in process
+        picked = gopro.pick(args.what)
+        print("Resolving: %s" % picked["name"])
+        source = gopro.GoProSource()
+        item = source.resolve(picked["id"], args.quality)
+        if picked.get("name") and picked["name"] != picked["id"]:
+            item.title = picked["name"]
+        if args.url_only:
+            print(item.resolve().url)
             return 0
     except CastError as e:
         return _fail(e)
 
-    if args.url_only:
-        print(url)
-        return 0
-    return cast(url, tv=args.tv, port=args.port or DEFAULT_PORT, title=title)
+    ip, avt, name = find_tv(args.tv)
+    if not avt:
+        return 1
+    return _cast_item(item, (ip, avt, name), args.port or DEFAULT_PORT, False)
 
 
 # --------------------------------------------------------------- cast-photos
