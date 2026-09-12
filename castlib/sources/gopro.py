@@ -364,32 +364,73 @@ def is_heavy(entry: Entry) -> bool:
 
 # --------------------------------------------------------------- the source
 class GoProSource:
-    """The ``Source`` contract over the module: a token gate, a listing, on-demand signed URLs."""
+    """The ``Source`` contract over the module: a token gate, a listing, on-demand signed URLs.
+
+    The source owns **one session credential**: read once from ``GOPRO_TOKEN``
+    or the token file on first use, replaced by a verified paste, cleared by
+    ``disconnect()`` (which never falls back to the environment again in this
+    process; a new process may still start from ``GOPRO_TOKEN``). Every
+    request captures the credential *and its generation* together; a verified
+    connection and a disconnect bump the generation, and a request's outcome
+    touches the state only while its generation is still current. A 401 sets
+    ``expired``; a plain list/thumb/resolve success never restores
+    ``connected`` - only a successful verification does (p4 review F1, F2).
+    """
 
     name = "gopro"
 
     def __init__(self):
         self._lock = threading.Lock()
         self._raw: dict[str, dict] = {}          # id -> raw listing entry, for resolve() and thumb()
-        self._verified_at: float | None = None   # the last call that succeeded with this token
-        self._expired_at: float | None = None    # the first 401, until a new token is verified
+        self._token: str | None = None           # the session credential
+        self._from_env = False                   # it came from GOPRO_TOKEN (no file age to show)
+        self._loaded = False                     # the first lookup happened (disconnect sets it too)
+        self._gen = 0                            # bumped by a verified connection and by disconnect
+        self._verified_at: float | None = None   # when the session credential was last verified
+        self._expired_at: float | None = None    # the first 401 on it, until a new one is verified
         self._error: dict | None = None
 
     # ---------------------------------------------------------- bookkeeping
-    def _call(self, fn, *args, **kwargs):
-        """Run an API-touching function; a 401 flips the source to ``expired`` before it propagates."""
+    def _credential(self) -> tuple[str | None, int]:
+        """``(token, generation)`` of the session; the first call reads the environment or the file."""
+        with self._lock:
+            if not self._loaded:
+                self._loaded = True
+                self._from_env = bool(os.environ.get("GOPRO_TOKEN"))
+                try:
+                    self._token = token()
+                except AuthError:
+                    self._token = None
+            return self._token, self._gen
+
+    def _no_token(self) -> AuthError:
+        return AuthError("no_token", "No GoPro token stored." + HOW_TO_GET_A_TOKEN, source="gopro")
+
+    def _call(self, fn):
+        """Run ``fn(token)`` with the session credential.
+
+        A 401 marks the source ``expired`` - but only if no verified connection
+        or disconnect happened since the request captured its credential, so a
+        stale answer cannot undo a recovery. A success changes no state.
+        """
+        tok, gen = self._credential()
+        if tok is None:
+            raise self._no_token()
         try:
-            result = fn(*args, **kwargs)
+            return fn(tok)
         except AuthError as e:
             with self._lock:
-                self._expired_at = time.time()
-                self._error = e.as_dict()
+                if gen == self._gen:
+                    self._expired_at = time.time()
+                    self._error = e.as_dict()
             raise
+
+    def _adopt(self, tok: str, from_env: bool) -> None:
+        """A verified credential becomes the session's: new generation, connected."""
         with self._lock:
-            self._verified_at = time.time()
-            self._expired_at = None
-            self._error = None
-        return result
+            self._token, self._from_env, self._loaded = tok, from_env, True
+            self._gen += 1
+            self._verified_at, self._expired_at, self._error = time.time(), None, None
 
     def _raw_of(self, media_id: str) -> dict | None:
         """The listing entry behind an id: this process's listing, the CLI's cached one, else ``/media/{id}``."""
@@ -405,7 +446,7 @@ class GoProSource:
                         "captured_at": cached.get("date"),
                         "thumbnail_available": cached.get("thumb")}
         try:                                       # a bare id (cast-gopro <id>): one lookup
-            raw = self._call(api, "/media/%s" % media_id, token())
+            raw = self._call(lambda tok: api("/media/%s" % media_id, tok))
         except UpstreamError:
             return None                            # 404 and the like: not an item of this library
         if not isinstance(raw, dict) or raw.get("id") != media_id:
@@ -416,12 +457,18 @@ class GoProSource:
 
     # ------------------------------------------------------------ contract
     def status(self) -> dict:
-        has_token = bool(os.environ.get("GOPRO_TOKEN")) or os.path.exists(token_file())
-        if not has_token:
+        tok, _ = self._credential()
+        if tok is None:
             return {"state": "disconnected", "detail": {"stored": False}}
-        since = stored_at()
         with self._lock:
-            expired, verified, error = self._expired_at, self._verified_at, self._error
+            expired, verified, error, from_env = (self._expired_at, self._verified_at,
+                                                  self._error, self._from_env)
+        since = None
+        if not from_env:
+            try:
+                since = os.path.getmtime(token_file())
+            except OSError:
+                since = None
         if expired is not None:
             state = "expired"
         elif verified is not None:
@@ -445,15 +492,29 @@ class GoProSource:
             tok, _ = fold_double_paste(pasted)
             search(tok, 1)                         # a 401 propagates; nothing changes here
             save_token(pasted)
-            with self._lock:
-                self._verified_at, self._expired_at, self._error = time.time(), None, None
+            self._adopt(tok, from_env=False)       # from now on every request uses the paste
             return self.status()
-        self._call(search, token(), 1)
+        tok, gen = self._credential()
+        if tok is None:
+            raise self._no_token()
+        try:
+            search(tok, 1)
+        except AuthError as e:
+            with self._lock:
+                if gen == self._gen:
+                    self._expired_at, self._error = time.time(), e.as_dict()
+            raise
+        with self._lock:
+            from_env = self._from_env
+        self._adopt(tok, from_env)
         return self.status()
 
     def disconnect(self) -> None:
+        """Forget the session credential and the file; this process never reads GOPRO_TOKEN again."""
         forget_token()
         with self._lock:
+            self._token, self._from_env, self._loaded = None, False, True
+            self._gen += 1
             self._verified_at = self._expired_at = self._error = None
             self._raw.clear()
 
@@ -464,7 +525,7 @@ class GoProSource:
             n = int(page)
         else:
             raise ConfigError("bad_page", "Not a page number: %r" % (page,), source="gopro")
-        media = self._call(search, token(), PAGE_SIZE, n)
+        media = self._call(lambda tok: search(tok, PAGE_SIZE, n))
         items = []
         for m in media:
             kind = kind_from_facets("gopro", m)
@@ -494,7 +555,7 @@ class GoProSource:
         source = self
 
         def fresh() -> Upstream:
-            return Upstream(source._call(picker, source_id, token(), quality))
+            return Upstream(source._call(lambda tok: picker(source_id, tok, quality)))
 
         return MediaItem(kind=kind, title=entry.name,
                          mime="video/mp4" if kind == "video" else "image/jpeg",
@@ -508,7 +569,7 @@ class GoProSource:
         kind = kind_from_facets("gopro", raw) if raw is not None else None
         if kind is None or not has_thumb(raw, kind):
             return None
-        _, variants = self._call(download_options, source_id, token(), THUMB_LABEL)
+        _, variants = self._call(lambda tok: download_options(source_id, tok, THUMB_LABEL))
         for v in variants:
             if _is_image_variant(v):
                 return Upstream(v["url"])       # the CDN needs no auth; it may say octet-stream
