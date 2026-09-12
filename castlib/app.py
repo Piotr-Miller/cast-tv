@@ -28,6 +28,7 @@ from castlib.platform import StayAwake, firewall_hint
 from castlib.server import Server
 from castlib.sources.gopro import GoProSource
 from castlib.sources.local import LocalSource
+from castlib.sources.onedrive import OneDriveSource
 from castlib.supervisor import Cast, Show
 
 APP_NAME = "cast-tv"
@@ -134,7 +135,7 @@ class App:
         self.errors = ErrorRing(50)
         self.settings = Settings()
         self.local = LocalSource()
-        self.sources: dict = {"gopro": GoProSource()}   # name -> Source; Phases 5-6 add theirs
+        self.sources: dict = {"gopro": GoProSource(), "onedrive": OneDriveSource()}   # name -> Source; Phase 6 adds gphotos
         self.stay_awake = StayAwake()
         self.addresses: list[str] = []
         self.started_at = time.time()

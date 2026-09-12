@@ -224,6 +224,7 @@ def app(server, monkeypatch, tmp_path, fast_supervisor):
     monkeypatch.setattr(config, "_CONFIG", str(tmp_path / "config"))
     monkeypatch.setattr(config, "_CACHE", str(tmp_path / "cache"))
     monkeypatch.delenv("GOPRO_TOKEN", raising=False)      # the developer's own token never leaks in
+    monkeypatch.delenv("ONEDRIVE_CLIENT_ID", raising=False)
     srv, base = server
     a = App(srv)
     tv = FakeTV(lambda: srv.registry)

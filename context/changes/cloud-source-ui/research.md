@@ -659,3 +659,94 @@ Two changes came out of the run: a pasted token is verified before it is saved (
 used to overwrite a working stored token), and the never-started probe reads the relayed
 address instead of the media id.
 
+
+## Follow-up 2026-09-12 — Phase 5: OneDrive, built on doc-shaped Graph before any live call
+
+No Entra registration existed when the phase was built (nothing under `~/.config/cast-tv`, no
+client id anywhere in the repo), so the code and tests were written without a live call to
+Microsoft; the client id arrived at the end of the session (below). What that means, honestly:
+
+- **The Graph fixtures are hand-written from the docs, not recorded.** `tests/fixtures/onedrive/`
+  follows the `driveItem` reference (`file`/`folder`/`image`/`photo`/`video` facets,
+  `thumbnails[0].{medium,large}.url` via `$expand`, `parentReference.{id,path}`,
+  `@odata.nextLink` with `$skiptoken`). The first live listing should be checked against them,
+  field by field: `video.duration` (milliseconds), `video.bitrate` (bit/s), `photo.takenDateTime`,
+  the thumbnail set shape, and `parentReference.path == "/drive/root:"` for children of the
+  root (the crumbs rely on it to stop). Anything that differs is a fixture fix, not a design one.
+- **Client id.** Piotr registered the app during this session and handed over the Application
+  (client) ID `652b2cf9-87f7-4d48-a6cf-67ed3ad8c9b6`; it ships as
+  `castlib/sources/onedrive.py:DEFAULT_CLIENT_ID` (not a secret) and `ONEDRIVE_CLIENT_ID`
+  overrides it. With the default emptied, the gate's Connect answers `400 no_client_id` with the
+  registration steps as the hint (personal accounts, "Mobile and desktop applications", "Allow
+  public client flows = Yes").
+- **The device code endpoints, error names and refresh grant** are exactly the ones the plan
+  sourced on 2026-09-09; `tests/test_onedrive.py::FakeMicrosoft` scripts them and the same stub
+  plays Graph, so the tests cover the full path from code to listing to download address.
+
+Decisions taken while implementing (also in the plan's Addenda):
+
+| what | decided |
+|---|---|
+| `connect({})` | stored and not expired → verify against `/me` (refreshing silently) and report `connected`; nothing stored, or `expired`, or `{"fresh": true}` → start a device flow and answer `{step: "code", user_code, verification_uri, expires_in, message}`; a flow already pending → the same code again, never a second flow; `{"cancel": true}` ends it |
+| the poll thread | saves the token and flips to `connected` under the source lock **only** if no disconnect or restart happened since the flow started (generation + identity of the flow record); a token that arrives after `disconnect()` is dropped (`test_disconnect_during_the_flow_drops_a_late_token`) |
+| `page` | must be Graph's own `@odata.nextLink` (`startswith(GRAPH + "/")`), else `400 bad_page` before any request: the bearer never travels to another host |
+| `path` | a folder id matching `^[A-Za-z0-9!_.\-]{1,128}$`, else `400 bad_path` |
+| crumbs | from a per-process `folder id -> (parent id, name)` map filled by listings; a folder never listed (a deep `?path=` on entry) is looked up with `GET /me/drive/items/{id}?$select=id,name,parentReference` and walked to the root, at most 32 hops |
+| thumbnails | the listing's `large` (else `medium`) address is reused for 30 min, then `GET /me/drive/items/{id}/thumbnails` fetches a fresh one; an item with no thumbnail set gets the placeholder tile |
+| photo cache `version` | `lastModifiedDateTime:size`, both already in the `$select` list |
+| heavy video | `warn` from `video.bitrate` (or size×8/duration when absent) above 60 Mbit/s; **no `variants`**, OneDrive has no lighter file to offer, so the tile warns and casts the one file |
+| hidden kinds | a still that fails `is_allowed_photo` (GIF, raw) is logged once per session; a document (PDF) is quietly not media |
+
+Row 5.1 evidence (2026-09-12): `python -m pytest tests/` → 170 passed (155 before, 15 new in
+`tests/test_onedrive.py`); `pyflakes castlib tests` clean.
+
+UI smoke (2026-09-12, Claude, Chrome through the extension, laptop only): on the real server
+(`-p 8896`, no client id) the OneDrive gate answered Connect with "No Entra application id is
+configured for OneDrive." plus the registration hint; on a stub-backed server (`-p 8897`,
+`FakeMicrosoft` from the tests behind `devicecode.AUTHORITY`/`onedrive.GRAPH`) the gate showed
+`ABCD-1234` with the `microsoft.com/devicelogin` link, "waiting for confirmation…", Copy code
+and Cancel; after the stub confirmed, the list replaced it with "signed in as Piotr Miller
+(piotr@example.com)" in the header, the two folders, the four media tiles (GIF, DNG and PDF
+hidden, "too heavy: 119 Mbit/s" on the MOV), Pictures → Camera Roll with the breadcrumb
+`OneDrive / Pictures / Camera Roll`, "Load more" appending page two (3 → 5 tiles), and the root
+crumb back to the top. No console errors. One observation worth knowing: a tab in a background
+Chrome window has `visibilityState: hidden`, so the 1.5 s status poll pauses by design and the
+flip to `connected` shows on the next foreground refresh.
+
+Live probe of the registration (2026-09-12, right after the id arrived): `devicecode.start()`
+with the shipped client id against the real `login.microsoftonline.com/consumers` answered
+200 with a user code, `verification_uri` **`https://www.microsoft.com/link`** (Microsoft's
+current page; the older `microsoft.com/devicelogin` is only a fallback in the code, the UI shows
+whatever the API returns), `expires_in` 900 and `interval` 5. The code was left unused. So the
+registration allows public client flows and personal accounts; nothing beyond that was
+exercised, no sign-in happened.
+
+### Live Graph, first contact (2026-09-12) — one fixture assumption was wrong
+
+`GET /me/drive/items/{id}?$select=id,@microsoft.graph.downloadUrl` answers `{"id": …}` and
+**nothing else** on this personal drive: any `$select` drops the annotation, whether it names
+it or not. A plain `GET /me/drive/items/{id}` carries `@microsoft.graph.downloadUrl` (a
+1 061-character `my.microsoftpersonalcontent.com` address), and `GET …/content` answers 302
+to the same address. The resolver now fetches the item without `$select` (a few KB) and the
+stub mirrors Graph: with a `$select` it answers only the named fields. Everything else the
+fixtures assumed held: `folder.childCount`, `image.width/height`, `photo.takenDateTime`,
+`video.{bitrate,duration,width,height}` (duration in ms), `thumbnails[0].large.url`
+pre-authenticated, `@odata.nextLink` with `$skiptoken`, `parentReference.path`
+`/drive/root:` for children of the root; the item ids look like `480EBB28A7DFE5BB!4309` or
+`480EBB28A7DFE5BB!s<32 hex>` and pass `ID_RE`.
+
+### Manual rows 5.2–5.5 — evidence (2026-09-12, run by Claude at Piotr's request)
+
+Laptop: Fedora, `.venv/bin/python -m castlib --no-browser --debug` on 8895, Chrome through the
+extension for the UI (same-origin navigation; a background window pauses the poll, so
+`refresh()` was forced by hand where noted); the Samsung `83" OLED` (192.168.50.142); Piotr's
+real OneDrive (`pmiller.software@gmail.com`); client id `652b2cf9-…c9b6`.
+
+| row | material | observed |
+|---|---|---|
+| 5.2 | code `RAKYC2NX` from the real endpoint, shown in the laptop gate; Piotr signed in on `www.microsoft.com/link` **on the phone** (confirmed by Piotr, 2026-09-12) | the server's poll thread flipped to `connected` with `account: Piotr Miller (pmiller.software@gmail.com)`; `~/.config/cast-tv/onedrive.json` written mode 0600 (2 095 bytes); the laptop UI, refreshed, replaced the gate with the drive root (7 folders, "Nothing castable here", header "signed in as …"). After each of the three server restarts that followed, `POST connect {}` verified the stored sign-in against `/me` and answered `connected` with no new code. |
+| 5.3 | `Pictures / OM Workspace / 2026_08_16`, 374 JPEGs (Olympus, 5184×3888) | page 1: 200 items in 2.1 s with `next`; page 2: 174 items in 1.3 s, `next` null; 374 unique ids; crumbs `OneDrive / Pictures / OM Workspace / 2026_08_16` on entry (looked up, the folder was opened by id). UI: "Load more" appended page 2 (200 → 374); thumbnails proxied through `/api/sources/onedrive/thumb/<id>` — `200 image/jpeg`, 137 863 bytes, `nosniff`, `private, max-age=3600` — and real stills in the grid once the tab loaded them (`naturalWidth` 800). |
+| 5.4 | **no HEIC and no 4K video existed in this drive** (60 folders walked to depth 3: 43 photos, all JPEG/PNG; 1 video, 2560×1440), so material was made. 4K: the sync mirror (`~/.onedrive-sync`, download-only) holds Olympus `.MOV` clips in `Pictures/OM Workspace/<date>/video/` that the depth-3 walk had missed; `P7242629.MOV` is HEVC 3840×2160 59.94 fps, 134 Mbit/s, 16.5 s, 287 MB — the listing flagged it `too heavy` from Graph's `video.bitrate` facet. HEIC: two files encoded with pillow_heif 1.7.0 / libheif 1.23.3 from `P8163285.JPG` (5184×3888) into `Pictures/OM Workspace/2026_09_12/`, uploaded by Piotr from the phone (the mirror is `download_only`, the app's token is `Files.Read`): `IMG_HEIC_landscape.HEIC` 12.8 MB, and `IMG_HEIC_portrait_orient6.HEIC` 12.7 MB stored sideways (`ispe` 3888×5184) with `irot` 270° CCW and EXIF orientation 6, the way a phone writes a portrait. | **4K video** (2026-09-12, before the HEIC upload): `preparing` → `starting` at 3 s → `PLAYING` at 6 s; the TV opened the relay with `Range=-` → `upstream: 200 video/quicktime, 287249920 bytes`, then thirteen ranged GETs (`bytes=0-`, tail probes, `bytes=116033591-` …) → `upstream: 206`; position advanced; the four quality variants were listed and `auto` was cast. **HEIC** (17:06 portrait, 17:07 landscape): both files listed as `photo … image/heic` with real thumbnails; each cast went `preparing` → `starting` at 6 s → `PLAYING` at 8 s, `converted: true`; the TV HEAD/GET'd the prepared JPEG six or seven times (`Range=-`, 4 360 402 and 4 360 546 bytes, both 4096×3072, EXIF stripped). The portrait file came out on the TV as the source rotated 180° — **a fixture error, not an app one**: its pixels had been rotated 90° CW where EXIF 6 / `irot` 270 expect 90° CCW, and `irot` and EXIF agree with each other, so every HEIF-spec viewer shows the same thing. pillow_heif applies `irot` in libheif and resets the EXIF orientation to 1 (keeping it as `info['original_orientation']`), which is what keeps `photos._convert` from rotating twice; a HEIC carrying EXIF orientation but no `irot` would show as stored, per spec. A corrected `IMG_HEIC_portrait_irot.HEIC` (pixels 90° CCW, `irot` 270, EXIF 6) decodes to the source (mean abs diff 0.04/255); uploaded by Piotr from the phone and cast at 18:17: listed as `image/heic` with a real thumbnail but `width`/`height` null (Graph had not built the `image` facet yet), `preparing` → `starting` at 6 s → `TRANSITIONING` at 8 s → `PLAYING` at 10 s, `converted: true`; the TV HEAD/GET'd the prepared JPEG six times (4 360 212 bytes, 4096×3072, EXIF stripped) and that JPEG matches the source photo (mean abs diff 0.14/255) — upright on screen, the same way round as the landscape one. **Not exercised: the one-hour pause before a seek.** The re-resolve path stays covered by `test_relay.py::test_reresolve_once` and `test_download_url_resolved_on_open`. |
+| 5.5 | **simulated**, not revoked in the Microsoft account: `refresh_token` and `access_token` in `onedrive.json` replaced with garbage, server restarted | `POST connect {}` → `401 refresh_rejected`, message "The OneDrive sign-in is no longer valid (invalid_grant). Connect again.", hint Microsoft's `AADSTS7000012 …`; status `expired`, `stored: true`; `GET list` → the same 401; the laptop UI showed the banner "The OneDrive sign-in expired … Connect again" over the still-visible 374-tile list, and the gate with "Connect again" plus the message once the list was cleared; `connect {}` while expired started a **new** device flow (code `RY47XHN8`), cancelled with `{"cancel": true}` → back to `expired`. The real file restored, restart, `connect {}` → `connected`, root lists 7 folders. A real revoke answers the same `invalid_grant` on refresh, so the path is the one exercised, but the account-side step itself was not. |
+
+Left running after the run: the server on 8895 with the real sign-in, for Piotr to try the phone.

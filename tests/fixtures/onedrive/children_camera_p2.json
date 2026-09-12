@@ -1,0 +1,26 @@
+{
+  "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#Collection(driveItem)",
+  "value": [
+    {
+      "id": "cam-4",
+      "name": "IMG_1004.JPG",
+      "size": 2100000,
+      "lastModifiedDateTime": "2026-08-11T09:00:00Z",
+      "file": {"mimeType": "image/jpeg", "hashes": {"quickXorHash": "K4"}},
+      "image": {"width": 4032, "height": 3024},
+      "photo": {"takenDateTime": "2026-08-11T08:59:00Z"},
+      "thumbnails": [{"id": "0", "large": {"width": 800, "height": 600, "url": "https://cdn.test/thumbs/cam-4/large?sig=1"}}],
+      "parentReference": {"driveId": "d1", "driveType": "personal", "id": "f-camera", "path": "/drive/root:/Pictures/Camera Roll"}
+    },
+    {
+      "id": "cam-5",
+      "name": "IMG_1005.HEIC",
+      "size": 2900000,
+      "lastModifiedDateTime": "2026-08-11T09:01:00Z",
+      "file": {"mimeType": "image/heic", "hashes": {"quickXorHash": "K5"}},
+      "image": {"width": 4032, "height": 3024},
+      "photo": {"takenDateTime": "2026-08-11T09:00:30Z"},
+      "parentReference": {"driveId": "d1", "driveType": "personal", "id": "f-camera", "path": "/drive/root:/Pictures/Camera Roll"}
+    }
+  ]
+}
