@@ -1204,14 +1204,14 @@ mocked).
 
 #### Automated
 
-- [ ] 5.1 `python -m pytest tests/` passes
+- [x] 5.1 `python -m pytest tests/` passes
 
 #### Manual
 
-- [ ] 5.2 Device code sign-in completed from the phone
-- [ ] 5.3 Folder with more than 200 items pages; thumbnails show
-- [ ] 5.4 HEIC and 4K video cast; relay re-resolves after an hour
-- [ ] 5.5 Revoked app flips the gate to expired
+- [x] 5.2 Device code sign-in completed from the phone
+- [x] 5.3 Folder with more than 200 items pages; thumbnails show
+- [x] 5.4 HEIC and 4K video cast; relay re-resolves after an hour
+- [x] 5.5 Revoked app flips the gate to expired
 
 ### Phase 6: Google Photos tab
 
@@ -1300,3 +1300,27 @@ the plan as the source of truth. Each names the review finding that raised it.
   `quality: "auto"` on such an item resolves the proxy, the UI shows the two-button choice on
   the tile, and `cast-gopro <n>` takes the proxy unless `-q source` says otherwise.
 
+### 2026-09-12 — Phase 5 implementation
+
+- **`connect({})` on OneDrive has three shapes.** A stored, unexpired credential is verified
+  against `/me` (refreshed silently) and answers `connected`; nothing stored, an `expired`
+  credential, or `{"fresh": true}` starts a device flow and answers `{step: "code", user_code,
+  verification_uri, expires_in, message}` (the same fields ride on `status.detail` while the
+  flow is pending, state `connecting`); a pending flow answers its own code again rather than
+  starting a second one; `{"cancel": true}` ends it. The polling thread commits the token only
+  while its generation is current, so a token that lands after `disconnect()` is dropped.
+- **`page` is Graph's own `@odata.nextLink`** and is refused (`400 bad_page`) unless it starts
+  with the Graph base, so the bearer never goes to another host; `path` is a folder id
+  (`400 bad_path` otherwise).
+- **Crumbs** come from a per-process parent map filled by listings; a folder never listed is
+  looked up (`?$select=id,name,parentReference`) and walked to the root, at most 32 hops.
+- **Thumbnails** reuse the listing's `large` (else `medium`) address for 30 min, then ask
+  `/thumbnails` for a fresh one. **Heavy videos warn without `variants`**: OneDrive has no
+  lighter file to offer. **`DEFAULT_CLIENT_ID`** is the owner's registration
+  (`652b2cf9-87f7-4d48-a6cf-67ed3ad8c9b6`, handed over 2026-09-12); with it emptied, Connect
+  answers `400 no_client_id` with the registration steps as the hint.
+- **The download address comes from a plain `GET /me/drive/items/{id}`**, not from
+  `?$select=id,@microsoft.graph.downloadUrl` as the Phase 5 contract says: on the live personal
+  drive any `$select` drops the annotation (probed 2026-09-12, `research.md`).
+- **The UI's expired banner is per source**: a paste form for GoPro, a "Connect again" button
+  otherwise; a source in state `connecting` always shows its gate (the code) over any list.
