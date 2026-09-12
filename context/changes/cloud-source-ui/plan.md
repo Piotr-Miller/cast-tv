@@ -1190,14 +1190,14 @@ mocked).
 
 #### Automated
 
-- [x] 4.1 `python -m pytest tests/` passes
-- [x] 4.2 `cast-gopro` listing and `--url-only` work with a live token
+- [x] 4.1 `python -m pytest tests/` passes — fcffb7e
+- [x] 4.2 `cast-gopro` listing and `--url-only` work with a live token — fcffb7e
 
 #### Manual
 
-- [x] 4.3 Token paste shows the list with thumbnails or placeholders and the token age
-- [x] 4.4 Heavy clip preselects proxy; source choice reports the refusal
-- [x] 4.5 Expired token shows the banner over the list; re-paste restores it
+- [x] 4.3 Token paste shows the list with thumbnails or placeholders and the token age — fcffb7e
+- [x] 4.4 Heavy clip preselects proxy; source choice reports the refusal — fcffb7e
+- [x] 4.5 Expired token shows the banner over the list; re-paste restores it — fcffb7e
 - [ ] 4.6 Paste and cast from the phone
 
 ### Phase 5: OneDrive tab
