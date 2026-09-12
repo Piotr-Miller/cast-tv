@@ -2,6 +2,7 @@
 import json
 import os
 import re
+import threading
 import urllib.parse
 
 import pytest
@@ -29,10 +30,20 @@ class FakeGoPro:
         self.probes = []           # every URL probed
         self.refuse = set()        # probe answers "not media" for these
         self.sig = 0
+        self.before_answer = None  # callable(url, status, token): runs before an answer is returned
+        self.tokens = []           # the bearer of every call, in order
 
     def fetch(self, url, op=None, headers=None, limit=0):
+        status, body, final = self._answer(url, headers)
+        if self.before_answer is not None:
+            self.before_answer(url, status, (headers or {}).get("Authorization", "")[7:])
+        return status, body, final
+
+    def _answer(self, url, headers):
         self.calls.append(url)
-        if (headers or {}).get("Authorization") != "Bearer " + self.good:
+        bearer = (headers or {}).get("Authorization", "")[7:]
+        self.tokens.append(bearer)
+        if bearer != self.good:
             return 401, '{"error": "unauthorized"}', url
         parsed = urllib.parse.urlparse(url)
         if parsed.path == "/media/search":
@@ -123,6 +134,111 @@ def test_status_before_and_after_connect(fake):
     fresh.disconnect()
     assert fresh.status() == {"state": "disconnected", "detail": {"stored": False}}
     assert not os.path.exists(gopro.token_file())
+
+
+def test_env_token_is_replaced_by_a_verified_paste(fake, monkeypatch):
+    """p4 review F1: the whole scenario - expired env token, paste, list/thumb/resolve on the paste, disconnect."""
+    monkeypatch.setenv("GOPRO_TOKEN", "eyJexpired-env")
+    src = GoProSource()
+    s = src.status()
+    assert s["state"] == "disconnected" and s["detail"]["stored"] and s["detail"]["age"] is None
+    with pytest.raises(AuthError):
+        src.connect({})                                       # verify the env token: 401
+    assert src.status()["state"] == "expired"
+    src.connect({"token": fake.good})                         # a paste replaces the session credential
+    assert src.status()["state"] == "connected" and src.status()["detail"]["age"]
+    src.list()
+    src.thumb("vid-heavy")
+    src.resolve("vid-light").resolve()
+    assert fake.tokens[-3:] == [fake.good] * 3                # list, thumb, resolve all used the paste
+    assert src.status()["state"] == "connected"
+    src.disconnect()
+    assert src.status() == {"state": "disconnected", "detail": {"stored": False}}
+    assert not os.path.exists(gopro.token_file())
+    with pytest.raises(AuthError) as err:
+        src.list()                                            # no fallback to GOPRO_TOKEN in this process
+    assert err.value.code == "no_token"
+    assert fake.tokens[-1] == fake.good                       # nothing was sent with the env token
+    assert gopro.token() == "eyJexpired-env"                  # the CLI / a new process still sees it
+    assert GoProSource().status()["detail"]["stored"]
+
+
+def test_stale_401_cannot_expire_a_fresh_connection(fake):
+    """p4 review F2: an old-token 401 that lands after a reconnect is ignored."""
+    src = GoProSource()
+    src.connect({"token": fake.good})
+    old = fake.good
+    fake.good = "eyJrotated"                                   # the old token dies
+    held, release = threading.Event(), threading.Event()
+
+    def hold(url, status, bearer):
+        if bearer == old and status == 401:
+            held.set()
+            release.wait(5)
+    fake.before_answer = hold
+    outcome = {}
+
+    def stale_list():
+        try:
+            src.list()
+        except AuthError as e:
+            outcome["error"] = e.code
+    t = threading.Thread(target=stale_list)
+    t.start()
+    assert held.wait(5)                                       # the old request has its 401, not yet delivered
+    fake.before_answer = None
+    src.connect({"token": fake.good})                         # a fresh paste, verified and adopted
+    assert src.status()["state"] == "connected"
+    release.set()
+    t.join(5)
+    assert outcome["error"] == "token_rejected"
+    assert src.status()["state"] == "connected"               # the stale 401 changed nothing
+
+
+def test_answer_after_disconnect_changes_nothing(fake):
+    src = GoProSource()
+    src.connect({"token": fake.good})
+    held, release = threading.Event(), threading.Event()
+
+    def hold(url, status, bearer):
+        if "/media/search" in url and status == 200 and "per_page=100" in url:
+            held.set()
+            release.wait(5)
+    fake.before_answer = hold
+    t = threading.Thread(target=lambda: src.list())
+    t.start()
+    assert held.wait(5)
+    fake.before_answer = None
+    src.disconnect()
+    release.set()
+    t.join(5)
+    assert src.status() == {"state": "disconnected", "detail": {"stored": False}}
+
+
+def test_older_success_cannot_clear_a_newer_expiry(fake):
+    src = GoProSource()
+    src.connect({"token": fake.good})
+    held, release = threading.Event(), threading.Event()
+
+    def hold(url, status, bearer):
+        if "/media/search" in url and status == 200 and "per_page=100" in url:
+            held.set()
+            release.wait(5)
+    fake.before_answer = hold
+    t = threading.Thread(target=lambda: src.list())
+    t.start()
+    assert held.wait(5)                                       # a success is in flight
+    fake.before_answer = None
+    fake.good = "eyJrotated"
+    with pytest.raises(AuthError):
+        src.thumb("vid-heavy")                                # a newer request: 401 → expired
+    assert src.status()["state"] == "expired"
+    release.set()
+    t.join(5)
+    assert src.status()["state"] == "expired"                 # the older success did not restore it
+    fake.good = "eyJgood"
+    src.connect({})                                           # only a verification does
+    assert src.status()["state"] == "connected"
 
 
 def test_401_flips_to_expired(fake):
