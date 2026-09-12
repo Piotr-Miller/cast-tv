@@ -26,6 +26,7 @@ from castlib.dlna import AVT
 from castlib.errors import CastError, ConfigError, NotMedia, TVError
 from castlib.platform import StayAwake, firewall_hint
 from castlib.server import Server
+from castlib.sources.gopro import GoProSource
 from castlib.sources.local import LocalSource
 from castlib.supervisor import Cast, Show
 
@@ -133,7 +134,7 @@ class App:
         self.errors = ErrorRing(50)
         self.settings = Settings()
         self.local = LocalSource()
-        self.sources: dict = {}            # name -> Source; Phases 4-6 fill it
+        self.sources: dict = {"gopro": GoProSource()}   # name -> Source; Phases 5-6 add theirs
         self.stay_awake = StayAwake()
         self.addresses: list[str] = []
         self.started_at = time.time()

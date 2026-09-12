@@ -1,0 +1,16 @@
+{
+  "_comment": "/media/{id}/download for a Photo, recorded 2026-09-12: the source JPEG only (no large/thumbnail label exists for stills); the CDN serves it as binary/octet-stream.",
+  "filename": "PXL_20260204_144855864MP.JPG",
+  "_embedded": {
+    "variations": [
+      {"label": "source", "type": "jpg", "width": 4000, "height": 3000, "url": "https://cdn.test/u-test/pho-1/source/default/1.jpg?sig=1"}
+    ],
+    "files": [
+      {"item_number": 1, "width": 4000, "height": 3000, "url": "https://cdn.test/u-test/pho-1/source/default/1.jpg?sig=1"}
+    ],
+    "sidecar_files": [
+      {"label": "mediainfo", "type": "json", "url": "https://cdn.test/u-test/pho-1/mediainfo/default/1.json?sig=1"}
+    ],
+    "sprites": []
+  }
+}

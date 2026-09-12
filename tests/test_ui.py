@@ -52,6 +52,21 @@ def test_ui_is_self_contained():
         assert "preconnect" not in text, name
 
 
+def test_ui_has_the_gopro_gate_and_list():
+    """Phase 4: the paste gate, the expired banner over the list and the variant chooser are in the markup."""
+    from castlib.server import UI_DIR
+    import os
+    with open(os.path.join(UI_DIR, "index.html"), encoding="utf-8") as fh:
+        html = fh.read()
+    assert 'saveToken(tab)' in html and 'x-model="tokenInput"' in html
+    assert 'class="banner warn expired"' in html and 'listVisible(tab)' in html
+    assert 'class="chooser"' in html and "castNow(it, v.quality)" in html
+    assert 'loadList(tab, true)' in html
+    with open(os.path.join(UI_DIR, "app.js"), encoding="utf-8") as fh:
+        js = fh.read()
+    assert "'/api/sources/' + name + '/list'" in js and "x-html" not in html and "innerHTML" not in js
+
+
 def open_ui_bytes():
     from castlib.server import UI_DIR
     import os

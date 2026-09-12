@@ -13,9 +13,15 @@ const SOURCES = [
 const GATES = {
   gopro: {
     title: 'Connect GoPro',
-    body: 'GoPro has no public sign-in for apps. The token comes from a logged-in browser and lasts a few hours; the list shows how old it is.',
-    cta: 'Paste a token',
-    note: 'gopro.com → F12 → Network → the Authorization header',
+    body: 'GoPro has no public sign-in for apps. The token comes from a logged-in browser and lasts a few hours; the header shows how old it is.',
+    cta: 'Save token',
+    note: 'The token is kept in ~/.config/cast-tv, readable by you only.',
+    paste: true,
+    steps: [
+      'Open gopro.com/media-library in a browser and sign in.',
+      'F12 → Application → Cookies → gopro.com → copy the value of gp_access_token (it starts with eyJ). Or: Network → any api.gopro.com request → Request Headers → the part of "authorization" after "Bearer ".',
+      'Paste it below.',
+    ],
   },
   onedrive: {
     title: 'Connect OneDrive',
@@ -62,6 +68,9 @@ function castTv() {
   return {
     status: { tv: null, tvs: [], cast: null, show: null, sources: {}, session: [], errors: 0, settings: { interval: 8 }, firewall_hint: '' },
     errors: [],
+    lists: {},               // per source: { items, next, loaded, loading, error }
+    tokenInput: '',
+    chooser: null,           // key of the tile whose variant chooser is open
     selection: [],
     tab: 'gopro',
     filter: 'all',
@@ -82,9 +91,12 @@ function castTv() {
     _refreshing: false,
     _retryAt: 0,
     _errorsSeq: 0,           // errors_seq of the list last fetched successfully
+    _verified: {},           // sources whose stored token this page already asked to verify
 
     async init() {
       await this.refresh();
+      this.$watch('tab', t => this.enterTab(t));
+      this.enterTab(this.tab);
       this._timer = setInterval(() => {
         if (document.visibilityState === 'hidden') return;
         if (this.offline && Date.now() < this._retryAt) return;   // slower while the server is away
@@ -103,6 +115,7 @@ function castTv() {
         if (s.settings && typeof s.settings.interval === 'number') this.interval = s.settings.interval;
         // errors_seq grows past the ring's size; a failed list fetch leaves _errorsSeq behind, so it is retried
         if (this.panel || (s.errors_seq || 0) !== this._errorsSeq) await this.loadErrors();
+        this.ensureList(this.tab);
       } catch (e) {
         this.offline = true;
         this._retryAt = Date.now() + OFFLINE_POLL_MS;
@@ -158,34 +171,96 @@ function castTv() {
     },
 
     // ------------------------------------------------------------ sources
+    source(name) { return (this.status.sources && this.status.sources[name]) || null; },
     connected(name) {
-      const s = this.status.sources && this.status.sources[name];
+      const s = this.source(name);
       return !!s && s.state === 'connected';
     },
+    expired(name) {
+      const s = this.source(name);
+      return !!s && s.state === 'expired';
+    },
     sourceHint(name) {
-      const s = this.status.sources && this.status.sources[name];
+      const s = this.source(name);
       if (!s) return 'not connected';
       if (s.state === 'connected') return (s.detail && (s.detail.account || s.detail.age)) || 'connected';
       if (s.state === 'expired') return 'token expired';
       if (s.state === 'connecting') return 'connecting…';
+      if (s.detail && s.detail.stored) return 'checking the token…';
       return 'not connected';
     },
-    gate(name) { return GATES[name] || { title: 'Connect ' + name, body: '', cta: 'Connect', note: '' }; },
-    async connect(name) {
+    tokenAge(name) {
+      const s = this.source(name);
+      return (s && s.detail && s.detail.age) || '';
+    },
+    gate(name) { return GATES[name] || { title: 'Connect ' + name, body: '', cta: 'Connect', note: '', steps: [] }; },
+    // entering a tab verifies a stored-but-unverified token once, and fetches the list once connected
+    enterTab(name) {
+      this.chooser = null;
+      const s = this.source(name);
+      if (!s) return;
+      if (s.state === 'disconnected' && s.detail && s.detail.stored && !this._verified[name]) {
+        this._verified[name] = true;
+        this.connect(name, {});
+      } else {
+        this.ensureList(name);
+      }
+    },
+    async connect(name, params) {
       this.busy.connect = true;
       try {
-        await api('POST', '/api/sources/' + name + '/connect');
+        await api('POST', '/api/sources/' + name + '/connect', params || {});
+        this.gateNote[name] = '';
+        this.tokenInput = '';
+        if (this.lists[name]) this.lists[name].loaded = false;   // a new token: list again
         await this.refresh();
+        this.ensureList(name);
       } catch (e) {
         this.gateNote[name] = e.code === 'unknown_source'
           ? 'This source is not wired up in this build yet.'
-          : e.message;
+          : String(e.message || '').split('\n')[0];             // the first line; the steps are on screen already
+        await this.refresh();                                    // the state may have flipped to expired
       }
       this.busy.connect = false;
     },
+    saveToken(name) {
+      if (!this.tokenInput.trim()) return;
+      this.connect(name, { token: this.tokenInput });
+    },
+    listOf(name) {
+      if (!this.lists[name]) this.lists[name] = { items: [], next: null, loaded: false, loading: false, error: '' };
+      return this.lists[name];
+    },
+    listVisible(name) {
+      const l = this.lists[name];
+      return this.connected(name) || !!(l && l.loaded);          // an expired token keeps the last list on screen
+    },
+    ensureList(name) {
+      const l = this.lists[name];
+      if (!this.connected(name) || (l && (l.loaded || l.loading))) return;
+      this.loadList(name);
+    },
+    async loadList(name, more) {
+      const l = this.listOf(name);
+      if (l.loading) return;
+      l.loading = true;
+      l.error = '';
+      try {
+        const page = more && l.next ? '?page=' + encodeURIComponent(l.next) : '';
+        const d = await api('GET', '/api/sources/' + name + '/list' + page);
+        l.items = more ? l.items.concat(d.items || []) : (d.items || []);
+        l.next = d.next || null;
+        l.loaded = true;
+      } catch (e) {
+        l.error = e.message;
+        if (e.code === 'token_rejected' || e.code === 'no_token') await this.refresh();   // the gate or banner takes over
+      } finally {
+        l.loading = false;
+      }
+    },
     items(name) {
-      const s = this.status.sources && this.status.sources[name];
-      return (s && s.items) || [];
+      const l = this.lists[name];
+      return (l && l.items) || [];
     },
     visible(list) {
       if (this.filter === 'all') return list;
@@ -204,9 +279,16 @@ function castTv() {
     clearSelection() { this.selection = []; },
 
     // ------------------------------------------------------------ playback
-    async castNow(it) {
+    async castNow(it, quality) {
+      if (it.variants && it.variants.length && !quality) {     // a heavy clip: the choice first
+        this.chooser = this.chooser === this.key(it) ? null : this.key(it);
+        return;
+      }
+      this.chooser = null;
       try {
-        await api('POST', '/api/cast', { source: it.source, id: it.id });
+        const body = { source: it.source, id: it.id };
+        if (quality) body.quality = quality;
+        await api('POST', '/api/cast', body);
         this.dismissedCast = null;
         await this.refresh();
       } catch (e) { this.flash(e.message); }
