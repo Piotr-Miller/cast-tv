@@ -17,6 +17,8 @@ const GATES = {
     cta: 'Save token',
     note: 'The token is kept in ~/.config/cast-tv, readable by you only.',
     paste: true,
+    expired: 'The GoPro token expired',
+    expiredBody: 'This list is what was fetched last. Paste a fresh token to keep going; nothing else changes.',
     steps: [
       'Open gopro.com/media-library in a browser and sign in.',
       'F12 → Application → Cookies → gopro.com → copy the value of gp_access_token (it starts with eyJ). Or: Network → any api.gopro.com request → Request Headers → the part of "authorization" after "Bearer ".',
@@ -25,9 +27,11 @@ const GATES = {
   },
   onedrive: {
     title: 'Connect OneDrive',
-    body: 'Sign in once with a code you type on any device. The token refreshes itself for about 90 days.',
+    body: 'Sign in once with a code you type on any device — this phone included. The sign-in refreshes itself for about 90 days.',
     cta: 'Connect',
-    note: 'Files.Read · offline_access',
+    note: 'Files.Read · offline_access · User.Read',
+    expired: 'The OneDrive sign-in expired',
+    expiredBody: 'Microsoft no longer accepts the stored sign-in (revoked, or older than 90 days). This list is what was fetched last; connect again to keep going.',
   },
   gphotos: {
     title: 'Connect Google Photos',
@@ -184,15 +188,32 @@ function castTv() {
       const s = this.source(name);
       if (!s) return 'not connected';
       if (s.state === 'connected') return (s.detail && (s.detail.account || s.detail.age)) || 'connected';
-      if (s.state === 'expired') return 'token expired';
-      if (s.state === 'connecting') return 'connecting…';
-      if (s.detail && s.detail.stored) return 'checking the token…';
+      if (s.state === 'expired') return this.gate(name).paste ? 'token expired' : 'sign-in expired';
+      if (s.state === 'connecting') return s.detail && s.detail.step === 'code' ? 'enter the code…' : 'connecting…';
+      if (s.detail && s.detail.stored) return 'checking…';
       return 'not connected';
     },
-    tokenAge(name) {
-      const s = this.source(name);
-      return (s && s.detail && s.detail.age) || '';
+    headerLine(name) {
+      const d = this.source(name) && this.source(name).detail;
+      if (!d) return '';
+      return d.age || (d.account ? 'signed in as ' + d.account : '');
     },
+    connecting(name) {
+      const s = this.source(name);
+      return !!s && s.state === 'connecting' && !!s.detail && s.detail.step === 'code';
+    },
+    flowError(name) {
+      const s = this.source(name);
+      const e = s && s.detail && s.detail.flow_error;
+      return e ? String(e.message || '').split('\n')[0] : '';
+    },
+    expiredText(name) {
+      if (this.gate(name).paste) return 'The stored token was rejected (401). Paste a fresh one.';
+      const s = this.source(name);
+      const e = s && s.detail && s.detail.error;
+      return (e && String(e.message || '').split('\n')[0]) || 'The sign-in is no longer valid. Connect again.';
+    },
+    cancelConnect(name) { this.connect(name, { cancel: true }); },
     gate(name) { return GATES[name] || { title: 'Connect ' + name, body: '', cta: 'Connect', note: '', steps: [] }; },
     // entering a tab verifies a stored-but-unverified token once, and fetches the list once connected
     enterTab(name) {
@@ -218,7 +239,7 @@ function castTv() {
       } catch (e) {
         this.gateNote[name] = e.code === 'unknown_source'
           ? 'This source is not wired up in this build yet.'
-          : String(e.message || '').split('\n')[0];             // the first line; the steps are on screen already
+          : String(e.message || '').split('\n')[0] + (e.hint ? ' ' + e.hint : '');   // the first line; the steps are on screen already
         await this.refresh();                                    // the state may have flipped to expired
       }
       this.busy.connect = false;
@@ -228,12 +249,23 @@ function castTv() {
       this.connect(name, { token: this.tokenInput });
     },
     listOf(name) {
-      if (!this.lists[name]) this.lists[name] = { items: [], next: null, loaded: false, loading: false, error: '' };
+      if (!this.lists[name]) this.lists[name] = { items: [], folders: [], crumbs: [], path: null, next: null, loaded: false, loading: false, error: '' };
       return this.lists[name];
     },
     listVisible(name) {
+      if (this.connecting(name)) return false;                   // the gate shows the code, whatever was listed before
       const l = this.lists[name];
       return this.connected(name) || !!(l && l.loaded);          // an expired token keeps the last list on screen
+    },
+    openFolder(name, id) {
+      const l = this.listOf(name);
+      l.path = id || null;
+      l.items = [];
+      l.folders = [];
+      l.next = null;
+      l.loaded = false;
+      this.chooser = null;
+      this.loadList(name);
     },
     ensureList(name) {
       const l = this.lists[name];
@@ -246,14 +278,18 @@ function castTv() {
       l.loading = true;
       l.error = '';
       try {
-        const page = more && l.next ? '?page=' + encodeURIComponent(l.next) : '';
-        const d = await api('GET', '/api/sources/' + name + '/list' + page);
+        const q = [];
+        if (l.path) q.push('path=' + encodeURIComponent(l.path));
+        if (more && l.next) q.push('page=' + encodeURIComponent(l.next));
+        const d = await api('GET', '/api/sources/' + name + '/list' + (q.length ? '?' + q.join('&') : ''));
         l.items = more ? l.items.concat(d.items || []) : (d.items || []);
+        if (!more) l.folders = d.folders || [];
+        l.crumbs = d.crumbs || [];
         l.next = d.next || null;
         l.loaded = true;
       } catch (e) {
         l.error = e.message;
-        if (e.code === 'token_rejected' || e.code === 'no_token') await this.refresh();   // the gate or banner takes over
+        if (['token_rejected', 'no_token', 'refresh_rejected', 'graph_unauthorized'].includes(e.code)) await this.refresh();   // the gate or banner takes over
       } finally {
         l.loading = false;
       }
@@ -425,7 +461,8 @@ function castTv() {
     },
     cardClass(e) {
       if (['tv_fetched_nothing', 'tv_unreachable', 'tv_rejected', 'tv_never_started', 'no_tv'].includes(e.code)) return 'bad';
-      if (['dts_audio', 'token_rejected', 'no_token'].includes(e.code)) return 'warn';
+      if (['dts_audio', 'token_rejected', 'no_token', 'refresh_rejected', 'graph_unauthorized', 'expired_token',
+           'authorization_declined', 'bad_verification_code', 'no_client_id'].includes(e.code)) return 'warn';
       return '';
     },
 

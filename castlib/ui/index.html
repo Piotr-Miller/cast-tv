@@ -166,7 +166,7 @@
         <div class="tile" :class="{on: isSelected(it)}">
           <div class="card">
             <div class="thumb" :style="'--hue:' + hueOf(it.name)" @click="toggle(it)" role="button" tabindex="0" @keydown.enter="toggle(it)">
-              <template x-if="it.thumb"><img :src="it.thumb" :alt="it.name" loading="lazy"></template>
+              <template x-if="it.thumb"><img :src="it.thumb" :alt="it.name" loading="lazy" @error="$el.hidden = true"></template>
               <span class="kind" x-text="it.kind"></span>
               <button class="tick" @click.stop="toggle(it)" :title="isSelected(it) ? 'Remove from the show' : 'Add to the show'">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>
@@ -209,8 +209,27 @@
           </div>
         </template>
         <template x-if="!gate(tab).paste">
-          <div class="cta">
-            <button class="primary" @click="connect(tab)" :disabled="busy.connect" x-text="gate(tab).cta"></button>
+          <div>
+            <!-- device code: the code is typed on any device, this page flips by itself -->
+            <template x-if="connecting(tab)">
+              <div class="devicecode">
+                <div class="lead">Open <a :href="source(tab).detail.verification_uri" target="_blank" rel="noopener" x-text="source(tab).detail.verification_uri"></a> on any device, sign in, and enter this code:</div>
+                <div class="code" x-text="source(tab).detail.user_code"></div>
+                <div class="wait"><span class="dot busy"></span><span>waiting for confirmation…</span><span class="muted mono" x-text="'code valid ' + Math.max(1, Math.round(source(tab).detail.expires_in / 60)) + ' min'"></span></div>
+                <div class="phone small muted">On a phone: open the link in this phone’s browser and type the code there. This page shows your files as soon as Microsoft confirms it.</div>
+                <div class="cta">
+                  <button @click="copy(source(tab).detail.user_code)">Copy code</button>
+                  <button class="ghost" @click="cancelConnect(tab)">Cancel</button>
+                </div>
+              </div>
+            </template>
+            <template x-if="!connecting(tab)">
+              <div class="cta">
+                <button class="primary" @click="connect(tab)" :disabled="busy.connect" x-text="busy.connect ? 'Starting…' : (expired(tab) ? 'Connect again' : gate(tab).cta)"></button>
+              </div>
+            </template>
+            <div class="later" x-show="expired(tab) && !connecting(tab)" x-text="expiredText(tab)"></div>
+            <div class="later" x-show="flowError(tab) && !connecting(tab)" x-text="flowError(tab)"></div>
           </div>
         </template>
         <div class="note" x-text="gate(tab).note"></div>
@@ -222,25 +241,48 @@
     <section class="section">
       <!-- an expired token: the banner sits over the list that was fetched last -->
       <div class="banner warn expired" x-show="expired(tab)" x-cloak>
-        <div class="text"><div class="title">The GoPro token expired</div><div class="small muted">This list is what was fetched last. Paste a fresh token to keep going; nothing else changes.</div></div>
-        <form class="paste" @submit.prevent="saveToken(tab)">
-          <input type="text" x-model="tokenInput" placeholder="eyJhbGc…" autocomplete="off" spellcheck="false" aria-label="GoPro token">
-          <button type="submit" class="primary" :disabled="busy.connect || !tokenInput.trim()" x-text="busy.connect ? 'Checking…' : 'Save token'"></button>
-        </form>
+        <div class="text"><div class="title" x-text="gate(tab).expired || 'The connection expired'"></div><div class="small muted" x-text="gate(tab).expiredBody || expiredText(tab)"></div></div>
+        <template x-if="gate(tab).paste">
+          <form class="paste" @submit.prevent="saveToken(tab)">
+            <input type="text" x-model="tokenInput" placeholder="eyJhbGc…" autocomplete="off" spellcheck="false" aria-label="GoPro token">
+            <button type="submit" class="primary" :disabled="busy.connect || !tokenInput.trim()" x-text="busy.connect ? 'Checking…' : 'Save token'"></button>
+          </form>
+        </template>
+        <template x-if="!gate(tab).paste">
+          <div class="actions"><button class="primary" @click="connect(tab)" :disabled="busy.connect" x-text="busy.connect ? 'Starting…' : 'Connect again'"></button></div>
+        </template>
         <div class="later" x-show="gateNote[tab]" x-text="gateNote[tab]"></div>
       </div>
       <h2>
         <span x-text="(sourceTabs.find(s => s.name === tab) || {label: tab}).label"></span>
         <span class="n" x-text="items(tab).length"></span>
         <button class="ghost tiny" @click="loadList(tab)" :disabled="listOf(tab).loading || expired(tab)" title="Fetch the list again">Refresh</button>
-        <span class="age" x-text="tokenAge(tab)"></span>
+        <span class="age" x-text="headerLine(tab)"></span>
       </h2>
+      <!-- folders: breadcrumbs from the drive root, then the folders in this one -->
+      <nav class="crumbs" x-show="listOf(tab).crumbs.length" x-cloak aria-label="Folder path">
+        <template x-for="(c, i) in listOf(tab).crumbs" :key="i">
+          <span class="crumb">
+            <button :class="{on: i === listOf(tab).crumbs.length - 1}" @click="openFolder(tab, c.id)" :disabled="i === listOf(tab).crumbs.length - 1 || listOf(tab).loading" x-text="c.name"></button>
+            <span class="sep" x-show="i < listOf(tab).crumbs.length - 1">/</span>
+          </span>
+        </template>
+      </nav>
+      <div class="folders" x-show="listOf(tab).folders.length" x-cloak>
+        <template x-for="f in listOf(tab).folders" :key="f.id">
+          <button class="folder" @click="openFolder(tab, f.id)" :disabled="listOf(tab).loading" :title="f.name">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>
+            <span class="fn" x-text="f.name"></span>
+            <span class="fc" x-show="f.count != null" x-text="f.count"></span>
+          </button>
+        </template>
+      </div>
       <div class="grid" x-show="visible(items(tab)).length">
         <template x-for="it in visible(items(tab))" :key="it.source + ':' + it.id">
           <div class="tile" :class="{on: isSelected(it)}">
             <div class="card">
               <div class="thumb" :style="'--hue:' + hueOf(it.name)" @click="toggle(it)" role="button" tabindex="0" @keydown.enter="toggle(it)">
-                <template x-if="it.thumb"><img :src="it.thumb" :alt="it.name" loading="lazy"></template>
+                <template x-if="it.thumb"><img :src="it.thumb" :alt="it.name" loading="lazy" @error="$el.hidden = true"></template>
                 <span class="kind" x-text="it.kind"></span>
                 <button class="tick" @click.stop="toggle(it)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg></button>
                 <button class="play" @click.stop="castNow(it)" :title="it.variants ? 'Choose a variant' : 'Cast now'"><svg width="16" height="16" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"></path></svg></button>

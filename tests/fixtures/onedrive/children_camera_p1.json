@@ -1,0 +1,38 @@
+{
+  "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#Collection(driveItem)",
+  "@odata.nextLink": "https://graph.microsoft.com/v1.0/me/drive/items/f-camera/children?$skiptoken=p2",
+  "value": [
+    {
+      "id": "cam-1",
+      "name": "IMG_1001.HEIC",
+      "size": 3100000,
+      "lastModifiedDateTime": "2026-08-10T12:00:00Z",
+      "file": {"mimeType": "image/heic", "hashes": {"quickXorHash": "K1"}},
+      "image": {"width": 4032, "height": 3024},
+      "photo": {"takenDateTime": "2026-08-10T11:59:00Z"},
+      "thumbnails": [{"id": "0", "large": {"width": 800, "height": 600, "url": "https://cdn.test/thumbs/cam-1/large?sig=1"}}],
+      "parentReference": {"driveId": "d1", "driveType": "personal", "id": "f-camera", "path": "/drive/root:/Pictures/Camera Roll"}
+    },
+    {
+      "id": "cam-2",
+      "name": "IMG_1002.HEIC",
+      "size": 3200000,
+      "lastModifiedDateTime": "2026-08-10T12:01:00Z",
+      "file": {"mimeType": "image/heic", "hashes": {"quickXorHash": "K2"}},
+      "image": {"width": 3024, "height": 4032},
+      "photo": {"takenDateTime": "2026-08-10T12:00:30Z"},
+      "thumbnails": [{"id": "0", "large": {"width": 600, "height": 800, "url": "https://cdn.test/thumbs/cam-2/large?sig=1"}}],
+      "parentReference": {"driveId": "d1", "driveType": "personal", "id": "f-camera", "path": "/drive/root:/Pictures/Camera Roll"}
+    },
+    {
+      "id": "cam-3",
+      "name": "IMG_1003.MOV",
+      "size": 45000000,
+      "lastModifiedDateTime": "2026-08-10T12:02:00Z",
+      "file": {"mimeType": "video/quicktime", "hashes": {"quickXorHash": "K3"}},
+      "video": {"bitrate": 16000000, "duration": 22500, "width": 3840, "height": 2160},
+      "thumbnails": [{"id": "0", "large": {"width": 800, "height": 450, "url": "https://cdn.test/thumbs/cam-3/large?sig=1"}}],
+      "parentReference": {"driveId": "d1", "driveType": "personal", "id": "f-camera", "path": "/drive/root:/Pictures/Camera Roll"}
+    }
+  ]
+}

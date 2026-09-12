@@ -35,7 +35,8 @@ def test_status_shape(app):
     assert d["app"] == "cast-tv" and d["version"]
     assert d["tv"] == {"ip": "127.0.0.1", "name": "Fake TV", "state": "ready"}
     assert d["tvs"] == [] and d["cast"] is None and d["show"] is None
-    assert d["sources"] == {"gopro": {"state": "disconnected", "detail": {"stored": False}}}
+    assert d["sources"] == {"gopro": {"state": "disconnected", "detail": {"stored": False}},
+                            "onedrive": {"state": "disconnected", "detail": {"stored": False}}}
     assert d["session"] == []
     assert isinstance(d["addresses"], list) and d["errors"] == 0 and d["errors_seq"] == 0
     assert d["settings"]["interval"] == 8
@@ -103,7 +104,7 @@ def test_bad_bodies_are_400(app):
 
 
 def test_cast_unknown_source_is_404(app):
-    status, _, d = _json(app.base_url, "POST", "/api/cast", {"source": "onedrive", "id": "x"})
+    status, _, d = _json(app.base_url, "POST", "/api/cast", {"source": "gphotos", "id": "x"})
     assert status == 404 and d["error"]["code"] == "unknown_source"
     status, _, d = _json(app.base_url, "POST", "/api/cast", {"source": "gopro", "id": "x"})
     assert status == 401 and d["error"]["code"] == "no_token"          # wired; nothing to look it up with
@@ -111,7 +112,7 @@ def test_cast_unknown_source_is_404(app):
     assert status == 404 and d["error"]["code"] == "unknown_item"
     status, _, d = _json(app.base_url, "GET", "/api/sources/local/list")
     assert status == 404
-    status, _, d = _json(app.base_url, "GET", "/api/sources/onedrive/status")
+    status, _, d = _json(app.base_url, "GET", "/api/sources/gphotos/status")
     assert status == 404 and d["error"]["code"] == "unknown_source"
     status, _, d = _json(app.base_url, "GET", "/api/sources/gopro/status")
     assert status == 200 and d["state"] == "disconnected"

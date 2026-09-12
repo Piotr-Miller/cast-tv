@@ -15,7 +15,7 @@ dependencies = ["pillow>=10", "pillow-heif>=0.16"]
 test = ["pytest", "pyflakes"]
 
 [tool.setuptools]
-packages = ["castlib", "castlib.sources"]
+packages = ["castlib", "castlib.auth", "castlib.sources"]
 
 [tool.setuptools.package-data]
 castlib = ["ui/*"]
