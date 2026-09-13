@@ -64,6 +64,51 @@ def test_exif_transpose(fixtures):
         assert a.read() == b.read()
 
 
+def _segment(marker: int, body: bytes) -> bytes:
+    return bytes([0xFF, marker]) + (len(body) + 2).to_bytes(2, "big") + body
+
+
+def _with_header(jpeg: bytes, *segments: bytes, tail: bytes = b"") -> bytes:
+    """``jpeg`` with ``segments`` inserted after SOI and ``tail`` appended after its EOI."""
+    return jpeg[:2] + b"".join(segments) + jpeg[2:] + tail
+
+
+@pytest.mark.filterwarnings("ignore:Corrupt EXIF data:UserWarning")      # the fake MPF index is a stub
+@pytest.mark.filterwarnings("ignore:Image appears to be a malformed MPO file:UserWarning")
+def test_pixel_ultra_hdr_motion_photo_is_reencoded(tmp_path):
+    """A header that announces more images (MPF, a gain map, a motion photo) is cut to the primary image."""
+    primary = make.jpeg(64, 48)
+    tail = make.jpeg(16, 12) + b"\0\0\0\x18ftypmp42" + b"\0" * 64   # the gain map, then the video
+    xmp = (b"http://ns.adobe.com/xap/1.0/\0<x:xmpmeta><rdf:Description GCamera:MotionPhoto=\"1\" "
+           b"hdrgm:Version=\"1.0\"/></x:xmpmeta>")
+    cases = {
+        "mpf": _segment(0xE2, b"MPF\0II*\0" + b"\0" * 16),
+        "iso21496": _segment(0xE2, b"urn:iso:std:iso:ts:21496:-1\0" + b"\0" * 8),
+        "xmp": _segment(0xE1, xmp),
+    }
+    for name, seg in cases.items():
+        path = tmp_path / ("%s.jpg" % name)
+        path.write_bytes(_with_header(primary, seg, tail=tail))
+        assert photos.announces_extra_images(path.read_bytes()), name
+        prep = photos.prepare(_photo(str(path)))
+        out = open(prep.path, "rb").read()
+        assert prep.mime == "image/jpeg" and (prep.width, prep.height) == (64, 48), name
+        assert out != path.read_bytes() and out.endswith(b"\xff\xd9"), name
+        assert b"MPF\0" not in out and b"ftyp" not in out and b"hdrgm" not in out, name
+        assert not photos.announces_extra_images(out), name
+        assert Image.open(prep.path).size == (64, 48)
+
+
+def test_unannounced_trailing_bytes_pass_through(tmp_path):
+    """Bytes after the image that the header does not announce (the Olympus case) are not a reason to re-encode."""
+    path = tmp_path / "olympus.jpg"
+    path.write_bytes(_with_header(make.jpeg(64, 48), _segment(0xE1, b"Exif\0\0" + b"\0" * 16),
+                                  tail=b"OLYMPUS preview" + b"\x55" * 400))
+    assert not photos.announces_extra_images(path.read_bytes())
+    prep = photos.prepare(_photo(str(path)))
+    assert open(prep.path, "rb").read() == path.read_bytes()
+
+
 def test_png_and_webp(fixtures):
     png = photos.prepare(_photo(fixtures["plain.png"]))
     assert png.mime == "image/png" and png.profile == "PNG_LRG"

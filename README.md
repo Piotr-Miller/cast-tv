@@ -64,6 +64,7 @@ cast-gopro                                 # list the GoPro cloud library
 cast-gopro 3                               # cast the third entry
 cast-gopro 3 -q proxy                      # ... as a lighter proxy variant
 cast-gopro https://gopro.com/v/AbCdE       # public GoPro share link
+cast-photos --pick                         # pick in Google Photos' own picker, then cast
 cast-photos https://photos.app.goo.gl/xxx  # Google Photos share link
 cast-photos <private link> -c cookies.txt  # private item, with your cookies
 ```
@@ -76,11 +77,17 @@ runs at 119 Mbit/s in a 3840x3360 frame, which this TV refuses outright - so `-q
 the proxy variant the cloud already holds. When the TV never starts, the file is probed and the
 likely reason printed rather than left to guesswork.
 
-**Google Photos** has no usable API for this — since 31 March 2025 the Library API only exposes
-items the user explicitly picks — so the starting point is a link to one video. The page is
-parsed for candidate stream URLs, each candidate is probed with a one-byte range request, and
-the first that answers as video wins. Public share links need nothing; private links need a
-cookie jar.
+**Google Photos** cannot be browsed — since 31 March 2025 the Library API only exposes items
+the user explicitly picks — so the main path is the **Picker API**: `cast-photos --pick` (or the
+Google Photos tab in the UI) consents once, in a browser on the machine running cast-tv, then
+opens Google's own picker, whose link works on the phone too; whatever is picked is listed and
+cast through the host with the OAuth bearer, since Google refuses the media addresses without
+it. One-time setup: a Google Cloud project with the Photos Picker API enabled, a *Desktop app*
+OAuth client, and its downloaded JSON copied to `~/.config/cast-tv/google-client.json`
+(`GOOGLE_CLIENT_JSON` overrides the path). The share-link path stays for links from other
+people's libraries: the page is parsed for candidate stream URLs, each candidate is probed with
+a one-byte range request, and the first that answers as video wins. Public share links need
+nothing; private links need a cookie jar.
 
 Both resolvers are written defensively because neither format is documented and both can change
 without notice: when nothing resolves, the command says what it saw instead of failing blind. On

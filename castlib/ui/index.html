@@ -210,8 +210,21 @@
         </template>
         <template x-if="!gate(tab).paste">
           <div>
+            <!-- Google consent: runs in a browser on the computer hosting cast-tv; this page flips by itself -->
+            <template x-if="connecting(tab) && connectStep(tab) === 'consent'">
+              <div class="devicecode consent">
+                <div class="lead">A Google consent page opened in the browser of the computer running cast-tv. Sign in there and allow access.</div>
+                <div class="wait"><span class="dot busy"></span><span>waiting for consent…</span><span class="muted mono" x-text="'valid ' + Math.max(1, Math.round(source(tab).detail.expires_in / 60)) + ' min'"></span></div>
+                <div class="phone small muted" x-text="source(tab).detail.note + ' If no browser tab opened, copy the link and open it on that computer.'"></div>
+                <div class="phone small muted" x-show="source(tab).detail.attempt > 1">Google asked for consent a second time so that it issues a refresh token; allow it once more.</div>
+                <div class="cta">
+                  <button @click="copy(source(tab).detail.auth_url)">Copy link</button>
+                  <button class="ghost" @click="cancelConnect(tab)">Cancel</button>
+                </div>
+              </div>
+            </template>
             <!-- device code: the code is typed on any device, this page flips by itself -->
-            <template x-if="connecting(tab)">
+            <template x-if="connecting(tab) && connectStep(tab) === 'code'">
               <div class="devicecode">
                 <div class="lead">Open <a :href="source(tab).detail.verification_uri" target="_blank" rel="noopener" x-text="source(tab).detail.verification_uri"></a> on any device, sign in, and enter this code:</div>
                 <div class="code" x-text="source(tab).detail.user_code"></div>
@@ -259,6 +272,24 @@
         <button class="ghost tiny" @click="loadList(tab)" :disabled="listOf(tab).loading || expired(tab)" title="Fetch the list again">Refresh</button>
         <span class="age" x-text="headerLine(tab)"></span>
       </h2>
+      <!-- Google Photos: the pick happens in Google's own picker, on any device; the picks land here -->
+      <div class="pickbar" x-show="tab === 'gphotos' && !expired(tab)" x-cloak>
+        <template x-if="!pickWaiting()">
+          <div class="row">
+            <button class="primary" @click="startPick()" :disabled="busy.connect" x-text="busy.connect ? 'Opening…' : (items(tab).length ? 'Pick more' : 'Pick in Google Photos')"></button>
+            <span class="small muted">Google’s picker opens in a new tab; choose photos and videos, press Done, and they appear here. Works from this phone too.</span>
+          </div>
+        </template>
+        <template x-if="pickWaiting()">
+          <div class="row">
+            <a class="button primary" :href="pickState().picker_uri" target="_blank" rel="noopener">Open the picker</a>
+            <span class="wait"><span class="dot busy"></span><span>waiting for your pick…</span><span class="muted mono" x-text="'valid ' + Math.max(1, Math.round(pickState().expires_in / 60)) + ' min'"></span></span>
+            <button class="ghost" @click="copy(pickState().picker_uri)">Copy link</button>
+            <button class="ghost" @click="cancelPick()">Cancel</button>
+          </div>
+        </template>
+        <div class="later" x-show="pickNote" x-text="pickNote"></div>
+      </div>
       <!-- folders: breadcrumbs from the drive root, then the folders in this one -->
       <nav class="crumbs" x-show="listOf(tab).crumbs.length" x-cloak aria-label="Folder path">
         <template x-for="(c, i) in listOf(tab).crumbs" :key="i">
@@ -307,11 +338,17 @@
         </template>
       </div>
       <div class="empty" x-show="listOf(tab).loading && !items(tab).length">Fetching the list…</div>
-      <div class="empty" x-show="!listOf(tab).loading && listOf(tab).loaded && !visible(items(tab)).length">Nothing castable here.</div>
+      <div class="empty" x-show="!listOf(tab).loading && listOf(tab).loaded && !visible(items(tab)).length" x-text="emptyText(tab)"></div>
       <div class="empty bad" x-show="listOf(tab).error && !expired(tab)" x-text="listOf(tab).error"></div>
       <div class="more" x-show="listOf(tab).next && !expired(tab)">
         <button @click="loadList(tab, true)" :disabled="listOf(tab).loading" x-text="listOf(tab).loading ? 'Loading…' : 'Load more'"></button>
       </div>
+      <!-- a share link from someone else's library: no picker session exists for it, the page is scraped -->
+      <form class="paste linkpaste" x-show="tab === 'gphotos' && !expired(tab)" x-cloak @submit.prevent="addLink()">
+        <span class="small muted">A video from a shared link:</span>
+        <input type="url" x-model="linkInput" placeholder="a photos.app.goo.gl link" autocomplete="off" spellcheck="false" aria-label="Google Photos share link">
+        <button type="submit" :disabled="busy.connect || !linkInput.trim()" x-text="busy.connect ? 'Checking…' : 'Add link'"></button>
+      </form>
     </section>
   </template>
 </main>

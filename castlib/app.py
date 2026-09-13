@@ -13,6 +13,7 @@ import errno
 import ipaddress
 import json
 import os
+import signal
 import sys
 import threading
 import time
@@ -20,12 +21,13 @@ import urllib.request
 import webbrowser
 from concurrent.futures import ThreadPoolExecutor
 
-from castlib import __version__, config, dlna, photos
+from castlib import __version__, config, dlna, downloads, photos
 from castlib.discovery import control_urls, discover, local_ip, renderer_name
 from castlib.dlna import AVT
 from castlib.errors import CastError, ConfigError, NotMedia, TVError
 from castlib.platform import StayAwake, firewall_hint
 from castlib.server import Server
+from castlib.sources.gphotos import GPhotosSource
 from castlib.sources.gopro import GoProSource
 from castlib.sources.local import LocalSource
 from castlib.sources.onedrive import OneDriveSource
@@ -123,6 +125,7 @@ class App:
         server.app = self
         self.registry = server.registry
         photos.attach(self.registry)
+        downloads.attach(self.registry)
         self.debug = debug
         self.codec_check = True            # ffprobe local videos for DTS before casting
         self.tv: dict | None = None        # {ip, name, avt, state}
@@ -135,7 +138,8 @@ class App:
         self.errors = ErrorRing(50)
         self.settings = Settings()
         self.local = LocalSource()
-        self.sources: dict = {"gopro": GoProSource(), "onedrive": OneDriveSource()}   # name -> Source; Phase 6 adds gphotos
+        self.sources: dict = {"gopro": GoProSource(), "onedrive": OneDriveSource(),
+                              "gphotos": GPhotosSource()}   # name -> Source
         self.stay_awake = StayAwake()
         self.addresses: list[str] = []
         self.started_at = time.time()
@@ -162,6 +166,7 @@ class App:
                     raise AlreadyRunning(url)
             raise
         app = cls(server, debug=debug)
+        app.sources["gphotos"].open_browser = browser   # the Google consent opens a tab on this machine, unless --no-browser
         app.serve()
         try:
             lan = local_ip("192.0.2.1")
@@ -234,7 +239,17 @@ class App:
                 self._set_tv_state("unreachable")
 
     def run_forever(self) -> int:
-        """Block until Ctrl+C; stops the TV and releases everything. Returns an exit code."""
+        """Block until Ctrl+C (or SIGTERM); stops the TV and releases everything. Returns an exit code."""
+        if threading.current_thread() is threading.main_thread():
+            # a plain ``kill`` ends the process the way Ctrl+C does: the TV is stopped and
+            # every source closed (Google Photos deletes its picker sessions); neither
+            # ``close()`` nor ``atexit`` would run on the default SIGTERM disposition
+            def _term(signum, frame):
+                raise KeyboardInterrupt
+            try:
+                signal.signal(signal.SIGTERM, _term)
+            except (ValueError, OSError):
+                pass
         try:
             while not self._closed.wait(1.0):
                 pass
@@ -261,12 +276,20 @@ class App:
         for item in self.registry.items():
             self.registry.retire(item.id)
         self._executor.shutdown(wait=False, cancel_futures=True)
+        for src in self.sources.values():
+            close = getattr(src, "close", None)   # Google Photos deletes its picker sessions
+            if close is not None:
+                try:
+                    close()
+                except Exception:
+                    pass
         try:
             self.server.shutdown()
             self.server.server_close()
         except Exception:
             pass
         config.remove_photo_tmp_dir()
+        config.remove_video_tmp_dir()
 
     # ------------------------------------------------------------------ TV
     def discover(self) -> list[dict]:

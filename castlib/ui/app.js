@@ -35,9 +35,11 @@ const GATES = {
   },
   gphotos: {
     title: 'Connect Google Photos',
-    body: 'Google Photos cannot be browsed. Consent once in this machine’s browser; then pick photos in Google’s own picker from any device.',
+    body: 'Google Photos cannot be browsed. Consent once in this computer’s browser; then pick photos in Google’s own picker from any device, this phone included.',
     cta: 'Connect',
     note: 'photospicker.mediaitems.readonly',
+    expired: 'The Google Photos consent expired',
+    expiredBody: 'Google no longer accepts the stored consent (revoked, or the test-user token ran out). These are the picks of this session; connect again to keep going.',
   },
 };
 const ACTIVE = ['preparing', 'starting', 'playing', 'paused'];
@@ -74,6 +76,9 @@ function castTv() {
     errors: [],
     lists: {},               // per source: { items, next, loaded, loading, error }
     tokenInput: '',
+    linkInput: '',
+    pickNote: '',            // the outcome of the last pick that did not land (timeout, error)
+    _picksSeq: null,         // picks_seq of the Google Photos list this page has fetched
     chooser: null,           // key of the tile whose variant chooser is open
     selection: [],
     tab: 'gopro',
@@ -119,6 +124,7 @@ function castTv() {
         if (s.settings && typeof s.settings.interval === 'number') this.interval = s.settings.interval;
         // errors_seq grows past the ring's size; a failed list fetch leaves _errorsSeq behind, so it is retried
         if (this.panel || (s.errors_seq || 0) !== this._errorsSeq) await this.loadErrors();
+        this.watchPicks(s);
         this.ensureList(this.tab);
       } catch (e) {
         this.offline = true;
@@ -187,9 +193,17 @@ function castTv() {
     sourceHint(name) {
       const s = this.source(name);
       if (!s) return 'not connected';
-      if (s.state === 'connected') return (s.detail && (s.detail.account || s.detail.age)) || 'connected';
+      if (s.state === 'connected') {
+        const d = s.detail || {};
+        if (d.account || d.age) return d.account || d.age;
+        if (typeof d.picks === 'number') return d.picks ? d.picks + ' picked' : 'nothing picked yet';
+        return 'connected';
+      }
       if (s.state === 'expired') return this.gate(name).paste ? 'token expired' : 'sign-in expired';
-      if (s.state === 'connecting') return s.detail && s.detail.step === 'code' ? 'enter the code…' : 'connecting…';
+      if (s.state === 'connecting') {
+        const step = s.detail && s.detail.step;
+        return step === 'code' ? 'enter the code…' : (step === 'consent' ? 'waiting for consent…' : 'connecting…');
+      }
       if (s.detail && s.detail.stored) return 'checking…';
       return 'not connected';
     },
@@ -198,9 +212,14 @@ function castTv() {
       if (!d) return '';
       return d.age || (d.account ? 'signed in as ' + d.account : '');
     },
+    // a multi-step sign-in in progress: the gate shows the code (OneDrive) or the consent link (Google)
     connecting(name) {
       const s = this.source(name);
-      return !!s && s.state === 'connecting' && !!s.detail && s.detail.step === 'code';
+      return !!s && s.state === 'connecting' && !!s.detail && (s.detail.step === 'code' || s.detail.step === 'consent');
+    },
+    connectStep(name) {
+      const s = this.source(name);
+      return (s && s.detail && s.detail.step) || '';
     },
     flowError(name) {
       const s = this.source(name);
@@ -289,7 +308,7 @@ function castTv() {
         l.loaded = true;
       } catch (e) {
         l.error = e.message;
-        if (['token_rejected', 'no_token', 'refresh_rejected', 'graph_unauthorized'].includes(e.code)) await this.refresh();   // the gate or banner takes over
+        if (['token_rejected', 'no_token', 'refresh_rejected', 'graph_unauthorized', 'picker_unauthorized'].includes(e.code)) await this.refresh();   // the gate or banner takes over
       } finally {
         l.loading = false;
       }
@@ -297,6 +316,65 @@ function castTv() {
     items(name) {
       const l = this.lists[name];
       return (l && l.items) || [];
+    },
+    emptyText(name) {
+      if (name === 'gphotos') return this.filter === 'all' ? 'Nothing picked yet. Pick in Google Photos, or paste a share link below.' : 'Nothing of that kind picked yet.';
+      return 'Nothing castable here.';
+    },
+
+    // ------------------------------------------------------------ Google Photos: the pick
+    pickState() {
+      const s = this.source('gphotos');
+      return (s && s.detail && s.detail.pick) || null;
+    },
+    pickWaiting() {
+      const p = this.pickState();
+      return !!p && p.state === 'waiting';
+    },
+    // the server's picks_seq moves when a pick lands, a session drops or a link is added: fetch the list again
+    watchPicks(s) {
+      const g = s.sources && s.sources.gphotos;
+      const seq = g && g.detail && typeof g.detail.picks_seq === 'number' ? g.detail.picks_seq : null;
+      if (seq === null) return;
+      if (this._picksSeq !== null && seq !== this._picksSeq && this.lists.gphotos) this.lists.gphotos.loaded = false;
+      this._picksSeq = seq;
+      const p = g.detail.pick;
+      if (p && p.state === 'timeout') this.pickNote = 'The picker timed out before anything was picked. Pick again when you are ready.';
+      else if (p && p.state === 'error' && p.error) this.pickNote = String(p.error.message || '').split('\n')[0] + (p.error.hint ? ' ' + p.error.hint : '');
+      else this.pickNote = '';
+    },
+    async startPick() {
+      this.busy.connect = true;
+      try {
+        await api('POST', '/api/sources/gphotos/pick', {});
+        this.pickNote = '';
+        await this.refresh();
+      } catch (e) {
+        this.pickNote = String(e.message || '').split('\n')[0] + (e.hint ? ' ' + e.hint : '');
+        await this.refresh();                                    // a 401 flips the tab to expired
+      }
+      this.busy.connect = false;
+    },
+    async cancelPick() {
+      try {
+        await api('POST', '/api/sources/gphotos/pick', { cancel: true });
+        await this.refresh();
+      } catch (e) { this.flash(e.message); }
+    },
+    async addLink() {
+      const link = this.linkInput.trim();
+      if (!link) return;
+      this.busy.connect = true;
+      try {
+        await api('POST', '/api/sources/gphotos/link', { link });
+        this.linkInput = '';
+        this.pickNote = '';
+        if (this.lists.gphotos) this.lists.gphotos.loaded = false;
+        await this.refresh();
+      } catch (e) {
+        this.pickNote = String(e.message || '').split('\n')[0] + (e.hint ? ' ' + e.hint : '');
+      }
+      this.busy.connect = false;
     },
     visible(list) {
       if (this.filter === 'all') return list;
@@ -392,7 +470,10 @@ function castTv() {
     castStateLabel() {
       const c = this.status.cast;
       if (!c) return '';
-      if (c.state === 'preparing') return c.kind === 'photo' ? 'converting…' : 'resolving…';
+      if (c.state === 'preparing') {
+        if (c.kind === 'photo') return 'converting…';
+        return c.progress != null ? 'downloading ' + Math.round(c.progress * 100) + '%' : 'resolving…';
+      }
       if (c.state === 'starting') return 'waiting for the TV…';
       if (c.state === 'paused') return 'paused';
       if (c.state === 'playing') return c.kind === 'photo' ? 'on screen' : 'playing';
@@ -462,7 +543,8 @@ function castTv() {
     cardClass(e) {
       if (['tv_fetched_nothing', 'tv_unreachable', 'tv_rejected', 'tv_never_started', 'no_tv'].includes(e.code)) return 'bad';
       if (['dts_audio', 'token_rejected', 'no_token', 'refresh_rejected', 'graph_unauthorized', 'expired_token',
-           'authorization_declined', 'bad_verification_code', 'no_client_id'].includes(e.code)) return 'warn';
+           'authorization_declined', 'bad_verification_code', 'no_client_id', 'picker_unauthorized',
+           'consent_timeout', 'consent_declined', 'no_google_client', 'repick_needed'].includes(e.code)) return 'warn';
       return '';
     },
 

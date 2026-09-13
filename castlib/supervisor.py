@@ -23,7 +23,7 @@ import time
 import urllib.error
 from xml.sax.saxutils import escape
 
-from castlib import dlna, photos
+from castlib import dlna, downloads, photos
 from castlib.diagnostics import check_codecs, explain_failure
 from castlib.dlna import AVT
 from castlib.errors import CastError, TVError
@@ -35,6 +35,9 @@ BUDGET_TRANSITIONING = 40.0   # TRANSITIONING is still an attempt
 BUDGET_OTHER = 24.0           # STOPPED after Play for this long is a refusal
 UNREACHABLE_AFTER = 3         # consecutive poll failures before the TV counts as gone
 TICK = 0.25                   # reaction time of the show's wait loops, not a deadline
+PLAY_701_GRACE = 4.0         # after a 701 on Play: seconds the TV gets to start by itself
+PLAY_701_STEP = 0.5          # between GetTransportInfo calls in that window
+PLAYING_STATES = ("PLAYING", "TRANSITIONING", "PAUSED_PLAYBACK")
 
 TERMINAL = ("stopped", "failed", "replaced", "cancelled")
 
@@ -68,7 +71,8 @@ def item_summary(item) -> dict:
     return {"source": item.source, "id": item.source_id, "name": item.title,
             "kind": item.kind, "mime": item.mime,
             "converted": bool(prep is not None and prep.mime != item.mime),
-            "width": item.width, "height": item.height, "size": item.size}
+            "width": item.width, "height": item.height, "size": item.size,
+            "progress": item.progress}
 
 
 class Cast:
@@ -78,6 +82,7 @@ class Cast:
         self.app = app
         self.item = item
         self.subtitle = subtitle
+        self._after_701: list[str] = []      # transport states seen after a 701 on Play
         self.generation = generation
         self.state = "preparing"
         self.tv_state = ""          # CurrentTransportState as the TV reports it
@@ -133,7 +138,7 @@ class Cast:
                 # The Samsung fetches a still during SetAVTransportURI and is already
                 # PLAYING when Play arrives, which it refuses as "701: Transition not
                 # available". The transport state, not the fault, says whether it plays.
-                if upnp_error(e)[0] != "701" or not self._already_playing(avt):
+                if upnp_error(e)[0] != "701" or not self._settles_playing(avt):
                     raise
         except Exception as e:
             if (isinstance(e, urllib.error.HTTPError) and upnp_error(e)[0] == "716"
@@ -143,8 +148,11 @@ class Cast:
                 # is the firewall case, not a bad file.
                 self._finish("failed", self._fetched_nothing())
                 return
+            seen = ""
+            if self._after_701:
+                seen = "; after it the TV reported %s" % ", ".join(self._after_701)
             self._finish("failed", TVError(
-                "tv_rejected", "The TV rejected the request: %s" % describe_soap_error(e),
+                "tv_rejected", "The TV rejected the request: %s%s" % (describe_soap_error(e), seen),
                 source=self.item.source, item=self.item.source_id))
             return
         with self._lock:
@@ -165,12 +173,46 @@ class Cast:
         self.thread = threading.Thread(target=self._poll, name="cast-poll", daemon=True)
         self.thread.start()
 
-    def _already_playing(self, avt) -> bool:
+    @staticmethod
+    def _transport_state(avt) -> str | None:
         try:
-            state = dlna.tag(dlna.soap(avt, AVT, "GetTransportInfo"), "CurrentTransportState")
+            return dlna.tag(dlna.soap(avt, AVT, "GetTransportInfo"), "CurrentTransportState") or None
         except Exception:
-            return False
-        return state in ("PLAYING", "TRANSITIONING", "PAUSED_PLAYBACK")
+            return None
+
+    def _settles_playing(self, avt) -> bool:
+        """After a 701 on Play: does the TV get to playing by itself, or after one more Play?
+
+        The Samsung answers 701 when it already plays a still it fetched during
+        SetAVTransportURI (Phase 3), and - seen live on 2026-09-13 for a photo and
+        a relayed video - also a moment before it starts on its own, while
+        GetTransportInfo does not read as playing yet. So the state is watched for
+        ``PLAY_701_GRACE`` seconds, then Play is sent once more. A stop or a newer
+        cast in that window is left to ``_promote`` (no second Play goes out). The
+        states seen are kept for the error message.
+        """
+        self._after_701 = []
+        deadline = time.monotonic() + PLAY_701_GRACE
+        retried = False
+        while True:
+            if not self.app.is_current(self.generation):
+                return True                   # superseded or stopped: _promote decides, no Play
+            state = self._transport_state(avt)
+            self._after_701.append(state or "no answer")
+            if state in PLAYING_STATES:
+                return True
+            if time.monotonic() >= deadline:
+                if retried:
+                    return False
+                retried = True
+                try:
+                    dlna.soap(avt, AVT, "Play", "<Speed>1</Speed>")
+                    return True
+                except Exception:
+                    self._after_701.append("Play refused again")
+                    deadline = time.monotonic() + PLAY_701_STEP   # one last look
+                    continue
+            time.sleep(PLAY_701_STEP)
 
     def _prepare(self) -> None:
         item = self.item
@@ -178,7 +220,13 @@ class Cast:
             item.debug = True
         if item.kind == "photo":
             photos.prepare(item)
-        elif item.kind == "video" and item.path and self.app.codec_check:
+            return
+        if item.download:
+            # the upstream ignores Range (Google Photos' original): fetch it whole first, so the
+            # TV's probes inside SetAVTransportURI are answered from a file within its SOAP window;
+            # a newer cast or show abandons the download (run() then finishes "cancelled")
+            downloads.fetch_whole(item, keep_going=lambda: self.app.is_current(self.generation))
+        if item.kind == "video" and item.path and self.app.codec_check:
             bad, cmd = check_codecs(item.path)
             if bad:
                 self.app.errors.push(CastError(
@@ -279,6 +327,7 @@ class Cast:
             self.app.registry.retire(self.item.id)   # served until idle, never yanked
         else:
             photos.release(self.item)        # never registered: no eviction will unpin it
+            downloads.release(self.item)
         self.sent.set()
         self.done.set()
         for ev in self.watchers:

@@ -16,6 +16,7 @@ import urllib.parse
 import urllib.request
 
 from castlib.errors import AuthError, CastError, ConfigError, NotMedia, TVError, UpstreamError
+from castlib.net import BEARER_SAFE
 
 MAX_BODY = 1 << 20
 MAX_SHOW_ITEMS = 500          # checked before the first resolve(), which from Phase 4 is an upstream call
@@ -23,7 +24,8 @@ THUMB_LIMIT = 8 * 1024 * 1024
 THUMB_TYPES = ("image/jpeg", "image/png", "image/webp", "image/gif")   # raster only: SVG can script
 THUMB_LOOSE = ("", "application/octet-stream", "binary/octet-stream")   # CDNs that do not name the type
 SHOW_CONTROLS = ("pause", "resume", "next", "prev", "stop")
-_SOURCE = re.compile(r"^/api/sources/([A-Za-z0-9_-]+)(?:/(status|connect|disconnect|list|thumb))?(?:/(.+))?$")
+_SOURCE = re.compile(r"^/api/sources/([A-Za-z0-9_-]+)(?:/(status|connect|disconnect|list|thumb|pick|link))?(?:/(.+))?$")
+SOURCE_EXTRAS = ("pick", "link")   # POST steps a source may offer beyond the contract (Google Photos does)
 
 
 class BadRequest(Exception):
@@ -226,6 +228,16 @@ def _source_route(app, handler, method, name, action, rest, params) -> None:
             listing = src.list((params.get("path") or [None])[0], (params.get("page") or [None])[0])
             handler._json(200, listing.as_dict())
         return
+    if action in SOURCE_EXTRAS:
+        step = getattr(src, action, None)
+        if not callable(step):
+            handler._drain()
+            handler._json_error(404, "not_found", "Not found.")   # this source has no such step
+            return
+        if _method(handler, method, ("POST",)):
+            body = _body(handler)
+            handler._json(200, step(body))
+        return
     handler._drain()
     handler._json_error(404, "not_found", "Not found.")
 
@@ -253,8 +265,7 @@ def _thumb(handler, src, source_id: str) -> None:
     for k, v in up.headers.items():
         req.add_header(k, v)
     try:
-        with (up.opener.open(req, timeout=20) if up.opener is not None
-              else urllib.request.urlopen(req, timeout=20)) as resp:
+        with (up.opener or BEARER_SAFE).open(req, timeout=20) as resp:   # the bearer never leaves its host
             ctype = (resp.headers.get("Content-Type") or "").split(";")[0].strip().lower()
             data = resp.read(THUMB_LIMIT + 1) if ctype in THUMB_TYPES or ctype in THUMB_LOOSE else b""
     except urllib.error.HTTPError as e:

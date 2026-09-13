@@ -4,6 +4,7 @@ from __future__ import annotations
 import http.cookiejar
 import os
 import urllib.error
+import urllib.parse
 import urllib.request
 
 from castlib.errors import ConfigError, UpstreamError
@@ -22,6 +23,24 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
 NO_REDIRECT = urllib.request.build_opener(_NoRedirect)
 """The opener for calls that carry a bearer or a secret: the default redirect handler
 copies every header, ``Authorization`` included, onto the redirected request."""
+
+
+class _DropAuthAcrossHosts(urllib.request.HTTPRedirectHandler):
+    """Follow redirects, but never carry ``Authorization`` to another host."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        new = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if new is not None and ((urllib.parse.urlsplit(newurl).hostname or "").lower()
+                                != (urllib.parse.urlsplit(req.full_url).hostname or "").lower()):
+            new.headers.pop("Authorization", None)
+            new.unredirected_hdrs.pop("Authorization", None)
+        return new
+
+
+BEARER_SAFE = urllib.request.build_opener(_DropAuthAcrossHosts)
+"""The opener for media fetches: redirects are followed, the bearer stays on its host.
+Google Photos answers ``baseUrl=dv`` and ``=m37`` with a 302 to a host that needs no
+bearer (probed 2026-09-13); the default handler would hand it over anyway."""
 
 
 def opener_for(cookies_path: str | None) -> urllib.request.OpenerDirector:

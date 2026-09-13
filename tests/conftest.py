@@ -139,6 +139,7 @@ class FakeTV:
         self.photo_script = ["PLAYING"]
         self.play_delay = 0.0
         self.faults = {}         # action -> UPnP error code to answer with, e.g. {"Play": "701"}
+        self.faults_once = {}    # action -> code answered the first time only; the next call succeeds
         self.hooks = {}          # action -> callable, run once during that action
         self.fail = False
         self.calls = []          # (action, body, t_start, t_end)
@@ -180,10 +181,11 @@ class FakeTV:
             hook = self.hooks.pop(action, None)
         if hook is not None:
             hook()
-        if action in self.faults:
+        with self._lock:
+            code = self.faults_once.pop(action, None) or self.faults.get(action)
+        if code:
             import io
             import urllib.error
-            code = self.faults[action]
             desc = {"701": "Transition not available", "716": "Resource not found"}.get(code, "Fault")
             fault = ("<s:Envelope><s:Body><s:Fault><detail><UPnPError>"
                      "<errorCode>%s</errorCode><errorDescription>%s</errorDescription>"
@@ -213,6 +215,8 @@ def fast_supervisor(monkeypatch):
     monkeypatch.setattr(supervisor, "BUDGET_TRANSITIONING", 0.6)
     monkeypatch.setattr(supervisor, "BUDGET_OTHER", 0.3)
     monkeypatch.setattr(supervisor, "TICK", 0.02)
+    monkeypatch.setattr(supervisor, "PLAY_701_GRACE", 0.1)
+    monkeypatch.setattr(supervisor, "PLAY_701_STEP", 0.02)
     monkeypatch.setattr(supervisor, "check_codecs", lambda path: ([], None))
 
 
