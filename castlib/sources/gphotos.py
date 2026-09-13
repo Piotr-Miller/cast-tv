@@ -32,9 +32,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from castlib import net
 from castlib.auth import loopback
-from castlib.auth.tokens import TokenStore
+from castlib.auth.tokens import REFRESH_MARGIN, TokenStore
 from castlib.errors import AuthError, ConfigError, NotMedia, UpstreamError
 from castlib.items import MediaItem, Upstream
 from castlib.media import kind_from_facets, note_hidden_kind
@@ -49,6 +48,7 @@ PAGE_SIZE = 100
 BASEURL_FRESH = 50 * 60         # a baseUrl is reused this long (Google's expire after 60 min), then re-listed
 DEFAULT_POLL = 5.0
 DEFAULT_PICK_TIMEOUT = 1800.0
+CLEANUP_BUDGET = 5.0            # seconds disconnect() and close() wait for the remote DELETEs, all together
 THUMB_SUFFIX = "=w400-h400"
 STREAM_SUFFIX = "=m37"          # Google's transcode: 1920x1080 H.264, ~2.5 Mbit/s, honours Range (probed 2026-09-13)
 LINK_PREFIX = "link-"
@@ -95,14 +95,14 @@ class _Unauthorized(Exception):
     """The Picker answered 401: the access token is stale; the caller refreshes and retries once."""
 
 
-def picker_call(method: str, path: str, token: str, body: dict | None = None) -> dict:
+def picker_call(method: str, path: str, token: str, body: dict | None = None, timeout: float = 30) -> dict:
     """One authenticated call; the JSON object, ``_Unauthorized`` on 401, ``UpstreamError`` otherwise."""
     data = json.dumps(body).encode("utf-8") if body is not None else None
     req = urllib.request.Request(PICKER + path, data=data, method=method, headers={
         "Authorization": "Bearer " + token, "Accept": "application/json",
         **({"Content-Type": "application/json"} if data is not None else {})})
     try:
-        with NO_REDIRECT.open(req, timeout=30) as r:      # a 3xx would carry the bearer elsewhere
+        with NO_REDIRECT.open(req, timeout=timeout) as r:   # a 3xx would carry the bearer elsewhere
             status, raw = r.status, r.read(8 << 20)
     except urllib.error.HTTPError as e:
         status, raw = e.code, e.read(1 << 20)
@@ -203,6 +203,13 @@ class GPhotosSource:
     thread captures it, and an outcome touches the state only while its
     generation is current. A refresh Google rejects sets ``expired``; a plain
     success never restores ``connected`` - only a verification does.
+
+    ``disconnect()`` and ``close()`` first take everything out under the lock -
+    the generation moves on, the flow, the waiting pick and every session are
+    detached, and ``close()`` marks the source closed for good - and only then,
+    outside it, cancel the flow and delete the remote sessions against one
+    deadline. A consent or a picker session that finishes opening after that
+    finds its generation gone and is cancelled or deleted, never published.
     """
 
     name = "gphotos"
@@ -225,6 +232,7 @@ class GPhotosSource:
         self._pick_stop: threading.Event | None = None
         self._picks_seq = 0                      # bumped whenever the listing changes
         self._links: collections.OrderedDict[str, dict] = collections.OrderedDict()   # share links pasted this process
+        self._closed = False                     # close() is final: nothing new starts after it
         atexit.register(self._delete_sessions_quietly)
 
     # ------------------------------------------------------- credential
@@ -275,18 +283,29 @@ class GPhotosSource:
             raise err
 
     # --------------------------------------------------------- the flow
+    def _check_open(self) -> None:
+        """Raise once ``close()`` has run (caller holds ``_lock``): a closed source starts nothing new."""
+        if self._closed:
+            raise ConfigError("source_closed", "Google Photos is shutting down.", source="gphotos")
+
     def _start_flow(self) -> dict:
         client = self._client_of()
         with self._flow_lock:
             with self._lock:
-                running = self._flow
+                self._check_open()
+                running, gen = self._flow, self._gen
             if running is None:
                 flow = loopback.start(client, SCOPES, browser=self.open_browser)
                 record = {"auth_url": flow.auth_url, "expires_at": time.time() + loopback.CONSENT_TIMEOUT,
                           "attempt": 1, "flow": flow}
                 with self._lock:
-                    self._flow, self._flow_error = record, None
-                    gen = self._gen
+                    stale = self._gen != gen or self._closed
+                    if not stale:
+                        self._flow, self._flow_error = record, None
+                if stale:                        # disconnected or closed while the listener opened
+                    flow.cancel()
+                    raise AuthError("cancelled", "The sign-in was cancelled while it was starting.",
+                                    source="gphotos")
                 threading.Thread(target=self._wait_for_consent, args=(client, record, gen),
                                  name="gphotos-consent", daemon=True).start()
         return dict(self.status(), step="consent")
@@ -346,6 +365,7 @@ class GPhotosSource:
     # ---------------------------------------------------------- contract
     def status(self) -> dict:
         with self._lock:
+            self._prune_expired()
             flow, flow_error = self._flow, self._flow_error
             expired, verified, error = self._expired_at, self._verified_at, self._error
             picks, seq = len(self._picks) + len(self._links), self._picks_seq
@@ -398,35 +418,82 @@ class GPhotosSource:
             self._cancel_flow()
             return self.status()
         with self._lock:
+            self._check_open()
             running, expired = self._flow is not None, self._expired_at is not None
         if running:
             return dict(self.status(), step="consent")   # the same round, not a second browser tab
         if self._store.exists() and not expired and not params.get("fresh"):
-            self._token(force=True)              # the one cheap proof the consent still stands
+            _, gen = self._token(force=True)     # the one cheap proof the consent still stands
             with self._lock:
-                self._gen += 1
-                self._verified_at, self._expired_at, self._error, self._flow_error = time.time(), None, None, None
+                self._check_open()
+                if self._gen == gen:             # not if a disconnect came in while it was refreshing
+                    self._gen += 1
+                    self._verified_at, self._expired_at, self._error, self._flow_error = time.time(), None, None, None
             return self.status()
         return self._start_flow()
 
     def disconnect(self) -> None:
-        """Forget the consent: the file, every session, every pick, any round in progress."""
-        self._cancel_flow()
-        self._cancel_pick()
-        self._delete_sessions()
+        """Forget the consent: the file, every session, every pick, any round in progress.
+
+        Everything local goes at once, under the lock; the remote sessions are
+        deleted afterwards within ``CLEANUP_BUDGET``, with the credential as it
+        was, and a DELETE that fails or times out changes nothing here.
+        """
         with self._lock:
             self._gen += 1
+            flow, stop, sids = self._detach()
+            credential = self._store.load()
             self._verified_at = self._expired_at = self._error = self._flow_error = None
             self._picks.clear()
             self._links.clear()
             self._pick = None
             self._picks_seq += 1
             self._store.clear()
+        self._release(flow, stop, sids, lambda force: self._token_of(credential, force))
 
     def close(self) -> None:
-        """Process exit: the sessions are deleted (Google keeps them for a day otherwise)."""
-        self._cancel_pick()
-        self._delete_sessions()
+        """Process exit: nothing new starts, and the sessions are deleted (Google keeps them for a day otherwise).
+
+        Final: marked closed under the lock that detaches the flow, the pick and
+        the sessions; the DELETEs follow within ``CLEANUP_BUDGET``. The consent
+        stays stored.
+        """
+        with self._lock:
+            if self._closed:
+                return
+            self._closed = True
+            self._gen += 1
+            flow, stop, sids = self._detach()
+            self._picks_seq += 1
+        self._release(flow, stop, sids, lambda force: self._token(force)[0])
+
+    def _detach(self) -> tuple:
+        """Take the flow, the waiting pick's poller and every session out of the state (caller holds ``_lock``)."""
+        flow, self._flow = self._flow, None
+        stop, self._pick_stop = self._pick_stop, None
+        if self._pick is not None and self._pick["state"] == "waiting":
+            self._pick["state"] = "cancelled"
+        sids, self._sessions = list(self._sessions), {}
+        for pick in self._picks.values():
+            pick["sessions"].clear()
+        return flow, stop, sids
+
+    def _release(self, flow, stop, sids: list[str], token) -> None:
+        """Outside ``_lock``: stop the poller, cancel the consent round, delete the remote sessions."""
+        if stop is not None:
+            stop.set()
+        if flow is not None:
+            flow["flow"].cancel()
+        self._delete_remote(sids, token)
+
+    def _token_of(self, credential: dict | None, force: bool) -> str:
+        """An access token from a credential already gone from the store: its own while fresh, else refreshed."""
+        if not credential or not credential.get("refresh_token"):
+            raise AuthError("no_token", "Not signed in.", source="gphotos")
+        if (not force and credential.get("access_token")
+                and (credential.get("expires_at") or 0) - time.time() > REFRESH_MARGIN):
+            return credential["access_token"]
+        return self._refresh(credential["refresh_token"])["access_token"]
 
     def _delete_sessions_quietly(self) -> None:
         try:
@@ -447,11 +514,13 @@ class GPhotosSource:
             with self._lock:
                 return {"pick": self._public_pick()}
         with self._lock:
+            self._check_open()
             pending = self._pick if self._pick is not None and self._pick["state"] == "waiting" else None
             if pending is not None:
                 return {"pick": self._public_pick()}
             gen = self._gen
-        session = self._call(lambda tok: picker_call("POST", "/sessions", tok, {}))
+        used: list[str] = []                     # the bearer that opened it, to delete it with if it goes stale
+        session = self._call(lambda tok: used.append(tok) or picker_call("POST", "/sessions", tok, {}))
         sid, uri = session.get("id"), session.get("pickerUri")
         if not isinstance(sid, str) or not sid or not isinstance(uri, str) or not uri.startswith("https://"):
             raise UpstreamError("picker_shape", "Google Photos opened no usable picker session (keys: %s)."
@@ -464,11 +533,17 @@ class GPhotosSource:
                   "error": None}
         stop = threading.Event()
         with self._lock:
-            if self._gen != gen:
-                raise AuthError("cancelled", "Sign-in changed while the picker was opening.", source="gphotos")
-            self._sessions[sid] = {"expire_at": _when(session.get("expireTime")) or now + 86400.0,
-                                   "ids": set(), "picker_uri": uri}
-            self._pick, self._pick_stop = record, stop
+            stale = self._gen != gen or self._closed
+            if not stale:
+                self._sessions[sid] = {"expire_at": _when(session.get("expireTime")) or now + 86400.0,
+                                       "ids": set(), "picker_uri": uri}
+                self._pick, self._pick_stop = record, stop
+        if stale:                                # disconnected or closed while the session opened: not ours to keep
+            try:
+                self._delete_remote([sid], lambda force: used[-1])
+            except Exception:
+                pass                             # best effort; the cancellation is what the caller hears
+            raise AuthError("cancelled", "Sign-in changed while the picker was opening.", source="gphotos")
         threading.Thread(target=self._wait_for_pick, args=(record, stop, gen),
                          name="gphotos-pick", daemon=True).start()
         with self._lock:
@@ -560,6 +635,22 @@ class GPhotosSource:
         return count
 
     # ---------------------------------------------------------- sessions
+    def _prune_expired(self) -> None:
+        """Forget sessions past their ``expireTime`` (caller holds ``_lock``): expired, they are of no use.
+
+        No DELETE for them. Their media stay in the grid - flagged "re-pick"
+        once no live session holds them - and lose only their links to the
+        expired sessions; links to live ones are kept.
+        """
+        now = time.time()
+        gone = [sid for sid, session in self._sessions.items() if session["expire_at"] <= now]
+        for sid in gone:
+            del self._sessions[sid]
+            for pick in self._picks.values():
+                pick["sessions"].discard(sid)
+        if gone:
+            self._picks_seq += 1
+
     def _live_sessions(self, media_id: str) -> list[str]:
         """Session ids that hold ``media_id`` and have not expired (caller holds ``_lock``)."""
         now = time.time()
@@ -582,11 +673,44 @@ class GPhotosSource:
             except (AuthError, UpstreamError, ConfigError):
                 pass                             # gone anyway, or will expire on its own
 
-    def _delete_sessions(self) -> None:
-        with self._lock:
-            sids = list(self._sessions)
-        for sid in sids:
-            self._drop_session(sid, delete=True)
+    def _delete_remote(self, sids: list[str], token) -> None:
+        """DELETE ``sids`` against one ``CLEANUP_BUDGET`` deadline; the local state is already gone.
+
+        The requests run on a daemon thread and the caller waits for it until
+        the deadline at most, so a DELETE that hangs neither holds the caller
+        nor keeps the process alive. ``token(force)`` supplies the bearer; one
+        refresh is allowed for the lot. Nothing here raises.
+        """
+        if not sids:
+            return
+        deadline = time.monotonic() + CLEANUP_BUDGET
+        done = threading.Event()
+
+        def work():
+            try:
+                tok, refreshed = token(False), False
+                for sid in sids:
+                    path = "/sessions/" + urllib.parse.quote(sid, safe="")
+                    while time.monotonic() < deadline:
+                        try:
+                            picker_call("DELETE", path, tok, timeout=max(0.05, min(30.0, deadline - time.monotonic())))
+                        except _Unauthorized:
+                            if not refreshed:
+                                tok, refreshed = token(True), True
+                                continue
+                        except (AuthError, UpstreamError, ConfigError):
+                            pass                 # gone already, or it expires on its own
+                        break
+            except Exception:
+                pass                             # best effort: nothing here can undo the local state
+            finally:
+                done.set()
+        try:
+            threading.Thread(target=work, name="gphotos-cleanup", daemon=True).start()
+        except RuntimeError:                     # an interpreter that is shutting down starts no thread
+            work()
+            return
+        done.wait(max(0.0, deadline - time.monotonic()))
 
     def _refresh_base(self, media_id: str, force: bool = False) -> tuple[str, dict]:
         """``(baseUrl, raw)`` for a pick, re-listed through a live session when stale or ``force``."""
@@ -599,6 +723,7 @@ class GPhotosSource:
             base = _media_file(pick["raw"]).get("baseUrl")
             if fresh and base and not force:
                 return base, pick["raw"]
+            self._prune_expired()
             candidates = self._live_sessions(media_id)
         for sid in candidates:
             try:
@@ -631,13 +756,14 @@ class GPhotosSource:
         if not isinstance(link, str) or not link.strip():
             raise ConfigError("bad_link", "Paste a Google Photos link.", source="gphotos")
         link = link.strip()
-        if not link.startswith(("http://", "https://")):
-            raise ConfigError("bad_link", "That is not a link (it should start with https://).", source="gphotos")
+        if not sharelink.allowed(link):          # before anything is fetched: no address off Google
+            raise ConfigError("bad_link", "That is not a Google Photos link (https://photos.app.goo.gl/... "
+                              "or https://photos.google.com/...).", source="gphotos")
         with self._lock:
             for lid, known in self._links.items():
                 if known["link"] == link:
                     return {"item": self._link_entry(lid, known).as_dict()}
-        url = sharelink.resolve(link, net.opener_for(None))
+        url = sharelink.resolve(link)
         name = urllib.parse.urlsplit(link).path.rstrip("/").rsplit("/", 1)[-1] or "Google Photos"
         with self._lock:
             lid = LINK_PREFIX + str(len(self._links) + 1)
@@ -658,15 +784,15 @@ class GPhotosSource:
             raise NotMedia("unknown_item", "That link was not pasted in this session.", source="gphotos", item=lid)
         source = self
 
-        def fresh() -> Upstream:
+        def fresh() -> Upstream:                 # played through the same guard: no redirect off Google
             with source._lock:
-                return Upstream(source._links[lid]["url"])
+                return Upstream(source._links[lid]["url"], opener=sharelink.opener())
 
         def again() -> Upstream:
-            url = sharelink.resolve(known["link"], net.opener_for(None))
+            url = sharelink.resolve(known["link"])
             with source._lock:
                 source._links[lid].update(url=url, resolved_at=time.time())
-            return Upstream(url)
+            return Upstream(url, opener=sharelink.opener())
 
         return MediaItem(kind="video", title=known["name"], mime="video/mp4", source="gphotos",
                          source_id=lid, version=known["link"], resolve=fresh, refresh=again)
@@ -675,6 +801,7 @@ class GPhotosSource:
     def list(self, path=None, page=None) -> Listing:
         """The picks of this process, in first-pick order, then the pasted links."""
         with self._lock:
+            self._prune_expired()
             entries = []
             for media_id, pick in self._picks.items():
                 entries.append(entry_for(pick["raw"], pick["kind"], bool(self._live_sessions(media_id))))
@@ -695,6 +822,7 @@ class GPhotosSource:
                 raise NotMedia("unknown_item", "That item is not among this session's picks.",
                                source="gphotos", item=source_id)
             raw, kind = pick["raw"], pick["kind"]
+            self._prune_expired()
             live = bool(self._live_sessions(source_id))
         entry = entry_for(raw, kind, live)
         if kind == "video" and quality not in ("auto", "original", "stream"):

@@ -56,7 +56,8 @@ against a cloud account.
 ## Cloud sources
 
 Two companion commands resolve a cloud item to a direct stream and hand it to the relay, so
-nothing is downloaded in that case either.
+nothing is downloaded in that case either - with one exception, a Google Photos original video
+(below).
 
 ```bash
 cast-gopro --token eyJhbGc...              # store a browser token once
@@ -88,6 +89,17 @@ OAuth client, and its downloaded JSON copied to `~/.config/cast-tv/google-client
 people's libraries: the page is parsed for candidate stream URLs, each candidate is probed with
 a one-byte range request, and the first that answers as video wins. Public share links need
 nothing; private links need a cookie jar.
+
+A picked Google Photos **video** is cast as its original by default, and the original is
+**downloaded before casting**: its host ignores range requests, and the TV gives up waiting
+for the end of the file. It goes to a per-process directory under `/var/tmp` (the system temp
+directory elsewhere), deleted when the item leaves the session or cast-tv exits; a directory left
+by a killed run is removed at the next start. Sizes are measured on that directory's filesystem:
+one download may be at most `CAST_TV_DOWNLOAD_MAX_GB` GiB (default 16, or a quarter of the
+filesystem if that is less), all downloads together at most a quarter of it, and a download stops
+before a write would leave less than 5 % of it free (at least 1 GiB) - a threshold to stop at, not
+a guarantee, since other programs write too. Raising the limit lifts neither the shared budget nor
+that reserve. The tile's **1080p stream** variant is relayed and downloads nothing.
 
 Both resolvers are written defensively because neither format is documented and both can change
 without notice: when nothing resolves, the command says what it saw instead of failing blind. On

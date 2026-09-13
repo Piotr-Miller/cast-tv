@@ -1228,14 +1228,14 @@ mocked).
 
 #### Automated
 
-- [x] 6.1 `python -m pytest tests/` passes
+- [x] 6.1 `python -m pytest tests/` passes — 715e4ce
 
 #### Manual
 
-- [x] 6.2 Restart keeps the connection, empties the grid
-- [x] 6.3 Pick on the phone lands in the laptop grid; slideshow plays photos and the video
-- [x] 6.4 Picked photo casts after 60 minutes
-- [x] 6.5 Share link still plays
+- [x] 6.2 Restart keeps the connection, empties the grid — 715e4ce
+- [x] 6.3 Pick on the phone lands in the laptop grid; slideshow plays photos and the video — 715e4ce
+- [x] 6.4 Picked photo casts after 60 minutes — 715e4ce
+- [x] 6.5 Share link still plays — 715e4ce
 
 ### Phase 7: Packaging, Linux and Windows
 

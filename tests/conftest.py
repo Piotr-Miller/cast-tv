@@ -227,6 +227,7 @@ def app(server, monkeypatch, tmp_path, fast_supervisor):
     from castlib.app import App
     monkeypatch.setattr(config, "_CONFIG", str(tmp_path / "config"))
     monkeypatch.setattr(config, "_CACHE", str(tmp_path / "cache"))
+    monkeypatch.setattr(config, "VIDEO_BASE", str(tmp_path))   # the startup sweep never sees the real /var/tmp
     monkeypatch.delenv("GOPRO_TOKEN", raising=False)      # the developer's own token never leaks in
     monkeypatch.delenv("ONEDRIVE_CLIENT_ID", raising=False)
     srv, base = server

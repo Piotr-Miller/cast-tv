@@ -8,9 +8,11 @@ path and this stays the fallback for links from other people's libraries.
 from __future__ import annotations
 
 import re
+import urllib.parse
+import urllib.request
 
 from castlib import net
-from castlib.errors import AuthError, NotMedia, UpstreamError
+from castlib.errors import AuthError, ConfigError, NotMedia, UpstreamError
 from castlib.media import probe_media
 
 # tried in order: full download first, then progressively smaller streams
@@ -26,6 +28,46 @@ A private link needs your Google cookies:
   cast-photos <link> -c cookies.txt
 A share link (Share -> Create link) needs none of this.
 """
+# the link, every redirect it takes and every address it yields: https on the default port,
+# no credentials, one of these hosts exactly, or a host under one of these domains
+ALLOWED_HOSTS = ("photos.app.goo.gl", "goo.gl", "photos.google.com", "photos.fife.usercontent.google.com")
+ALLOWED_DOMAINS = ("googleusercontent.com",
+                   "googlevideo.com")    # =m37 and =m18 redirect to rr...googlevideo.com (probed 2026-09-13)
+LOGIN_HOST = "accounts.google.com"
+
+
+def allowed(url) -> bool:
+    """Whether a share link may fetch ``url``: https on an allowed Google host, nothing else."""
+    try:
+        parts = urllib.parse.urlsplit(url)
+        port = parts.port
+    except ValueError:
+        return False
+    if (parts.scheme != "https" or port not in (None, 443)
+            or parts.username is not None or parts.password is not None):
+        return False
+    host = parts.hostname or ""
+    return host in ALLOWED_HOSTS or any(host.endswith("." + domain) for domain in ALLOWED_DOMAINS)
+
+
+class _GooglePhotosOnly(urllib.request.HTTPRedirectHandler):
+    """Follow a redirect only onto an ``allowed()`` address, decided before the hop is sent."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        target = urllib.parse.urlsplit(newurl)
+        if target.hostname == LOGIN_HOST:        # the login page itself is never fetched
+            raise AuthError("login_required", "Google asked for a login." + HOW_TO_GET_COOKIES,
+                            source="link")
+        if not allowed(newurl):
+            raise UpstreamError("redirect_refused", "The link redirected away from Google Photos "
+                                "(to %s); that address is not fetched." % (target.netloc or newurl[:80]),
+                                source="link")
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+def opener(cookies_path=None):
+    """The opener for everything a share link touches: its cookies, if any, behind ``_GooglePhotosOnly``."""
+    return net.opener_for(cookies_path, _GooglePhotosOnly)
 
 
 def unescape_google(text):
@@ -84,7 +126,16 @@ def _probe(url, op):
         return None
 
 
-def resolve(link, op):
+def resolve(link, cookies_path=None):
+    """The stream address behind a share link, or behind a media address pasted as one.
+
+    The page, every redirect and every probe go through ``opener()``: an address
+    ``allowed()`` refuses is never sent a request.
+    """
+    if not allowed(link):
+        raise ConfigError("bad_link", "Only https links on photos.app.goo.gl or photos.google.com "
+                          "(or a Google media address) are fetched.", source="link")
+    op = opener(cookies_path)
     if MEDIA_HOST.match(link):
         # already a media address - only the right variant is missing
         tries = [link] if "/video-downloads" in link else variants(link)
@@ -100,8 +151,8 @@ def resolve(link, op):
                        "session. Use Share -> Create link, or add cookies (-c)."
                        + HOW_TO_GET_COOKIES, source="link")
 
-    status, html, final = net.fetch(link, op)
-    if "accounts.google.com" in final or status in (401, 403):
+    status, html, _ = net.fetch(link, op)
+    if status in (401, 403):                     # a redirect to the login page stops in _GooglePhotosOnly
         raise AuthError("login_required", "Google asked for a login." + HOW_TO_GET_COOKIES,
                         source="link")
     if status >= 400:

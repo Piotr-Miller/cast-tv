@@ -7,7 +7,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from castlib.errors import ConfigError, UpstreamError
+from castlib.errors import CastError, ConfigError, UpstreamError
 
 UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
       "Chrome/128.0 Safari/537.36")
@@ -25,28 +25,39 @@ NO_REDIRECT = urllib.request.build_opener(_NoRedirect)
 copies every header, ``Authorization`` included, onto the redirected request."""
 
 
-class _DropAuthAcrossHosts(urllib.request.HTTPRedirectHandler):
-    """Follow redirects, but never carry ``Authorization`` to another host."""
+def _origin(url: str) -> tuple | None:
+    """``(scheme, host, port)`` with the default port filled in; ``None`` when the port is unreadable."""
+    parts = urllib.parse.urlsplit(url)
+    scheme = parts.scheme.lower()
+    try:
+        port = parts.port or {"http": 80, "https": 443}.get(scheme)
+    except ValueError:
+        return None
+    return scheme, (parts.hostname or "").lower(), port
+
+
+class _DropAuthAcrossOrigins(urllib.request.HTTPRedirectHandler):
+    """Follow redirects, but carry ``Authorization`` only to the same scheme, host and port."""
 
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         new = super().redirect_request(req, fp, code, msg, headers, newurl)
-        if new is not None and ((urllib.parse.urlsplit(newurl).hostname or "").lower()
-                                != (urllib.parse.urlsplit(req.full_url).hostname or "").lower()):
+        origin = _origin(newurl)
+        if new is not None and (origin is None or origin != _origin(req.full_url)):
             new.headers.pop("Authorization", None)
             new.unredirected_hdrs.pop("Authorization", None)
         return new
 
 
-BEARER_SAFE = urllib.request.build_opener(_DropAuthAcrossHosts)
-"""The opener for media fetches: redirects are followed, the bearer stays on its host.
-Google Photos answers ``baseUrl=dv`` and ``=m37`` with a 302 to a host that needs no
+BEARER_SAFE = urllib.request.build_opener(_DropAuthAcrossOrigins)
+"""The opener for media fetches: redirects are followed, the bearer stays on its origin
+(another host, a TLS downgrade or another port drops it). Google Photos answers ``baseUrl=dv`` and ``=m37`` with a 302 to a host that needs no
 bearer (probed 2026-09-13); the default handler would hand it over anyway."""
 
 
-def opener_for(cookies_path: str | None) -> urllib.request.OpenerDirector:
-    """A urllib opener carrying a Netscape cookie jar, or a plain one."""
+def opener_for(cookies_path: str | None, *handlers) -> urllib.request.OpenerDirector:
+    """A urllib opener carrying a Netscape cookie jar, or a plain one; ``handlers`` join either."""
     if not cookies_path:
-        return urllib.request.build_opener()
+        return urllib.request.build_opener(*handlers)
     jar = http.cookiejar.MozillaCookieJar()
     try:
         jar.load(os.path.abspath(cookies_path), ignore_discard=True, ignore_expires=True)
@@ -54,7 +65,7 @@ def opener_for(cookies_path: str | None) -> urllib.request.OpenerDirector:
         raise ConfigError("cookies_unreadable",
                           "Could not read cookies from %s: %s" % (cookies_path, e))
     print("  cookies: %d entries" % len(jar))
-    return urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
+    return urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar), *handlers)
 
 
 def fetch(url: str, op=None, headers=None, limit: int = 6_000_000):
@@ -71,6 +82,8 @@ def fetch(url: str, op=None, headers=None, limit: int = 6_000_000):
             return r.status, r.read(limit).decode("utf-8", "replace"), r.url
     except urllib.error.HTTPError as e:
         return e.code, e.read(limit).decode("utf-8", "replace"), url
+    except CastError:
+        raise                                    # a redirect guard's refusal keeps its own code
     except Exception as e:
         raise UpstreamError("fetch_failed", "Could not fetch %s: %s" % (url, e))
 
