@@ -883,8 +883,16 @@ in that phone's browser. Breadcrumbs and "load more" in the list.
 - Cast a HEIC from OneDrive: upright, converted; cast a 4K video: plays; seek an hour into
   a film after leaving it paused for over an hour: the relay re-resolves and playback
   continues.
+  *Row 5.4 is partially verified (Phase 5 review, F9): HEIC and 4K were cast live on
+  2026-09-12 (`research.md`); the hour-long pause before a seek was not, and stands only on
+  `test_relay.py::test_reresolve_once` and `test_download_url_resolved_on_open` as
+  auxiliary evidence. The live attempt is row 7.5.*
 - Revoke the app in the Microsoft account: the next call flips the gate to expired with a
   message.
+  *Row 5.5 stays open (Phase 5 review, F9): on 2026-09-12 the refresh was made to fail with
+  garbage tokens on disk (`research.md`), which exercises the `invalid_grant` handling but
+  not the account-side revoke itself. It ticks when the app is revoked in the Microsoft
+  account, or if the criterion is explicitly changed to the simulation.*
 
 **Implementation Note**: After completing this phase and all automated verification passes,
 pause here for manual confirmation from the human that the manual testing was successful
@@ -1078,6 +1086,9 @@ mocked).
   does not let the machine sleep.
 - On Fedora: a 30-minute slideshow does not let the laptop sleep; `Ctrl+C` releases the
   inhibitor.
+- OneDrive (moved from Phase 5, row 5.4 — Phase 5 review, F9): play a film from OneDrive,
+  leave it paused for over an hour, then seek an hour in: the relay re-resolves the
+  download address and playback continues.
 
 ---
 
@@ -1211,7 +1222,7 @@ mocked).
 - [x] 5.2 Device code sign-in completed from the phone
 - [x] 5.3 Folder with more than 200 items pages; thumbnails show
 - [x] 5.4 HEIC and 4K video cast; relay re-resolves after an hour
-- [x] 5.5 Revoked app flips the gate to expired
+- [ ] 5.5 Revoked app flips the gate to expired
 
 ### Phase 6: Google Photos tab
 
@@ -1237,6 +1248,7 @@ mocked).
 
 - [ ] 7.3 Windows: pipx install, UI opens, firewall accepted, TV found, cast plays, 30-min slideshow without sleep
 - [ ] 7.4 Fedora: 30-min slideshow without sleep; Ctrl+C releases the inhibitor
+- [ ] 7.5 OneDrive film paused over an hour, then a seek: the relay re-resolves
 
 ## Addenda
 
@@ -1304,14 +1316,19 @@ the plan as the source of truth. Each names the review finding that raised it.
 
 - **`connect({})` on OneDrive has three shapes.** A stored, unexpired credential is verified
   against `/me` (refreshed silently) and answers `connected`; nothing stored, an `expired`
-  credential, or `{"fresh": true}` starts a device flow and answers `{step: "code", user_code,
-  verification_uri, expires_in, message}` (the same fields ride on `status.detail` while the
-  flow is pending, state `connecting`); a pending flow answers its own code again rather than
+  credential, or `{"fresh": true}` starts a device flow and answers `{state: "connecting",
+  step: "code", detail: {user_code, verification_uri, expires_in, message, stored}}` — the
+  code fields are nested under `detail`, the same object `status()` shows while the flow is
+  pending, not flat on the answer as the Phase 5 contract wrote; the UI reads `detail.*`
+  (Phase 5 review, F7); a pending flow answers its own code again rather than
   starting a second one; `{"cancel": true}` ends it. The polling thread commits the token only
   while its generation is current, so a token that lands after `disconnect()` is dropped.
-- **`page` is Graph's own `@odata.nextLink`** and is refused (`400 bad_page`) unless it starts
-  with the Graph base, so the bearer never goes to another host; `path` is a folder id
-  (`400 bad_path` otherwise).
+- **`page` is Graph's own `@odata.nextLink`** and is refused (`400 bad_page`) unless it has the
+  shape of a children listing under the Graph base (`/me/drive/root/children?…` or
+  `/me/drive/items/<id>/children?…`), so the bearer never goes to another host or another
+  Graph path; `path` is a folder id (`400 bad_path` otherwise). Graph and token-endpoint
+  calls go through `net.NO_REDIRECT`, an opener that refuses every 3xx (the default one
+  copies `Authorization` onto the redirected request) — Phase 5 review, F1.
 - **Crumbs** come from a per-process parent map filled by listings; a folder never listed is
   looked up (`?$select=id,name,parentReference`) and walked to the root, at most 32 hops.
 - **Thumbnails** reuse the listing's `large` (else `medium`) address for 30 min, then ask
@@ -1324,3 +1341,10 @@ the plan as the source of truth. Each names the review finding that raised it.
   drive any `$select` drops the annotation (probed 2026-09-12, `research.md`).
 - **The UI's expired banner is per source**: a paste form for GoPro, a "Connect again" button
   otherwise; a source in state `connecting` always shows its gate (the code) over any list.
+  **There is no "signed in as … — show files" step**: once the poll reports `connected`, the
+  gate hands straight over to the list, which carries "signed in as …" in its header (Phase 5
+  review, F7).
+- **Three UI changes reach every tab, not only OneDrive** (Phase 5 review, F6): a thumbnail
+  that fails to load hides itself and leaves the placeholder (`@error` on the `<img>` in both
+  grids); GoPro's gate says "checking…" instead of "checking the token…"; a gate error note
+  appends the error's `hint` for every source.

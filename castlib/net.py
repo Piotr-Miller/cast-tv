@@ -12,6 +12,18 @@ UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
       "Chrome/128.0 Safari/537.36")
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Refuse every redirect: a 3xx surfaces as ``HTTPError`` instead of being followed."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+NO_REDIRECT = urllib.request.build_opener(_NoRedirect)
+"""The opener for calls that carry a bearer or a secret: the default redirect handler
+copies every header, ``Authorization`` included, onto the redirected request."""
+
+
 def opener_for(cookies_path: str | None) -> urllib.request.OpenerDirector:
     """A urllib opener carrying a Netscape cookie jar, or a plain one."""
     if not cookies_path:

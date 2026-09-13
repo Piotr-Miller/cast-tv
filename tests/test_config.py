@@ -76,6 +76,12 @@ def test_write_private_mode(tmp_path):
     assert oct(path.stat().st_mode & 0o777) == "0o600"
     config.write_private(str(path), "again")
     assert oct(path.stat().st_mode & 0o777) == "0o600"
+    assert path.read_text() == "again"
+    # written beside and renamed over: a failed write leaves the old content and no temp file
+    with pytest.raises(TypeError):
+        config.write_private(str(path), None)
+    assert path.read_text() == "again"
+    assert [p.name for p in path.parent.iterdir()] == [path.name]
 
 
 def test_photo_tmp_dir_is_created_and_removed():
