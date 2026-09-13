@@ -27,9 +27,11 @@ class TokenStore:
     def __init__(self, name: str):
         self.name = name
         self.path = os.path.join(config.config_dir(), name + ".json")
-        self._lock = threading.Lock()
+        self._lock = threading.Lock()               # the data and the file; never held around network
+        self._refresh_lock = threading.Lock()       # one refresh at a time; taken before ``_lock``, never inside it
         self._data: dict | None = None      # None until the first read
         self._loaded = False
+        self._version = 0                   # bumped by every save/clear/refresh: a late refresh answer must not win
 
     # ------------------------------------------------------------- storage
     def _read(self) -> dict | None:
@@ -77,6 +79,7 @@ class TokenStore:
             config.write_private(self.path, json.dumps(data))
             self._data = data
             self._loaded = True
+            self._version += 1
             return dict(data)
 
     def set_account(self, account: dict | None) -> None:
@@ -91,12 +94,23 @@ class TokenStore:
         """Forget the credential in memory and on disk."""
         with self._lock:
             self._data, self._loaded = None, True
+            self._version += 1
             try:
                 os.unlink(self.path)
             except FileNotFoundError:
                 pass
 
     # ------------------------------------------------------------- tokens
+    @staticmethod
+    def _fresh(data: dict) -> bool:
+        return bool(data.get("access_token")) and (data.get("expires_at") or 0) - time.time() > REFRESH_MARGIN
+
+    def _current_locked(self) -> dict:
+        data = self._load_locked()
+        if data is None:
+            raise AuthError("no_token", "Not signed in.", source=self.name)
+        return data
+
     def get_access_token(self, refresher: Callable[[str], dict], force: bool = False) -> str:
         """A usable access token: the stored one while it is fresh, else a refreshed one.
 
@@ -105,26 +119,39 @@ class TokenStore:
         keeps the credential (the source decides what "expired" means) and the
         error propagates. ``force`` refreshes even a token that looks fresh: the
         server just refused it.
+
+        The request runs under ``_refresh_lock`` only, so readers (``status()``
+        polls) never wait on the token endpoint; callers that queue behind a
+        refresh re-check and take its result instead of refreshing again. An
+        answer that arrives after ``clear()`` or a new ``save()`` is dropped:
+        it would restore a removed sign-in or overwrite a newer one.
         """
         with self._lock:
-            data = self._load_locked()
-            if data is None:
-                raise AuthError("no_token", "Not signed in.", source=self.name)
-            token = data.get("access_token")
-            fresh = token and (data.get("expires_at") or 0) - time.time() > REFRESH_MARGIN
-            if fresh and not force:
-                return token
-            refresh_token = data.get("refresh_token")
-            # the refresh runs under the lock: two handler threads that both hit
-            # a stale token make one request, not two racing ones
-            answer = refresher(refresh_token)
-            data = {
-                "access_token": answer.get("access_token"),
-                "expires_at": time.time() + float(answer.get("expires_in") or 0),
-                "refresh_token": answer.get("refresh_token") or refresh_token,
-                "account": data.get("account"),
-                "scope": answer.get("scope") or data.get("scope"),
-            }
-            config.write_private(self.path, json.dumps(data))
-            self._data = data
-            return data["access_token"]
+            data = self._current_locked()
+            seen = data.get("access_token")
+            if self._fresh(data) and not force:
+                return seen
+        with self._refresh_lock:
+            with self._lock:
+                data = self._current_locked()
+                token = data.get("access_token")
+                # someone refreshed while we waited: their token is the answer, refused or stale one or not
+                if token != seen or (self._fresh(data) and not force):
+                    return token
+                refresh_token = data.get("refresh_token")
+                version = self._version
+            answer = refresher(refresh_token)             # network: no data lock held
+            with self._lock:
+                if self._version != version:
+                    return self._current_locked()["access_token"]   # cleared or re-signed-in meanwhile
+                data = {
+                    "access_token": answer.get("access_token"),
+                    "expires_at": time.time() + float(answer.get("expires_in") or 0),
+                    "refresh_token": answer.get("refresh_token") or refresh_token,
+                    "account": (self._data or {}).get("account"),
+                    "scope": answer.get("scope") or data.get("scope"),
+                }
+                config.write_private(self.path, json.dumps(data))
+                self._data = data
+                self._version += 1
+                return data["access_token"]

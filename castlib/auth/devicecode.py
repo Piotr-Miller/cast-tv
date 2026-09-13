@@ -19,6 +19,7 @@ import urllib.parse
 import urllib.request
 
 from castlib.errors import AuthError, UpstreamError
+from castlib.net import NO_REDIRECT
 
 AUTHORITY = "https://login.microsoftonline.com"
 GRANT_DEVICE = "urn:ietf:params:oauth:grant-type:device_code"
@@ -40,7 +41,7 @@ def _post_form(url: str, data: dict, source: str = "onedrive") -> tuple[int, dic
     req = urllib.request.Request(url, data=body, headers={
         "Content-Type": "application/x-www-form-urlencoded", "Accept": "application/json"})
     try:
-        with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
+        with NO_REDIRECT.open(req, timeout=TIMEOUT) as r:    # a 3xx would carry the secret elsewhere
             status, raw = r.status, r.read(1 << 20)
     except urllib.error.HTTPError as e:
         status, raw = e.code, e.read(1 << 20)
@@ -72,9 +73,14 @@ def start(client_id: str, scopes: str, tenant: str = "consumers") -> dict:
             hint="Check the app registration: personal accounts allowed, "
                  "\"Allow public client flows\" set to Yes.",
             source="onedrive")
+    uri = str(data.get("verification_uri") or "https://microsoft.com/devicelogin")
+    parts = urllib.parse.urlsplit(uri)
+    if parts.scheme != "https" or not parts.netloc:     # the UI renders it as a link: https with a host, or nothing
+        raise UpstreamError("devicecode_refused",
+                            "Microsoft sent an unusable sign-in address: %r" % uri[:100], source="onedrive")
     return {
         "user_code": str(data["user_code"]),
-        "verification_uri": str(data.get("verification_uri") or "https://microsoft.com/devicelogin"),
+        "verification_uri": uri,
         "expires_in": float(data.get("expires_in") or DEFAULT_EXPIRES),
         "interval": float(data.get("interval") or DEFAULT_INTERVAL),
         "message": str(data.get("message") or ""),

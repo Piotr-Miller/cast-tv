@@ -76,12 +76,26 @@ def cache_read(name: str):
 
 
 def write_private(path: str, text: str) -> None:
-    """Create or overwrite ``path`` readable by this user only (mode 0600)."""
-    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, "w", encoding="utf-8") as fh:
-        fh.write(text)
-    os.chmod(path, 0o600)
+    """Create or overwrite ``path`` readable by this user only (mode 0600), atomically.
+
+    Like ``write_json``: a 0600 temp file in the same directory, then a rename,
+    so a crash or a full disk mid-write never leaves a truncated credential
+    behind (``TokenStore`` reads a partial file as "not signed in").
+    """
+    directory = os.path.dirname(path) or "."
+    os.makedirs(directory, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(prefix=os.path.basename(path) + ".", dir=directory)   # mkstemp creates it 0600
+    try:
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(text)
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
 
 
 def photo_tmp_dir() -> str:

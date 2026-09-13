@@ -15,6 +15,7 @@ registration must allow personal Microsoft accounts and public client flows.
 """
 from __future__ import annotations
 
+import collections
 import json
 import os
 import re
@@ -29,6 +30,7 @@ from castlib.auth.tokens import TokenStore
 from castlib.errors import AuthError, ConfigError, NotMedia, UpstreamError
 from castlib.items import MediaItem, Upstream
 from castlib.media import kind_from_facets, note_hidden_kind
+from castlib.net import NO_REDIRECT
 from castlib.sources.base import Entry, Folder, Listing
 
 GRAPH = "https://graph.microsoft.com/v1.0"
@@ -41,9 +43,11 @@ LIST_SELECT = "id,name,size,lastModifiedDateTime,folder,file,image,photo,video"
 LIST_EXPAND = "thumbnails($select=medium,large)"
 ME_SELECT = "displayName,userPrincipalName"
 THUMB_FRESH = 30 * 60           # a listing's thumbnail address is reused this long, then fetched again
+CACHE_ITEMS = 4000              # driveItems remembered per process (LRU); an evicted one is looked up again on open
 HEAVY_MBIT = 60.0               # above this bitrate the TV is likely to refuse the file
 CRUMB_HOPS = 32
-ID_RE = re.compile(r"^[A-Za-z0-9!_.\-]{1,128}$")
+ID_RE = re.compile(r"[A-Za-z0-9!_.\-]{1,128}")   # checked with fullmatch(); "." and ".." are refused besides
+PAGE_RE = re.compile(r"^(root|items/[A-Za-z0-9!_.\-]{1,128})/children\?")   # a nextLink, after GRAPH + "/me/drive/"
 ROOT_CRUMB = {"id": None, "name": "OneDrive"}
 HOW_TO_REGISTER = (
     "Register an app once at https://entra.microsoft.com (App registrations -> New): "
@@ -51,6 +55,11 @@ HOW_TO_REGISTER = (
     "\"Mobile and desktop applications\", and Authentication -> Advanced settings -> "
     "\"Allow public client flows\" = Yes. Then start cast-tv with "
     "ONEDRIVE_CLIENT_ID=<Application (client) ID>.")
+
+
+def good_id(value) -> bool:
+    """A driveItem id as Graph issues them: one path segment, never ``.`` or ``..``."""
+    return isinstance(value, str) and ID_RE.fullmatch(value) is not None and value not in (".", "..")
 
 
 def client_id() -> str:
@@ -71,7 +80,7 @@ def graph_get(url: str, token: str) -> dict:
     req = urllib.request.Request(url, headers={"Authorization": "Bearer " + token,
                                                "Accept": "application/json"})
     try:
-        with urllib.request.urlopen(req, timeout=30) as r:
+        with NO_REDIRECT.open(req, timeout=30) as r:      # a 3xx would carry the bearer elsewhere
             status, raw = r.status, r.read(8 << 20)
     except urllib.error.HTTPError as e:
         status, raw = e.code, e.read(1 << 20)
@@ -83,7 +92,7 @@ def graph_get(url: str, token: str) -> dict:
         data = json.loads(raw.decode("utf-8", "replace")) if raw.strip() else {}
     except ValueError:
         data = None
-    if status >= 400:
+    if status >= 300:                         # a 3xx too: redirects are refused, never followed
         detail = ""
         if isinstance(data, dict) and isinstance(data.get("error"), dict):
             detail = data["error"].get("message") or data["error"].get("code") or ""
@@ -218,8 +227,8 @@ class OneDriveSource:
         self._verified_at: float | None = None
         self._expired_at: float | None = None
         self._error: dict | None = None
-        self._raw: dict[str, dict] = {}          # file id -> driveItem as Graph returned it
-        self._thumbs: dict[str, tuple[str | None, float]] = {}   # file id -> (large url, when)
+        self._raw: collections.OrderedDict[str, dict] = collections.OrderedDict()   # file id -> driveItem, LRU
+        self._thumbs: dict[str, tuple[str | None, float]] = {}   # file id -> (large url, when); keyed like _raw
         self._parents: dict[str, tuple[str | None, str]] = {}    # folder id -> (parent id, name)
 
     # ------------------------------------------------------- credential
@@ -292,6 +301,16 @@ class OneDriveSource:
         return dict(self.status(), step="code")
 
     def _wait_for_token(self, cid: str, flow: dict, record: dict, stop: threading.Event, gen: int) -> None:
+        try:
+            self._finish_flow(cid, flow, record, stop, gen)
+        except Exception as e:                   # the thread must not die with the code still on show
+            err = UpstreamError("flow_failed", "The sign-in could not be completed: %s" % e, source="onedrive")
+            with self._lock:
+                if self._gen == gen and self._flow is record:
+                    self._flow, self._flow_stop = None, None
+                    self._flow_error = err.as_dict()
+
+    def _finish_flow(self, cid: str, flow: dict, record: dict, stop: threading.Event, gen: int) -> None:
         try:
             tokens = devicecode.poll(cid, flow, TENANT, stop)
         except (AuthError, UpstreamError) as e:
@@ -393,15 +412,17 @@ class OneDriveSource:
     def _folder_id(self, path) -> str | None:
         if path is None or path == "":
             return None
-        if not isinstance(path, str) or not ID_RE.match(path):
+        if not good_id(path):
             raise ConfigError("bad_path", "Not a OneDrive folder id: %r" % (path,), source="onedrive")
         return path
 
     def list(self, path=None, page=None) -> Listing:
         folder_id = self._folder_id(path)
         if page:
-            # a page is Graph's own @odata.nextLink; the bearer goes nowhere else
-            if not isinstance(page, str) or not page.startswith(GRAPH + "/"):
+            # a page is Graph's own @odata.nextLink of a children listing; the bearer goes nowhere else
+            prefix = GRAPH + "/me/drive/"
+            if (not isinstance(page, str) or not page.startswith(prefix)
+                    or not PAGE_RE.match(page[len(prefix):])):
                 raise ConfigError("bad_page", "Not a OneDrive page link.", source="onedrive")
             url = page
         else:
@@ -432,8 +453,7 @@ class OneDriveSource:
                     note_hidden_kind("onedrive", mime or name)   # a still the TV is not sent (GIF, raw)
                 continue
             with self._lock:
-                self._raw[item_id] = item
-                self._thumbs[item_id] = (thumb_url(item), now)
+                self._remember(item_id, item, now)
             items.append(entry_for(item, kind))
         nxt = data.get("@odata.nextLink")
         return Listing(items=items, folders=folders,
@@ -473,10 +493,21 @@ class OneDriveSource:
             self._parents[folder_id] = known
         return known
 
+    def _remember(self, item_id: str, raw: dict, when: float) -> None:
+        """Keep a driveItem and its thumbnail address; the least recently used fall out past ``CACHE_ITEMS``."""
+        self._raw[item_id] = raw                 # caller holds _lock
+        self._raw.move_to_end(item_id)
+        self._thumbs[item_id] = (thumb_url(raw), when)
+        while len(self._raw) > CACHE_ITEMS:
+            old, _ = self._raw.popitem(last=False)
+            self._thumbs.pop(old, None)
+
     def _raw_of(self, item_id: str) -> dict | None:
         """The driveItem behind an id: this process's listing, else one ``GET /me/drive/items/{id}``."""
         with self._lock:
             raw = self._raw.get(item_id)
+            if raw is not None:
+                self._raw.move_to_end(item_id)
         if raw is not None:
             return raw
         try:
@@ -486,13 +517,12 @@ class OneDriveSource:
         if not isinstance(raw, dict) or str(raw.get("id")) != item_id:
             return None
         with self._lock:
-            self._raw[item_id] = raw
-            self._thumbs[item_id] = (thumb_url(raw), time.time())
+            self._remember(item_id, raw, time.time())
         return raw
 
     def resolve(self, source_id: str, quality: str = "auto") -> MediaItem:
         """An unregistered item whose ``resolve`` callable asks Graph for a fresh download address."""
-        if not isinstance(source_id, str) or not ID_RE.match(source_id):
+        if not good_id(source_id):
             raise NotMedia("bad_id", "Not a OneDrive item id.", source="onedrive",
                            item=str(source_id)[:64])
         raw = self._raw_of(source_id)
@@ -519,7 +549,7 @@ class OneDriveSource:
 
     def thumb(self, source_id: str) -> Upstream | None:
         """The ``large`` thumbnail: the listing's address while it is young, else a fresh one from Graph."""
-        if not isinstance(source_id, str) or not ID_RE.match(source_id):
+        if not good_id(source_id):
             return None
         if self._raw_of(source_id) is None:
             return None

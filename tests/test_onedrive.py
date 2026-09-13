@@ -12,7 +12,7 @@ import pytest
 
 from castlib import config
 from castlib.auth import devicecode
-from castlib.errors import AuthError, ConfigError, NotMedia
+from castlib.errors import AuthError, ConfigError, NotMedia, UpstreamError
 from castlib.sources import onedrive
 from castlib.sources.onedrive import OneDriveSource
 from tests.conftest import request, wait_for
@@ -60,7 +60,7 @@ class _Handler(http.server.BaseHTTPRequestHandler):
                 n = f.devicecode_calls
             return self._send(200, {
                 "user_code": "ABCD-1234", "device_code": "dc-%d" % n,
-                "verification_uri": "https://microsoft.com/devicelogin",
+                "verification_uri": f.verification_uri,
                 "expires_in": f.expires_in, "interval": f.interval,
                 "message": "To sign in, use a web browser to open the page "
                            "https://microsoft.com/devicelogin and enter the code ABCD-1234 to authenticate."})
@@ -77,6 +77,8 @@ class _Handler(http.server.BaseHTTPRequestHandler):
                 return self._send(400, {"error": answer, "error_description": "AADSTS: " + answer})
             if form.get("grant_type") == "refresh_token":
                 if f.refresh == "ok" and (form.get("refresh_token") or "").startswith("rt"):
+                    if f.before_answer is not None:
+                        f.before_answer("refresh")
                     return self._send(200, f.issue())
                 if f.refresh == "http500":
                     return self._send(500, {"error": "server_error"})
@@ -91,11 +93,19 @@ class _Handler(http.server.BaseHTTPRequestHandler):
         bearer = (self.headers.get("Authorization") or "")[7:]
         with f.lock:
             f.calls.append((parsed.path, q, bearer))
-            valid = bearer in f.valid
+            valid = bearer in f.valid and not f.reject_bearers
         if not valid:
             return self._send(401, {"error": {"code": "InvalidAuthenticationToken",
                                               "message": "Access token has expired or is not yet valid."}})
         path = parsed.path
+        if f.graph_garbage:
+            body = b"<html>Sorry, something went wrong</html>"
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
         if path == "/v1.0/me":
             return self._send(200, {"displayName": "Piotr Miller", "userPrincipalName": "piotr@example.com"})
         m = re.match(r"^/v1.0/me/drive/(?:root|items/([^/]+))(/children|/thumbnails)?$", path)
@@ -103,6 +113,12 @@ class _Handler(http.server.BaseHTTPRequestHandler):
             return self._send(404, {"error": {"code": "itemNotFound", "message": "not found"}})
         item_id, tail = m.group(1), m.group(2)
         if tail == "/children":
+            if f.redirect_children:
+                self.send_response(302)
+                self.send_header("Location", f.redirect_children)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
             if item_id is None:
                 text = _fixture("children_root.json")
             elif item_id == "f-pictures":
@@ -163,7 +179,11 @@ class FakeMicrosoft:
         self.dl_calls = 0
         self.thumb_sig = 0
         self.download = "https://cdn.test"      # where downloadUrl points; tests aim it at an upstream stub
-        self.before_answer = None               # callable(kind), run before an "ok" token answer
+        self.before_answer = None               # callable(kind), run before an "ok" answer: "token" or "refresh"
+        self.redirect_children = None           # when set, every children listing answers 302 there
+        self.reject_bearers = False             # 401 to every Graph call, whatever the bearer
+        self.graph_garbage = False              # 200 with an HTML body to every Graph call
+        self.verification_uri = "https://microsoft.com/devicelogin"
         self.lock = threading.Lock()
         self.base = ""
 
@@ -257,13 +277,17 @@ def test_status_before_and_after_connect(fake):
 def test_devicecode_polling_errors(fake, monkeypatch):
     fake.script = ["authorization_pending", "slow_down", "authorization_pending", "ok"]
     flow = devicecode.start("client-test", onedrive.SCOPES)
-    stamps = []
-    fake.before_answer = lambda kind: stamps.append(time.monotonic())
-    t0 = time.monotonic()
-    tokens = devicecode.poll("client-test", flow, stop=threading.Event())
+
+    class RecordingStop(threading.Event):
+        waits = []
+
+        def wait(self, timeout=None):
+            self.waits.append(round(timeout, 3))
+            return super().wait(timeout)
+    tokens = devicecode.poll("client-test", flow, stop=RecordingStop())
     assert tokens["access_token"] == "at1" and tokens["refresh_token"] == "rt1"
     assert len(fake.token_posts()) == 4
-    assert stamps[0] - t0 >= 0.05                              # slow_down added its step before the next polls
+    assert RecordingStop.waits == [0.01, 0.01, 0.06, 0.06]    # slow_down added its step to every later poll
     for error in ("authorization_declined", "bad_verification_code"):
         fake.script = [error]
         with pytest.raises(AuthError) as err:
@@ -405,6 +429,34 @@ def test_folders_and_media_only(fake, capsys, monkeypatch):
     assert listing.as_dict()["folders"][0] == {"id": "f-pictures", "name": "Pictures", "count": 2}
 
 
+def test_graph_redirect_is_not_followed(fake):
+    """A 3xx from Graph is an error, never a second request: the default opener would resend the bearer."""
+    src = OneDriveSource()
+    _sign_in(src, fake)
+    fake.redirect_children = "https://evil.test/collect"
+    before = len(fake.calls)
+    with pytest.raises(UpstreamError) as err:
+        src.list()
+    assert err.value.code == "graph_http" and "302" in err.value.message
+    assert len(fake.calls) == before + 1
+
+
+def test_listing_cache_is_bounded(fake, monkeypatch):
+    monkeypatch.setattr(onedrive, "CACHE_ITEMS", 4)
+    src = OneDriveSource()
+    _sign_in(src, fake)
+    root = [e.id for e in src.list().items]                   # heic-1, vid-1, vid-heavy, png-1
+    assert len(root) == 4 and list(src._raw) == root
+    src.resolve("heic-1")                                     # a use makes it the most recent
+    src.list("f-camera")                                      # cam-1..3 push the oldest three out
+    assert list(src._raw) == ["heic-1", "cam-1", "cam-2", "cam-3"]
+    assert set(src._thumbs) == set(src._raw)
+    lookups = len(fake.graph("/items/vid-1"))
+    src.resolve("vid-1")                                      # evicted: looked up again, and remembered
+    assert len(fake.graph("/items/vid-1")) == lookups + 1
+    assert list(src._raw) == ["cam-1", "cam-2", "cam-3", "vid-1"]
+
+
 def test_list_pages_nextlink(fake):
     src = OneDriveSource()
     _sign_in(src, fake)
@@ -422,7 +474,8 @@ def test_list_pages_nextlink(fake):
     assert len([c for c in fake.calls if c[0].endswith("/items/f-camera")]) == 1   # the crumb is remembered
     # a page must be Graph's own link: the bearer goes nowhere else
     before = len(fake.calls)
-    for bad in ("https://evil.test/v1.0/me/drive/root/children", "p2", "http://" + fake.base[7:] + "/x"):
+    for bad in ("https://evil.test/v1.0/me/drive/root/children", "p2", "http://" + fake.base[7:] + "/x",
+                fake.base + "/v1.0/me/drive/items/cam-1/content"):    # same host, not a listing
         with pytest.raises(ConfigError) as err:
             src.list("f-camera", page=bad)
         assert err.value.code == "bad_page"
@@ -544,6 +597,192 @@ def test_token_file_mode_0600(fake):
         assert json.load(fh)["access_token"] == "at2"
     src.disconnect()
     assert not os.path.exists(path)
+
+
+def _stale_signed_in(fake):
+    """A connected source whose access token is about to expire: the next Graph call refreshes first."""
+    src = OneDriveSource()
+    _sign_in(src, fake)
+    src._store._data["expires_at"] = time.time() + 30
+    return src
+
+
+def _held_refresh(fake):
+    """``(held, release)``: the stub blocks inside the next refresh until ``release`` is set."""
+    held, release = threading.Event(), threading.Event()
+
+    def hold(kind):
+        if kind == "refresh":
+            held.set()
+            release.wait(5)
+    fake.before_answer = hold
+    return held, release
+
+
+def _refreshes(fake):
+    return [f for f in fake.token_posts() if f["grant_type"] == "refresh_token"]
+
+
+def test_status_answers_while_a_refresh_hangs(fake):
+    src = _stale_signed_in(fake)
+    held, release = _held_refresh(fake)
+    outcome = []
+    lister = threading.Thread(target=lambda: outcome.append(src.list()), daemon=True)
+    lister.start()
+    assert held.wait(5)                                       # the token endpoint is now "hanging"
+    answered = []
+    poller = threading.Thread(target=lambda: answered.append(src.status()), daemon=True)
+    poller.start()
+    poller.join(2)
+    assert answered and answered[0]["state"] == "connected"   # the poll did not queue behind the refresh
+    assert not poller.is_alive()
+    release.set()
+    lister.join(5)
+    assert outcome and [e.id for e in outcome[0].items][:1] == ["heic-1"]
+    assert len(_refreshes(fake)) == 1
+
+
+def test_concurrent_callers_share_one_refresh(fake):
+    src = _stale_signed_in(fake)
+    held, release = _held_refresh(fake)
+    outcome = []
+    threads = [threading.Thread(target=lambda: outcome.append(src.list()), daemon=True) for _ in range(3)]
+    for t in threads:
+        t.start()
+    assert held.wait(5)
+    time.sleep(0.2)                                           # the others reach the stale check and queue
+    release.set()
+    for t in threads:
+        t.join(5)
+    assert len(outcome) == 3 and len(_refreshes(fake)) == 1
+    assert src._store.load()["access_token"] == "at2"
+
+
+def test_late_refresh_does_not_restore_a_disconnected_sign_in(fake):
+    src = _stale_signed_in(fake)
+    held, release = _held_refresh(fake)
+    errors = []
+
+    def run():
+        try:
+            src.list()
+        except AuthError as e:
+            errors.append(e.code)
+    lister = threading.Thread(target=run, daemon=True)
+    lister.start()
+    assert held.wait(5)
+    src.disconnect()                                          # must not wait for the token endpoint
+    assert src.status() == {"state": "disconnected", "detail": {"stored": False}}
+    release.set()
+    lister.join(5)
+    assert errors == ["no_token"]
+    assert src.status() == {"state": "disconnected", "detail": {"stored": False}}
+    assert not os.path.exists(_token_file())                  # the refreshed credential was dropped
+
+
+def test_late_refresh_does_not_overwrite_a_new_sign_in(fake):
+    src = _stale_signed_in(fake)
+    held, release = _held_refresh(fake)
+    outcome = []
+    lister = threading.Thread(target=lambda: outcome.append(src.list()), daemon=True)
+    lister.start()
+    assert held.wait(5)
+    fake.script = ["ok"]
+    d = src.connect({"fresh": True})                          # a second account signs in meanwhile
+    assert d["step"] == "code"
+    wait_for(lambda: src.status()["state"] == "connected")
+    stored = src._store.load()
+    assert stored["refresh_token"] == "rt2"                   # the new sign-in
+    release.set()                                             # the old refresh now answers at3/rt3
+    lister.join(5)
+    assert outcome                                            # the listing went through on the current token
+    assert src._store.load()["refresh_token"] == "rt2" and src._store.load()["access_token"] == "at2"
+    with open(_token_file(), encoding="utf-8") as fh:
+        assert json.load(fh)["refresh_token"] == "rt2"
+    assert len(_refreshes(fake)) == 1
+
+
+def test_flow_thread_failure_clears_the_code(fake):
+    """A save that raises must not leave the gate showing a dead code for ever."""
+    fake.script = ["ok"]
+    src = OneDriveSource()
+
+    def broken_save(*a, **k):
+        raise OSError(30, "Read-only file system")
+    src._store.save = broken_save                             # instance-only; deleted below
+    assert src.connect({})["step"] == "code"
+    wait_for(lambda: src.status()["state"] == "disconnected")
+    s = src.status()
+    assert s["detail"]["flow_error"]["code"] == "flow_failed"
+    assert "Read-only file system" in s["detail"]["flow_error"]["message"]
+    assert not os.path.exists(_token_file())
+    del src._store.save
+    n = fake.devicecode_calls
+    assert src.connect({})["step"] == "code"                  # a new flow, not the dead one repeated
+    assert fake.devicecode_calls == n + 1
+    wait_for(lambda: src.status()["state"] == "connected")
+
+
+def test_second_401_after_a_refresh_is_graph_unauthorized(fake):
+    src = OneDriveSource()
+    _sign_in(src, fake)
+    fake.reject_bearers = True                                # the refreshed token is refused too
+    with pytest.raises(AuthError) as err:
+        src.list()
+    assert err.value.code == "graph_unauthorized"
+    assert len(_refreshes(fake)) == 1                         # one refresh, then give up
+    s = src.status()
+    assert s["state"] == "expired" and s["detail"]["error"]["code"] == "graph_unauthorized"
+
+
+def test_refresh_5xx_keeps_the_credential(fake):
+    src = _stale_signed_in(fake)
+    fake.refresh = "http500"
+    with pytest.raises(UpstreamError) as err:
+        src.list()
+    assert err.value.code == "refresh_failed"
+    assert src.status()["state"] == "connected"               # a flaky endpoint is not a revoked sign-in
+    assert src._store.load()["refresh_token"] == "rt1"
+    fake.refresh = "ok"
+    assert [e.id for e in src.list().items][:1] == ["heic-1"]   # the next call refreshes and goes through
+    assert src._store.load()["access_token"] == "at2"
+
+
+def test_graph_200_with_a_non_json_body(fake):
+    src = OneDriveSource()
+    _sign_in(src, fake)
+    fake.graph_garbage = True
+    with pytest.raises(UpstreamError) as err:
+        src.list()
+    assert err.value.code == "graph_not_json"
+
+
+def test_item_ids_are_one_clean_segment(fake):
+    src = OneDriveSource()
+    _sign_in(src, fake)
+    before = len(fake.calls)
+    for bad in (".", "..", "a/b", "id\n", "x" * 129):
+        with pytest.raises(ConfigError) as err:
+            src.list(bad)
+        assert err.value.code == "bad_path", bad
+        with pytest.raises(NotMedia) as err:
+            src.resolve(bad)
+        assert err.value.code == "bad_id", bad
+        assert src.thumb(bad) is None
+    with pytest.raises(NotMedia):                             # "" is the root for list(), never an item
+        src.resolve("")
+    assert src.thumb("") is None
+    assert len(fake.calls) == before                          # none of them reached Graph
+
+
+def test_verification_uri_must_be_https_with_a_host(fake):
+    for bad in ("https:///devicelogin", "http://microsoft.com/devicelogin", "javascript:alert(1)", "microsoft.com/link"):
+        fake.verification_uri = bad
+        with pytest.raises(UpstreamError) as err:
+            devicecode.start("client-test", onedrive.SCOPES)
+        assert err.value.code == "devicecode_refused" and "sign-in address" in err.value.message
+    fake.verification_uri = "https://www.microsoft.com/link"
+    assert devicecode.start("client-test", onedrive.SCOPES)["verification_uri"] == "https://www.microsoft.com/link"
 
 
 def test_disconnect_during_the_flow_drops_a_late_token(fake):
