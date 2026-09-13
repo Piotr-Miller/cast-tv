@@ -1228,14 +1228,14 @@ mocked).
 
 #### Automated
 
-- [ ] 6.1 `python -m pytest tests/` passes
+- [x] 6.1 `python -m pytest tests/` passes
 
 #### Manual
 
-- [ ] 6.2 Restart keeps the connection, empties the grid
-- [ ] 6.3 Pick on the phone lands in the laptop grid; slideshow plays photos and the video
-- [ ] 6.4 Picked photo casts after 60 minutes
-- [ ] 6.5 Share link still plays
+- [x] 6.2 Restart keeps the connection, empties the grid
+- [x] 6.3 Pick on the phone lands in the laptop grid; slideshow plays photos and the video
+- [x] 6.4 Picked photo casts after 60 minutes
+- [x] 6.5 Share link still plays
 
 ### Phase 7: Packaging, Linux and Windows
 
@@ -1348,3 +1348,69 @@ the plan as the source of truth. Each names the review finding that raised it.
   that fails to load hides itself and leaves the placeholder (`@error` on the `<img>` in both
   grids); GoPro's gate says "checking…" instead of "checking the token…"; a gate error note
   appends the error's `hint` for every source.
+
+### 2026-09-13 — Phase 6 implementation
+
+- **`connect({})` on Google Photos has the OneDrive shapes, with a consent round instead of a
+  code.** A stored, unexpired credential is verified by one **forced refresh** at the token
+  endpoint (the Picker has no read that does not open a session) and answers `connected`;
+  nothing stored, `expired`, or `{"fresh": true}` starts a loopback round and answers
+  `{state: "connecting", step: "consent", detail: {auth_url, expires_in, attempt, note}}`, the
+  URL under `detail` like OneDrive's code; the server opens the browser itself (off under
+  `--no-browser`); a pending round answers its own URL again; `{"cancel": true}` ends it. A token
+  answer without `refresh_token` starts a second round with `prompt=consent` (`attempt: 2`); a
+  second miss is `no_refresh_token`. A restart is `connected` with an empty grid.
+- **The pick is a POST step, not part of `connect`.** `POST /api/sources/gphotos/pick {}` answers
+  `{pick: {session_id, picker_uri, state, expires_in, count}}`, the same object `status().detail.pick`
+  carries while it waits; `{"cancel": true}` stops the poll and deletes the session; a timeout
+  (`pollingConfig.timeoutIn`) deletes the session and leaves the grid unchanged. `api._SOURCE`
+  accepts `pick` and `link` as source-specific POST steps (`SOURCE_EXTRAS`); a source without
+  the method answers `404 not_found`. `status().detail.picks_seq` moves whenever the listing
+  changes and the UI refetches the list on a change, so a pick made on the phone lands in the
+  laptop grid on the next poll.
+- **`MediaItem.refresh` (new, generic).** An optional second resolver the relay and the photo
+  fetch call on their one retry after an upstream 401/403/404, falling back to `resolve`.
+  `photos._fetch` gained that one retry (it had none), so a OneDrive photo whose download address
+  died is asked for again as the relay already did for video. Google Photos uses it to re-list
+  a `baseUrl` regardless of age; the age rule alone (50 min) stays in `resolve`.
+- **Share links live on the same source.** `POST /api/sources/gphotos/link {link}` scrapes once
+  through `sharelink.resolve` and lists a video tile with id `link-<n>` after the picks; the
+  stream address is reused on every open and re-scraped only through `refresh`; the same link
+  pasted twice is one entry; links go with `disconnect()`.
+- **Sessions are deleted on `disconnect()`, on `App.close()` (which now calls `close()` on any
+  source that has one) and at `atexit`; the consent survives `close()`.**
+- **`cast-photos --pick`** connects if needed, prints the consent URL quoted (it holds `&`),
+  opens a pick, prints the `pickerUri`, waits, lists numbered, reads a number on stdin and casts
+  through `cli._cast_item`; the `link` argument became optional (one of the two is required);
+  `--url-only` prints the `=d`/`=dv` address without the bearer, which is a header.
+- **The client file** is `config_dir()/google-client.json` or `GOOGLE_CLIENT_JSON`: the console's
+  Desktop-app JSON (`installed`/`web` wrapper or flat); missing → `400 no_google_client` with the
+  console steps as the hint. `MediaItem.version` is the media id.
+- **UI (cross-tab, small):** `connecting()` now covers `step: "consent"` as well as `"code"`, the
+  gate branches on `connectStep()`; `sourceHint()` shows "N picked" for a connected source that
+  reports `picks`; the empty-list text is per source (`emptyText()`); `input[type=url]` shares the
+  text-input style.
+- **A JPEG that announces extra images is re-encoded (amends the Phase 2 "stored as fetched"
+  rule), found live at row 6.3.** A Pixel "Ultra HDR" motion photo passed through untouched
+  showed on the Samsung as a plain green frame. `photos.announces_extra_images()` flags a header
+  with an MPF or ISO 21496-1 APP2, or XMP naming a gain map or a motion photo; such a JPEG is
+  re-encoded to its primary image. Trailing bytes the header does not announce still pass
+  through: the Olympus files carry them and were shown correctly in Phase 5. Which segment trips
+  the TV was not isolated (`research.md`, "Manual rows 6.2 and 6.3").
+- **SIGTERM ends the app like Ctrl+C** (`App.run_forever`), found live: a plain `kill` had
+  left a picker session at Google because neither `close()` nor `atexit` ran.
+- **A Google Photos video's original is downloaded before casting (amends "videos relayed"),
+  found live at row 6.3; Piotr's decision.** `baseUrl=dv` redirects to a host that ignores Range
+  (always 200, the whole file), so the TV's tail probe cannot be relayed within its 10 s SOAP
+  window. `MediaItem.download` items are fetched by `castlib/downloads.py` into a per-process
+  directory under `/var/tmp` before `SetAVTransportURI` and served as local files; bounded LRU,
+  pinned while registered, abandoned by a newer cast. Google video tiles offer **Original**
+  (default, downloads first) and **1080p stream** (`=m37`, which honours Range, relayed).
+- **`net.BEARER_SAFE`**: media fetches (relay, photo fetch, thumbnails, downloads) follow
+  redirects but drop `Authorization` when the host changes; Google's video redirects needed no
+  bearer and the default handler forwarded it.
+- **A 701 on `Play` gets a 4 s window and one more `Play` (amends the Phase 3 rule), found live
+  at rows 6.3 and 6.5.** Three casts were marked refused although the TV played them. The state is
+  now watched for `PLAY_701_GRACE` seconds, then `Play` is sent once more; a stop or newer cast in
+  the window sends none; a refusal's message lists the states the TV reported.
+

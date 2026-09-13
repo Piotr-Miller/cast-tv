@@ -13,6 +13,7 @@ import io
 import os
 import tempfile
 import threading
+import urllib.error
 import urllib.request
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
@@ -21,8 +22,9 @@ import pillow_heif
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 from castlib import config
-from castlib.errors import ConfigError, NotMedia, UpstreamError
+from castlib.errors import CastError, ConfigError, NotMedia, UpstreamError
 from castlib.media import PHOTO_MAX, is_allowed_photo, photo_profile
+from castlib.net import BEARER_SAFE
 
 pillow_heif.register_heif_opener()
 
@@ -30,6 +32,7 @@ CACHE_BYTES = 256 * 1024 * 1024
 CACHE_ENTRIES = 200
 JPEG_QUALITY = 92
 FETCH_LIMIT = 200 * 1024 * 1024
+RERESOLVE_ON = (401, 403, 404)      # the upstream refused the address it gave us: ask the source once more
 _MIME_OF_FORMAT = {"JPEG": "image/jpeg", "PNG": "image/png", "HEIF": "image/heic",
                    "WEBP": "image/webp", "GIF": "image/gif"}
 
@@ -199,18 +202,67 @@ def _fetch(item) -> bytes:
     if item.resolve is None:
         raise NotMedia("photo_no_source", "No file or address behind %s" % item.title,
                        source=item.source, item=item.id or item.source_id)
-    up = item.resolve()
-    req = urllib.request.Request(up.url, headers={"User-Agent": "Mozilla/5.0",
-                                                   "Accept": "*/*"})
-    for name, value in up.headers.items():
-        req.add_header(name, value)
-    try:
-        with (up.opener.open(req, timeout=60) if up.opener is not None
-              else urllib.request.urlopen(req, timeout=60)) as resp:
-            return resp.read(FETCH_LIMIT + 1)
-    except Exception as e:
-        raise UpstreamError("photo_fetch_failed", "Could not fetch %s: %s" % (item.title, e),
-                            source=item.source, item=item.id or item.source_id)
+    last = None
+    for attempt in (1, 2):
+        # like the relay: an address the upstream refuses is asked for once more,
+        # through ``refresh`` when the source has one (signed addresses expire)
+        try:
+            up = (item.refresh or item.resolve)() if attempt == 2 else item.resolve()
+        except CastError:
+            raise
+        except Exception as e:
+            raise UpstreamError("photo_fetch_failed", "Could not fetch %s: %s" % (item.title, e),
+                                source=item.source, item=item.id or item.source_id)
+        req = urllib.request.Request(up.url, headers={"User-Agent": "Mozilla/5.0",
+                                                       "Accept": "*/*"})
+        for name, value in up.headers.items():
+            req.add_header(name, value)
+        try:
+            with (up.opener or BEARER_SAFE).open(req, timeout=60) as resp:   # the bearer never leaves its host
+                return resp.read(FETCH_LIMIT + 1)
+        except urllib.error.HTTPError as e:
+            last = e
+            if e.code in RERESOLVE_ON and attempt == 1:
+                continue
+        except Exception as e:
+            last = e
+        break
+    raise UpstreamError("photo_fetch_failed", "Could not fetch %s: %s" % (item.title, last),
+                        source=item.source, item=item.id or item.source_id)
+
+
+_EXTRA_IMAGE_XMP = (b"hdrgm:", b"GCamera:MotionPhoto", b"GCamera:MicroVideo", b"Container:Directory")
+
+
+def announces_extra_images(data: bytes) -> bool:
+    """True when a JPEG's header announces images beyond the primary one.
+
+    Pixel "Ultra HDR" photos carry an MPF index and an ISO 21496-1 gain map, and
+    motion photos a video after the picture; the Samsung shows such a file as a
+    plain green frame (live, 2026-09-13), so it is re-encoded to the primary image
+    alone. Trailing bytes the header does not announce are left alone: the
+    Olympus JPEGs carry ~400 KB of them and were shown correctly in Phase 5.
+    """
+    i, n = 2, len(data)
+    while i + 4 <= n and data[i] == 0xFF:
+        m = data[i + 1]
+        if m == 0xFF:                            # fill byte before a marker
+            i += 1
+            continue
+        if m in (0xD8, 0x01) or 0xD0 <= m <= 0xD7:
+            i += 2
+            continue
+        if m == 0xDA:                            # the scan starts: the header is over
+            return False
+        length = int.from_bytes(data[i + 2:i + 4], "big")
+        body = data[i + 4:i + 2 + length]
+        if m == 0xE2 and body.startswith((b"MPF\0", b"urn:iso:std:iso:ts:21496")):
+            return True
+        if (m == 0xE1 and body.startswith(b"http://ns.adobe.com/xap/1.0/")
+                and any(tag in body for tag in _EXTRA_IMAGE_XMP)):
+            return True
+        i += 2 + length
+    return False
 
 
 def _convert(item, data: bytes) -> tuple[bytes, str, int, int]:
@@ -240,7 +292,8 @@ def _convert(item, data: bytes) -> tuple[bytes, str, int, int]:
         pass
     width, height = im.size
     fits = width <= PHOTO_MAX and height <= PHOTO_MAX
-    if fmt in ("JPEG", "PNG") and orientation == 1 and fits:
+    extra = fmt == "JPEG" and announces_extra_images(data)
+    if fmt in ("JPEG", "PNG") and orientation == 1 and fits and not extra:
         return data, mime, width, height
     if orientation != 1:
         im = ImageOps.exif_transpose(im)

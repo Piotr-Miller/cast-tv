@@ -225,11 +225,46 @@ def test_play_refused_with_701_is_fine_when_already_playing(app, tmp_path):
     wait_for(lambda: c.state == "playing")
     assert tv.actions()[:3] == ["SetAVTransportURI", "Play", "GetTransportInfo"]
 
-    tv.video_script = ["STOPPED"]             # but a 701 on something not playing is a refusal
-    c2 = app.cast(_video(tmp_path))
+    tv.video_script = ["STOPPED"]             # but a 701 on something that never plays is a refusal,
+    c2 = app.cast(_video(tmp_path))           # after the grace window and one more Play
     assert c2.done.wait(5)
     assert c2.state == "failed" and c2.reason.code == "tv_rejected"
     assert "UPnP 701: Transition not available" in c2.reason.message
+    assert "after it the TV reported STOPPED" in c2.reason.message and "Play refused again" in c2.reason.message
+    assert tv.actions().count("Play") == 3    # the photo's one, the video's first and its retry
+
+
+def test_701_then_the_tv_starts_by_itself(app, tmp_path):
+    """Seen live 2026-09-13: a 701 on Play while the TV does not read as playing yet; it starts a moment later."""
+    tv = app.tv_fake
+    tv.faults_once = {"Play": "701"}
+    tv.video_script = ["STOPPED", "STOPPED", "PLAYING", "PLAYING", "STOPPED"]
+    c = app.cast(_video(tmp_path))
+    assert c.done.wait(5)
+    assert c.state == "stopped" and c.reason is None, c.reason
+    assert tv.actions().count("Play") == 1    # it started on its own: no second Play
+
+
+def test_701_and_still_stopped_gets_one_more_play(app, tmp_path):
+    tv = app.tv_fake
+    tv.faults_once = {"Play": "701"}
+    tv.video_script = ["STOPPED"] * 12 + ["PLAYING", "PLAYING", "STOPPED"]
+    c = app.cast(_video(tmp_path))
+    assert c.done.wait(5)
+    assert c.state == "stopped" and c.reason is None, c.reason
+    assert tv.actions().count("Play") == 2
+
+
+def test_stop_during_the_701_window_sends_no_second_play(app, tmp_path):
+    tv = app.tv_fake
+    tv.faults = {"Play": "701"}
+    tv.video_script = ["STOPPED"]
+    tv.hooks["GetTransportInfo"] = app.stop   # the user presses Stop while the TV is watched
+    c = app.cast(_video(tmp_path))
+    assert c.done.wait(5)
+    assert c.state == "cancelled"
+    assert tv.actions().count("Play") == 1
+    assert not [e for e in app.errors.list() if e["code"] == "tv_rejected"]
 
 
 def test_716_on_set_uri_with_no_request_is_the_firewall_diagnosis(app, tmp_path):

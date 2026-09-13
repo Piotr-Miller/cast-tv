@@ -15,6 +15,7 @@ import urllib.request
 
 from castlib.errors import CastError
 from castlib.media import dlna_headers
+from castlib.net import BEARER_SAFE
 
 CHUNK = 256 * 1024
 RERESOLVE_ON = (401, 403, 404)
@@ -24,7 +25,9 @@ def _open(item, wanted, handler):
     """Open the upstream, re-resolving once when it refuses the address it gave us."""
     last = None
     for attempt in (1, 2):
-        up = item.resolve()
+        # the retry asks the source for a *new* address (``refresh``) when it has one;
+        # a source without one is asked the same question again
+        up = (item.refresh or item.resolve)() if attempt == 2 else item.resolve()
         req = urllib.request.Request(up.url, headers={"User-Agent": "Mozilla/5.0",
                                                        "Accept": "*/*"})
         for name, value in up.headers.items():
@@ -32,9 +35,7 @@ def _open(item, wanted, handler):
         if wanted:
             req.add_header("Range", wanted)
         try:
-            if up.opener is not None:
-                return up, up.opener.open(req, timeout=30)
-            return up, urllib.request.urlopen(req, timeout=30)
+            return up, (up.opener or BEARER_SAFE).open(req, timeout=30)   # the bearer never leaves its host
         except urllib.error.HTTPError as e:
             last = e
             if e.code in RERESOLVE_ON and attempt == 1:

@@ -25,7 +25,7 @@ from castlib.errors import CastError
 from castlib.items import MediaItem, Upstream
 from castlib.media import MIME, kind_of_extension
 from castlib.server import Server
-from castlib.sources import gopro, sharelink
+from castlib.sources import gopro, gphotos, sharelink
 from castlib.sources.local import item_for_path
 
 DEFAULT_PORT = 8895
@@ -394,10 +394,95 @@ def main_gopro(argv=None):
 
 
 # --------------------------------------------------------------- cast-photos
+def _wait_status(src, wanted, until, timeout, step=0.5):
+    """Poll ``src.status()`` until ``wanted(status)`` or ``until(status)`` (a failure) or the timeout."""
+    import time
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        st = src.status()
+        if wanted(st):
+            return st, True
+        if until(st):
+            return st, False
+        time.sleep(step)
+    return src.status(), False
+
+
+def show_picks(items):
+    if not items:
+        print("Nothing was picked.")
+        return
+    width = max(len(i.name) for i in items)
+    for n, i in enumerate(items, 1):
+        res = "%dx%d" % (i.width, i.height) if i.width and i.height else ""
+        print("%3d. %-*s  %s  %-9s %s" % (n, width, i.name, i.date or "----------", res, i.kind))
+
+
+def pick_photos(tv=None, port=DEFAULT_PORT, url_only=False, source=None):
+    """``cast-photos --pick``: connect if needed, open a pick, wait, list, cast the chosen number."""
+    src = source or gphotos.GPhotosSource()
+    try:
+        return _pick_and_cast(src, tv, port, url_only)
+    finally:
+        src.close()                              # the picker sessions are deleted
+
+
+def _pick_and_cast(src, tv, port, url_only):
+    try:
+        st = src.status()
+        if st["state"] != "connected":
+            d = src.connect({})
+            if d.get("step") == "consent":
+                print("Consent: a Google page opened in this computer's browser. If it did not, open\n"
+                      "  '%s'\n(quoted: the address contains '&'). Waiting up to %d min..."
+                      % (d["detail"]["auth_url"], round(gphotos.loopback.CONSENT_TIMEOUT / 60)))
+                st, ok = _wait_status(src, lambda s: s["state"] == "connected",
+                                      lambda s: s["state"] != "connecting", gphotos.loopback.CONSENT_TIMEOUT + 5)
+                if not ok:
+                    err = st["detail"].get("flow_error") or st["detail"].get("error") or {}
+                    print(err.get("message") or "The consent did not complete.", file=sys.stderr)
+                    return 1
+            print("Google Photos: connected.")
+        pick = src.pick({})["pick"]
+        print("Pick in Google Photos (this link works on the phone too):\n  %s\nWaiting for the pick..."
+              % pick["picker_uri"])
+        st, ok = _wait_status(src, lambda s: (s["detail"].get("pick") or {}).get("state") == "done",
+                              lambda s: (s["detail"].get("pick") or {}).get("state") not in ("waiting", "done"),
+                              pick["expires_in"] + 5)
+        pick = st["detail"].get("pick") or {}
+        if not ok:
+            err = pick.get("error") or {}
+            print(err.get("message") or "The picker %s." % (pick.get("state") or "ended"), file=sys.stderr)
+            return 1
+        items = src.list().items
+        show_picks(items)
+        if not items:
+            return 1
+        try:
+            choice = input("\nCast which number? ").strip()
+        except EOFError:
+            choice = ""
+        if not choice.isdigit() or not 1 <= int(choice) <= len(items):
+            print("No such number.", file=sys.stderr)
+            return 1
+        item = src.resolve(items[int(choice) - 1].id)
+        if url_only:
+            print(item.resolve().url)
+            return 0
+    except CastError as e:
+        return _fail(e)
+    ip, avt, name = find_tv(tv)
+    if not avt:
+        return 1
+    return _cast_item(item, (ip, avt, name), port, False)
+
+
 def main_photos(argv=None):
     ap = argparse.ArgumentParser(prog="cast-photos",
-                                 description="Play a Google Photos video on a TV.")
-    ap.add_argument("link", help="link to a video in Google Photos")
+                                 description="Play a Google Photos video on a TV, or pick items in Google's picker.")
+    ap.add_argument("link", nargs="?", help="link to a video in Google Photos")
+    ap.add_argument("--pick", action="store_true",
+                    help="connect (once, in this computer's browser), pick in Google Photos, cast the chosen item")
     ap.add_argument("-c", "--cookies", help="Netscape cookie jar (for private links)")
     ap.add_argument("-t", "--tv", default=os.environ.get("CAST_TV"),
                     help="TV address (default: $CAST_TV, else discover it)")
@@ -405,6 +490,11 @@ def main_photos(argv=None):
     ap.add_argument("--url-only", action="store_true",
                     help="print the address instead of casting it")
     args = ap.parse_args(argv)
+
+    if args.pick:
+        return pick_photos(tv=args.tv, port=args.port or DEFAULT_PORT, url_only=args.url_only)
+    if not args.link:
+        ap.error("give a Google Photos link, or --pick")
 
     try:
         op = net.opener_for(args.cookies)

@@ -48,7 +48,7 @@ button.ghost { background: transparent; border-color: transparent; color: var(--
 button.ghost:hover { color: var(--ink); background: var(--bg-button); }
 button.icon { width: 36px; padding: 0; justify-content: center; }
 button.round { width: 42px; height: 42px; border-radius: 999px; padding: 0; justify-content: center; }
-input[type=text], input[type=number] { height: 36px; padding: 0 12px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--bg-well); color: var(--ink); min-width: 0; }
+input[type=text], input[type=number], input[type=url] { height: 36px; padding: 0 12px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--bg-well); color: var(--ink); min-width: 0; }
 input:focus, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .mono { font-family: var(--mono); }
 .muted { color: var(--ink-3); }
@@ -326,3 +326,17 @@ main { flex: 1; display: flex; flex-direction: column; padding-bottom: 96px; }
 @media (max-width: 720px) {
   .gate .devicecode .code { font-size: 28px; letter-spacing: .1em; }
 }
+
+/* ---- Phase 6: the Google consent gate, the pick bar, the share-link paste */
+.gate .consent .lead { text-align: center; }
+.pickbar { margin: -2px 0 14px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg-well); }
+.pickbar .row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+.pickbar .row > .small { flex: 1 1 260px; line-height: 1.45; }
+.pickbar .wait { display: inline-flex; align-items: center; gap: 9px; font-size: 13px; color: var(--ink-2); }
+.pickbar .later { margin-top: 8px; font-size: 12.5px; color: var(--warn); }
+a.button { text-decoration: none; border: 1px solid var(--line-strong); background: var(--bg-button); border-radius: 8px; padding: 0 14px; height: 36px; display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+a.button.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; font-weight: 600; }
+a.button.primary:hover { filter: brightness(1.06); }
+form.linkpaste { margin-top: 18px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+form.linkpaste .small { flex-basis: 100%; }
+form.linkpaste input { flex: 1 1 260px; font-family: var(--mono); font-size: 12px; }

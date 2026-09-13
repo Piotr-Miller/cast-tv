@@ -19,6 +19,10 @@ from castlib.errors import ConfigError
 _CONFIG = os.path.expanduser("~/.config/cast-tv")
 _CACHE = os.path.expanduser("~/.cache/cast-tv")
 _photo_tmp: str | None = None
+# Videos fetched whole (castlib.downloads) can be gigabytes: on Fedora /tmp is RAM-backed
+# (tmpfs), /var/tmp is on disk. Elsewhere (Windows) the default temp dir is on disk.
+VIDEO_BASE: str | None = "/var/tmp" if os.path.isdir("/var/tmp") and os.access("/var/tmp", os.W_OK) else None
+_video_tmp: str | None = None
 _photo_lock = threading.Lock()
 
 
@@ -113,5 +117,24 @@ def remove_photo_tmp_dir() -> None:
     global _photo_tmp
     with _photo_lock:
         path, _photo_tmp = _photo_tmp, None
+    if path:
+        shutil.rmtree(path, ignore_errors=True)
+
+
+def video_tmp_dir() -> str:
+    """The per-process directory for videos fetched whole; created on first use, removed at exit."""
+    global _video_tmp
+    with _photo_lock:
+        if _video_tmp is None or not os.path.isdir(_video_tmp):
+            _video_tmp = tempfile.mkdtemp(prefix="cast-tv-videos-", dir=VIDEO_BASE)
+            atexit.register(remove_video_tmp_dir)
+        return _video_tmp
+
+
+def remove_video_tmp_dir() -> None:
+    """Delete the video directory now."""
+    global _video_tmp
+    with _photo_lock:
+        path, _video_tmp = _video_tmp, None
     if path:
         shutil.rmtree(path, ignore_errors=True)

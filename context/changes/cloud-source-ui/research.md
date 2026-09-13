@@ -750,3 +750,252 @@ real OneDrive (`pmiller.software@gmail.com`); client id `652b2cf9-…c9b6`.
 | 5.5 | **simulated**, not revoked in the Microsoft account: `refresh_token` and `access_token` in `onedrive.json` replaced with garbage, server restarted | `POST connect {}` → `401 refresh_rejected`, message "The OneDrive sign-in is no longer valid (invalid_grant). Connect again.", hint Microsoft's `AADSTS7000012 …`; status `expired`, `stored: true`; `GET list` → the same 401; the laptop UI showed the banner "The OneDrive sign-in expired … Connect again" over the still-visible 374-tile list, and the gate with "Connect again" plus the message once the list was cleared; `connect {}` while expired started a **new** device flow (code `RY47XHN8`), cancelled with `{"cancel": true}` → back to `expired`. The real file restored, restart, `connect {}` → `connected`, root lists 7 folders. A real revoke answers the same `invalid_grant` on refresh, so the path is the one exercised, but the account-side step itself was not. *Phase 5 review (F9, 2026-09-13): the tick was withdrawn; row 5.5 stays open until the app is revoked in the Microsoft account or the criterion is explicitly changed to this simulation.* |
 
 Left running after the run: the server on 8895 with the real sign-in, for Piotr to try the phone.
+
+## Follow-up 2026-09-13 — Phase 6: Google Photos, built on the spike plus the Picker reference
+
+The consent half was proven live on 2026-09-09 (the follow-up above: loopback + PKCE, refresh
+token issued, `sessions.create` 200, `baseUrl` 206 with the bearer and 403 without). The
+listing and session shapes in `tests/test_gphotos.py::FakeGoogle` are **doc-shaped, not
+recorded**: the Picker `mediaItems` reference (`PickedMediaItem{id, createTime, type,
+mediaFile{baseUrl, mimeType, filename, mediaFileMetadata{width, height, …}}}`), the
+`sessions` reference (`pickerUri`, `pollingConfig{pollInterval, timeoutIn}` as protobuf
+Durations like `"5s"`, `expireTime` RFC 3339, `mediaItemsSet`), and the `mediaItems.list`
+paging (`pageSize`, `pageToken`, `nextPageToken`). The one live pick of 2026-09-09 confirmed
+`type`, `mediaFile.mimeType` and `mediaFile.baseUrl`; the first live pick through the tab
+should be checked against the fake field by field, `videoMetadata` in particular (the code
+reads a `duration` or `durationMillis` there if present and otherwise leaves the duration
+unknown). Anything that differs is a fixture fix, not a design one.
+
+Decisions taken while implementing (also in the plan's Addenda):
+
+| what | decided |
+|---|---|
+| `connect({})` with a stored consent | one **forced refresh** at the token endpoint proves the refresh token still stands (the Picker has no cheap read that does not open a session); `invalid_grant` → `expired`, the gate returns. A restart therefore answers `connected` with an empty grid, the definition of "connected (Google Photos)" |
+| the consent round | `{state: "connecting", step: "consent", detail: {auth_url, expires_in, attempt, note}}`; the server opens the browser itself (`loopback.open_browser`, off under `--no-browser`) and the UI shows the link for copying with the on-host note; a redirect with the wrong `state` answers 400 and the round keeps waiting; `access_denied` → `consent_declined`; no redirect in 5 min → `consent_timeout` and the listener closes; a token answer without `refresh_token` starts a second round with `prompt=consent` (`attempt: 2`), and a second miss is `no_refresh_token` |
+| `pick()` | `POST /api/sources/gphotos/pick {}` opens a session and answers `{pick: {session_id, picker_uri, state, expires_in, count}}`; the same object rides on `status().detail.pick`; a second `pick` while one waits answers the same session; `{"cancel": true}` stops the poll thread and deletes the session; the poll thread honours `pollInterval`, gives up at `timeoutIn` (`state: timeout`, session deleted, grid unchanged), and merges only while its generation is current |
+| picks and sessions | `picks` is an ordered dict by media id (first-pick order; a re-picked id keeps its place, takes the newer `baseUrl`, gains the session); `sessions` map id → `expire_at` + the ids it holds; `status().detail.picks_seq` moves on every merge, drop or pasted link, and the UI refetches the list when it changes |
+| `baseUrl` freshness | reused for 50 min (`BASEURL_FRESH`), then re-listed through a live session holding the id; the relay's and the photo fetch's one retry after an upstream 401/403/404 call the item's new **`MediaItem.refresh`** hook, which re-lists regardless of age; no live session left → `repick_needed` (502) and the tile shows `warn: "re-pick"`; a session Google answers 404 for is dropped |
+| `MediaItem.refresh` (new, generic) | optional second resolver; `relay._open` and `photos._fetch` use it on their retry and fall back to `resolve`; `photos._fetch` gained the one retry the relay already had, so a OneDrive photo whose download address died is asked for again too |
+| the bearer | `Upstream(baseUrl + "=d" \| "=dv", {"Authorization": "Bearer …"})`, the token fetched at open time (refreshed when within 60 s of expiry); thumbnails are `baseUrl + "=w400-h400"` with the same header, proxied by `/api/sources/gphotos/thumb/<id>` |
+| share links | `POST /api/sources/gphotos/link {link}` runs `sharelink.resolve` once and lists the result as a video tile with id `link-<n>` after the picks; the stream address is reused on every open and re-scraped only through `refresh`; pasting the same link twice is one entry; links go with `disconnect()` |
+| the API | `_SOURCE` accepts `pick` and `link` as POST steps a source may offer (`SOURCE_EXTRAS`); a source without the method answers `404 not_found` |
+| exit | `App.close()` calls `close()` on every source that has one; `GPhotosSource.close()` deletes the open sessions and keeps the consent; `atexit` does the same for the CLI |
+| `cast-photos --pick` | connects if needed (prints the consent URL quoted, because it holds `&`), opens a pick, prints the `pickerUri`, waits, lists numbered, asks for a number on stdin, casts it through `cli._cast_item`; `--url-only` prints the `=d`/`=dv` address (the bearer is a header, never in the URL); the sessions are deleted on every exit path |
+| the client file | `config_dir()/google-client.json` (or `GOOGLE_CLIENT_JSON`), the console's `client_secret_*.json` for a Desktop app (`installed` or `web` wrapper, or a flat `{client_id, client_secret}`); missing → `400 no_google_client` with the console steps as the hint |
+| `MediaItem.version` | the media id (Google keeps it stable and the bytes do not change), so the photo cache holds one conversion per picked photo per process |
+
+Row 6.1 evidence (2026-09-13): `python -m pytest tests/` → 200 passed (182 before, 18 new in
+`tests/test_gphotos.py`); `pyflakes castlib tests` clean; `node --check castlib/ui/app.js` ok.
+The eleven test names the plan lists exist, plus `test_stored_consent_is_verified_by_a_refresh`,
+`test_no_client_file_is_a_config_error`, `test_a_late_pick_after_disconnect_is_dropped`,
+`test_picker_401_refreshes_once_then_expires`, `test_share_link_paste_lists_a_video`,
+`test_pick_and_link_over_api`, `test_cast_photos_pick_over_the_cli`. One hazard found while
+writing them: a stub `baseUrl` that carried a query string made `baseUrl + "=d"` land the
+suffix after the query; real `baseUrl`s carry no query, so the fake now keeps its per-listing
+signature as a path segment. `test_ui_is_self_contained` also refused an `https://` in the
+link input's placeholder; the placeholder reads `a photos.app.goo.gl link` now.
+
+UI smoke (2026-09-13, Claude, Chrome through the extension, laptop only, stub-backed server on
+8898 with `FakeGoogle` behind `loopback.TOKEN`/`gphotos.PICKER` and a `FakeTV`; the extension's
+navigations are cross-site, so the page was reached from a same-site link page on 18898 as in
+Phases 4 and 5): the Google Photos gate showed "Connect Google Photos" with the scope note;
+Connect flipped it to "waiting for consent… valid 5 min" with the on-host note, Copy link and
+Cancel, and the tab hint read "waiting for consent…"; the fake's browser landed the redirect
+(200, "Google Photos is connected.") and the tab showed the pick bar ("Pick in Google Photos"),
+"Nothing picked yet…" and the share-link paste; Pick showed "Open the picker", "waiting for
+your pick… valid 10 min", Copy link and Cancel; a fake pick of three photos and a video landed as
+four tiles with thumbnails proxied through `/api/sources/gphotos/thumb/<id>`, the header count 4,
+the hint "4 picked" and the button relabelled "Pick more"; casting `beach.jpg` from the tile
+went `preparing` → `playing` with the bottom bar "beach.jpg · on screen", the photo fetched from
+the stub with the bearer and converted. No console errors. A tab in a background Chrome window
+has `visibilityState: hidden` and pauses the poll, so `refresh()` was forced by hand where the
+flip had to be observed, as in Phase 5.
+
+**Not exercised: anything against the real Google.** The consent on the host, the pick from
+the phone, the 60-minute re-list and the real share link are rows 6.2–6.5 and need
+`~/.config/cast-tv/google-client.json` (the Desktop-app JSON downloaded on 2026-09-09 sits in
+`~/Downloads/client_secret_26923464307-….json`; copy it there, mode 0600).
+
+### Manual rows 6.2 and 6.3 (first attempt) — evidence (2026-09-13, Piotr at the TV, Claude on the laptop)
+
+Laptop: Fedora, `.venv/bin/python -m castlib --debug` on 8895 (later `--no-browser --debug`,
+restarted by Claude); the Samsung `83" OLED` (192.168.50.142); Piotr's Google account as the
+test user of the `cast-tv` Cloud project; client file copied from
+`~/Downloads/client_secret_26923464307-….json` to `~/.config/cast-tv/google-client.json` (0600).
+
+| row | observed |
+|---|---|
+| 6.2 | Piotr pressed Connect in the Google Photos tab on the laptop and consented in the laptop's browser (confirmed by Piotr, 14:21). `status`: `connected`; `~/.config/cast-tv/google.json` mode 0600, 525 bytes, keys `access_token, account, expires_at, refresh_token, scope`, scope `…/auth/photospicker.mediaitems.readonly`, **refresh token present**, access token valid ~58 min. Server restarted (14:25): before any call `disconnected` with `stored: true`, `picks: 0`; `POST connect {}` (what the tab does on entry) → `connected` with no consent round; `GET list` → `{"items": []}`. Connected, grid empty. |
+| 6.3, first pick | Piotr picked **five photos** (no video) on the phone; all five landed in the grid (`picks: 5`, session `mediaItemsSet: true`, `expireTime` +7 days). |
+
+**Live Picker shape vs the test fake (the check the Phase 6 follow-up asked for).** Five
+`PickedMediaItem`s fetched with the stored token: top-level keys exactly `createTime, id,
+mediaFile, type`; `createTime` with milliseconds (`2026-09-04T13:00:51.646Z`); `mediaFile` keys
+exactly `baseUrl, filename, mediaFileMetadata, mimeType`; `mediaFileMetadata` carries
+`width`/`height` as JSON integers plus `cameraMake`, `cameraModel` and `photoMetadata`
+(`focalLength, apertureFNumber, isoEquivalent, exposureTime`); `baseUrl` carries no query
+string (so `baseUrl + "=d"` is right, and the fake's path-segment signature matches). The
+session answer is `{id, mediaItemsSet, expireTime}` plus `pickerUri`, with `pollingConfig`
+absent once the pick is set. All as the fake has it. **`videoMetadata` is still unseen**: no
+video was picked yet.
+
+**The green frame (6.3, first cast).** `PXL_20260904_125850108.MP.jpg` (3000×4000,
+5 178 290 bytes) cast from the grid went `preparing` → `starting` → `PLAYING`; the TV
+HEAD/GET'd the full file six times (`0-5178289/5178290`); **the screen showed a plain green
+portrait-shaped rectangle** (Piotr's photo of the TV, 15:07). The photo had been passed through
+untouched (JPEG, orientation 1, under 4096 px: the Phase 2 rule). Its structure: a Pixel
+"Ultra HDR" motion photo — the primary JPEG ends at byte 3 754 860, then a second JPEG, the
+**gain map** (124 833 bytes, listed in XMP `Container:Directory` as `GainMap`), then an **MP4**
+(`ftyp` at 3 879 699, `GCamera:MotionPhoto="1"`); the header announces them with an **MPF** APP2,
+an **ISO 21496-1** APP2 and `hdrgm:` XMP. Pillow reads it as a single 3000×4000 JPEG. Which of
+these trips the Samsung's decoder was **not isolated**. What rules one explanation out: the
+Olympus JPEGs cast in Phase 5 carry ~400 KB after their EOI too, with no MPF and no gain map,
+and showed correctly — so unannounced trailing bytes alone are not it.
+
+Fix: `photos.announces_extra_images()` — a JPEG whose header carries an MPF or ISO 21496-1 APP2,
+or XMP with `hdrgm:` / `GCamera:MotionPhoto` / `GCamera:MicroVideo` / `Container:Directory`, is
+re-encoded (quality 92) to the primary image alone. The real file: flagged, re-encoded in
+0.21 s to 4 286 753 bytes, 3000×4000, no MPF, no `ftyp`, ends at its EOI; two Olympus files:
+not flagged, still passed through byte for byte. **The re-encoded file on the TV is not yet
+seen** (the restart that loaded the fix drops the picks; the re-pick below is that check).
+
+**An orphaned session and a plain `kill`.** Restarting the server with `kill -TERM` left the
+first pick's session alive at Google (`GET /v1/sessions/10b5…` → `mediaItemsSet: true` after the
+process was gone): SIGTERM bypassed both `App.close()` and `atexit`. Deleted by hand (`DELETE`
+200, then `GET` 404). `App.run_forever()` now turns SIGTERM into the Ctrl+C path
+(`test_sigterm_closes_sources_like_ctrl_c`); the next restart printed "Stopped." on its way out.
+
+### Row 6.3, second attempt — the show failed on the video (2026-09-13, 16:02)
+
+Piotr picked five Pixel photos and one video (`PXL_20260205_143617434.mp4`, 3840×2160, 33.9 s,
+183 983 754 bytes) and started a show on the laptop, interval 8 s, with the video first. Piotr
+reported "all is working"; **the server says otherwise**: the show ended `finished` with
+`skipped: 6` of 6, and the error ring holds, in order, `tv_rejected … timed out` (16:02:54,
+the video) and seven `tv_rejected … UPnP 701: Transition not available` (16:03:03–16:03:36,
+the video twice more, then each photo within two seconds). The TV answered `STOPPED` afterwards,
+its last track the video with duration `0:00:33`.
+
+What happened, from the log and from direct probes with the stored token:
+
+| request | answer |
+|---|---|
+| `baseUrl=dv` with the bearer | **302** to `video-downloads.googleusercontent.com` (no query on the `Location`) |
+| that target, with `Range: bytes=0-3`, `bytes=183983626-`, `bytes=1000000-1000003`, or none; with or without the bearer | **200, the whole 183 983 754 bytes, no `Accept-Ranges`**, 4.6–8.6 s to the first byte |
+| the same download, measured | first byte after 5.4 s, then 59 MB/s (473 Mbit/s): about 13 s for the whole file |
+| `baseUrl=dv` **without** the bearer | 403 (the bearer is needed on the first hop only) |
+| `baseUrl=m37` with the bearer | 302 to `rr…googlevideo.com`; the target honours Range (206) without the bearer; ffprobe: H.264 1920×1080 30 fps, AAC, 33.9 s, 2.5 Mbit/s, 10.6 MB |
+| `baseUrl=m18` | the same host, 206; H.264 640×360, 0.8 Mbit/s, 3.2 MB |
+| `baseUrl=m22` | 206 on a byte range (13.5 MB) but ffprobe could not read it |
+| `baseUrl=d` on the video (its still) and on photos | 206 for bounded and open-ended ranges, no redirect |
+
+So the relay could not answer the TV's tail probe (`Range: bytes=183983626-`; this MP4 keeps its
+index at the end) without reading 184 MB from the start, inside `SetAVTransportURI`, whose SOAP
+call times out at 10 s. The TV stayed mid-transition and refused the next calls with 701, so the
+show skipped every item in a few seconds. The relay also copied `Authorization` onto the
+cross-host redirect (the default urllib redirect handler copies every header).
+
+**Decision (Piotr, 2026-09-13):** "Original, downloaded first", with Google's 1080p stream offered
+as the lighter choice on the tile. Implemented:
+
+- `MediaItem.download` (and `progress`); `castlib/downloads.py` fetches such an item into a
+  per-process directory under `/var/tmp` (disk: on this machine `/tmp` is a 15.6 GB tmpfs,
+  `/var/tmp` is on the btrfs root with 348 GB free) **before** `SetAVTransportURI`, then the
+  server serves it as a local file. Bounded LRU (4 GiB, 16 entries) reusing the photo cache's
+  pinning; `release` on registry removal and on a cast that ends unregistered; the directory goes
+  at exit. A newer cast or show abandons the download between reads (`read1`, so a slow link does
+  not freeze the progress or the abandon check); refused once → re-listed through `refresh`,
+  refused twice → `download_refused`; not enough room (`free < size + 256 MB`) → `no_space`.
+- Google video tiles carry `variants`: **Original** (`WxH, downloads first`, default) and
+  **1080p stream** (`=m37`, relayed). `quality: "auto"`, a show, and `cast-photos --pick` take
+  the original.
+- `net.BEARER_SAFE`: the opener the relay, the photo fetch, the thumbnail proxy and the download
+  use; it follows redirects but drops `Authorization` when the host changes.
+- The UI's cast bar reads "downloading NN%" while a video is fetched.
+
+Tests: 209 passed (six new in `tests/test_gphotos.py`: variants, fetched whole before the TV is
+told with the bearer kept off the second host, abandoned by a newer cast with the partial file
+removed, refused once/twice, no room, same-host vs cross-host bearer). The fake now mirrors
+Google: `=dv` and `=m37` answer 302 to the stub under the name `localhost` (another host), the
+`=dv` target ignores Range. **Not yet seen on the TV: the downloaded original playing, and a
+show that plays through.**
+
+### Row 6.3 — evidence (2026-09-13, 17:25 and 18:03, Piotr at the TV)
+
+The six items of Piotr's third pick (phone, 16:24): `PXL_20260205_143617434.mp4` (3840×2160,
+33.9 s, 184 MB) and five Pixel photos, all `.MP.jpg` Ultra HDR motion photos (4000×3000 /
+3000×4000), among them `PXL_20260904_125850108.MP.jpg`, the one that had shown as a green frame.
+Shows started from the laptop UI (17:25, by Claude in Chrome, the real Start show button,
+`/api/show` → 202) and through the API (18:03, at Piotr's request, so he could watch it), both
+interval 8 s, the video first.
+
+| show | server | TV (Piotr) |
+|---|---|---|
+| 17:25 | the original downloaded before `SetAVTransportURI`, then `PLAYING` 0:01 → 0:31 of 0:33; the five photos 17:25:44 → 17:26:40, each held for the interval; `finished`, **skipped 0**, no new errors | — (not remembered) |
+| 18:03 | video 18:03:36 → 18:04:10 (served from the download cache, no second download); photos at 18:04:12, :22, :30, :38, :46; `finished` 18:04:52, **skipped 0**, no new errors | **"All ok"**: the video played to its end, the five photos showed as photos, upright, the formerly green one included |
+
+Piotr's own Start show on the phone (before 17:22) never reached the server (no show was
+created, no error logged); the laptop UI's identical click did. Not diagnosed; the likeliest
+reading is that no tile was ticked, since the Start show bar only appears with a selection.
+
+Open, not blocking 6.3: the single photo cast at 16:26 (`…130719574.MP.jpg`, from a tile) was
+recorded as `tv_rejected … UPnP 701` although the TV showed it and still reported `PLAYING` on
+that URI an hour later: the 701-on-`Play` exemption (Phase 3) asks `GetTransportInfo`, and that
+answer did not read as playing at that moment.
+
+### Row 6.5 — evidence (2026-09-13, about 18:14, Piotr at the TV)
+
+Piotr made a share link in Google Photos on the phone (Share → Create link) for a video and pasted
+it into the tab's link field: it was listed as tile `link-1` (`KwhGzcxkNtQpudc46`, video,
+`video/mp4`, after the six picks). Cast from the tile: **the video played to its end** (Piotr:
+"Link dodany, video odtworzone"); the server's cast ended `stopped` with no error, duration
+`0:00:08`, seven TV requests. The scraper's stream answered like the picked original: **200 and
+the whole file whatever the Range** (3 553 136 bytes), so the relay trimmed every range itself
+(`bytes=3553008-` among them). It works because the file is small; a long shared video would meet
+the same 10 s SOAP window the picked 4K video did. Share links still relay (the plan's "plays as
+before"); fetching them whole like picked originals is a one-line change left for Piotr to decide.
+
+**The first two casts of the link failed** (18:14:18 and 18:14:21, `tv_rejected … UPnP 701:
+Transition not available`, item `link-1`); the third played. Together with the photo at 16:26
+that is three casts refused by the 701-on-`Play` rule although the TV went on to play: the
+Phase 3 exemption asks `GetTransportInfo` once, right after the fault, and the answer at that
+moment did not read as playing. Fix in progress (below).
+
+### The 701 fix (2026-09-13, written into the working tree at 18:20, deployed after row 6.4)
+
+Three casts in this session were marked `tv_rejected … UPnP 701` although the TV went on to play
+them: the photo at 16:26 (still `PLAYING` on its URI an hour later) and the share link twice at
+18:14 (the third attempt played). The Phase 3 rule asked `GetTransportInfo` once, right after the
+701 on `Play`. The state it saw was not recorded, so the exact reading is unknown; the fix makes
+the next one visible.
+
+`Cast._settles_playing`: after a 701 on `Play`, `GetTransportInfo` is asked every 0.5 s for up to
+4 s (`PLAY_701_GRACE`, `PLAY_701_STEP`); `PLAYING`, `TRANSITIONING` or `PAUSED_PLAYBACK` means the
+cast is fine; still not playing at the end → `Play` once more; refused again → one last look, then
+`tv_rejected` whose message now ends with the states seen (`after it the TV reported STOPPED,
+STOPPED, …, Play refused again, STOPPED`). A stop or a newer cast inside the window sends no second
+`Play`; `_promote` handles it as before. Tests: 212 passed (three new in `test_supervisor.py`: the
+TV starts by itself after a 701, starts after the second `Play`, a stop in the window sends no
+second `Play`; the existing 701 test now also checks the retry and the reported states). The fake
+TV gained `faults_once`.
+
+### Row 6.4 — evidence, server side (2026-09-13)
+
+Material: `PXL_20260904_125023968.MP.jpg` (Pixel Ultra HDR motion photo, 4000×3000, 5 587 717 bytes
+at Google), picked from the phone into its own session at 18:18:59, never prepared or cast by this
+server process before. Its address as Google listed it was saved at 18:23 (it answered `206` then).
+
+| time | observed |
+|---|---|
+| 20:19:43 | the server prepared the photo: `/tmp/cast-tv-photos-gts3hedd/pwrpxz64m.jpg`, 4 386 210 bytes — byte for byte the size `photos._convert` gives the file downloaded fresh from Google (re-encoded: it announces a gain map), 121 minutes after the pick |
+| 20:19:44 | the address saved at 18:23 answers **`403`**: expired. So the fetch a second earlier used an address the server had just re-listed (the 50-minute rule), not the one from the pick |
+| 20:21:41 | cast again through the API for Piotr to watch: `preparing` → `starting` → `PLAYING` at 20:21:46, six TV requests, served from that prepared file |
+
+The same minutes show why Piotr "did not know which photo was on": between 20:19:43 and 20:20:10
+his taps on three other tiles drew nine `tv_rejected … UPnP 701` (the old rule, still running on
+this process; the fix above is deployed after this row), and the TV had gone quiet at 19:32
+(`tv_unreachable`), presumably its own standby.
+
+TV side (Piotr, 20:22): **"Potwierdzam"** — the landscape photo on screen was the one described
+to him from the prepared file (a brown one-storey wooden building with a red roof, a round conifer
+in front on a paved square, a green picket fence with a red spring-rider horse on the lawn, a lake
+and a willow behind), upright and in normal colours. Row 6.4 ticked.

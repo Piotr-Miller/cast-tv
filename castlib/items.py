@@ -33,6 +33,9 @@ class MediaItem:
     version: str | None = None   # etag or id the source gives the bytes; local files use mtime+size
     path: str | None = None   # local file, or None
     resolve: Callable[[], Upstream] | None = None   # for remote items
+    refresh: Callable[[], Upstream] | None = None   # called instead of ``resolve`` on the one retry after an upstream 401/403/404
+    download: bool = False    # the upstream ignores Range: fetch the whole file before casting (castlib.downloads)
+    progress: float | None = None   # 0..1 while such a download runs
     size: int | None = None
     width: int | None = None
     height: int | None = None
