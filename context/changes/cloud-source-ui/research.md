@@ -999,3 +999,32 @@ TV side (Piotr, 20:22): **"Potwierdzam"** — the landscape photo on screen was 
 to him from the prepared file (a brown one-storey wooden building with a red roof, a round conifer
 in front on a paved square, a green picket fence with a red spring-rider horse on the lawn, a lake
 and a willow behind), upright and in normal colours. Row 6.4 ticked.
+
+### Row 6.5 — re-check after the Phase 6 review fixes (2026-09-13, 22:16–22:23, Piotr at the TV)
+
+Server restarted on `cdbdb0f` (share-link host allowlist, redirect guard on every hop, guarded
+relay). Three links pasted:
+
+- `link-1` `Nj2VHaD5bqKviYhq6` and `link-2` `Vdc9XaAhsYEedMAa8` — share links to a **photo** (a
+  motion photo). Resolved through the allowlist (`=dv` on `lh3.googleusercontent.com` →
+  `video-downloads.googleusercontent.com`); the answer is the photo's embedded clip, 2 969 708 bytes
+  (ffprobe: 1.78 s HEVC 1440×1080 at 120 fps, a second HEVC 2048×1536 still track, two data
+  tracks). The TV fetched it (9 requests) and stayed `STOPPED`: `tv_never_started` at 22:16:23 and
+  22:20:58. Share links are video-only by design (`plan.md:995`), so not a regression; follow-ups
+  in `follow-ups/review-fixes.md`.
+- `link-3` `cMSPYewNYdYXjrJq6` — a share link to a **video**: **played to its end** (Piotr: "po
+  wklejeniu video 6.5 działa"); cast `stopped` with no error, duration `0:00:08`, seven TV
+  requests, 3 553 136 bytes relayed whole-per-request as before (`bytes=3553008-` trimmed by the
+  relay). The earlier known-good link `KwhGzcxkNtQpudc46` also still resolves to the same H.264
+  file with the new code (checked off the TV).
+
+### Row 6.3 — re-check after the Phase 6 review fixes (2026-09-13, 22:27, Piotr at the TV)
+
+Same server (`cdbdb0f`, pid 726890), after Connect with the stored consent and a pick on the
+phone: `VID_20240830_220448.mp4` (1920×1080) cast as **Original**. It was fetched whole first —
+6 132 233 bytes into `/var/tmp/cast-tv-videos-726890-d6d3zl1_/` (the new pid-named directory; the size is well inside the per-file
+limit, the budget and the reserve) — and the TV's ranges were answered from the local file
+(`Range=bytes=6132105- -> 6132105-6132232/6132233`, no relay trimming). **The video played**
+(Piotr: "6.3 zrobione, film zagrał"); cast `stopped` with no error, duration `0:00:11`, six TV
+requests. The file stays in the download LRU after the cast (for a re-cast) and goes on eviction
+or at exit.
