@@ -126,6 +126,7 @@ class App:
         self.registry = server.registry
         photos.attach(self.registry)
         downloads.attach(self.registry)
+        config.sweep_stale_video_dirs()    # what a killed run left under /var/tmp
         self.debug = debug
         self.codec_check = True            # ffprobe local videos for DTS before casting
         self.tv: dict | None = None        # {ip, name, avt, state}

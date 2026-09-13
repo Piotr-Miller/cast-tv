@@ -21,7 +21,7 @@ def captured_cast(monkeypatch):
 def test_cloud_commands_honour_cast_tv(monkeypatch, captured_cast):
     monkeypatch.setenv("CAST_TV", "192.0.2.42")
     monkeypatch.setattr(cli.gopro, "share_url", lambda url: "https://cdn/x.mp4")
-    monkeypatch.setattr(cli.sharelink, "resolve", lambda link, op: "https://cdn/y.mp4")
+    monkeypatch.setattr(cli.sharelink, "resolve", lambda link, cookies_path=None: "https://cdn/y.mp4")
     assert cli.main_gopro(["https://gopro.com/v/abc"]) == 0
     assert cli.main_photos(["https://photos.app.goo.gl/x"]) == 0
     assert [kw["tv"] for _, kw in captured_cast] == ["192.0.2.42", "192.0.2.42"]

@@ -1,7 +1,9 @@
 """The Google Photos source on the ``Source`` contract, against a scripted Google (token endpoint, Picker API and media host on one stub)."""
 import base64
 import hashlib
+import http.client
 import http.server
+import io
 import json
 import os
 import socketserver
@@ -9,6 +11,7 @@ import threading
 import time
 import urllib.parse
 import urllib.request
+import urllib.response
 
 import pytest
 
@@ -80,7 +83,11 @@ class _Handler(http.server.BaseHTTPRequestHandler):
         data = f.dl_body
         self.send_response(200)
         self.send_header("Content-Type", "video/mp4")
-        self.send_header("Content-Length", str(len(data)))
+        if f.dl_no_length:                       # no length: the body ends when the connection does
+            self.send_header("Connection", "close")
+            self.close_connection = True
+        else:
+            self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         try:
             for i in range(0, len(data), 256):
@@ -269,6 +276,7 @@ class FakeGoogle:
         self.alt_base = ""                      # the same stub under another host name: a redirect across hosts
         self.dl_body = VIDEO                    # what the original's host serves, whole
         self.dl_delay = 0.0                     # seconds per 256-byte chunk of it
+        self.dl_no_length = False               # answer without Content-Length
         self.dl_finished = []                   # monotonic times its answers finished
         self.lock = threading.Lock()
         self.base = ""
@@ -711,6 +719,9 @@ def test_session_expired_marks_items(fake):
         src._sessions["s1"]["expire_at"] = time.time() - 1      # expireTime passed
     listing = src.list()
     assert [(e.id, e.warn) for e in listing.items] == [("a", "re-pick"), ("b", "re-pick")]
+    with src._lock:
+        assert "s1" not in src._sessions                          # dropped, not merely skipped
+        assert src._picks["a"]["sessions"] == set() == src._picks["b"]["sessions"]
     assert src.status()["detail"]["sessions"] == 0
     item = src.resolve("a")
     with src._lock:
@@ -743,6 +754,10 @@ def test_repick_merges_by_media_id(fake):
         assert src._picks["b"]["sessions"] == {"s1", "s2"}
         src._sessions["s1"]["expire_at"] = time.time() - 1      # S1 expires
     assert [(e.id, e.warn) for e in src.list().items] == [("a", "re-pick"), ("b", None), ("c", None)]
+    with src._lock:
+        assert "s1" not in src._sessions and set(src._sessions) == {"s2"}
+        assert src._picks["b"]["sessions"] == {"s2"}              # its link to the live session stays
+        assert "a" in src._picks and src._picks["a"]["sessions"] == set()   # the medium stays, for "re-pick"
     item = src.resolve("b")
     with src._lock:
         src._picks["b"]["fetched_at"] = 0
@@ -781,6 +796,115 @@ def test_a_late_pick_after_disconnect_is_dropped(fake):
     fake.sessions[sid] = {"items": [_item("a")], "set": True, "expire_at": time.time() + 600}   # Google still has it
     time.sleep(0.1)
     assert src.list().items == [] and src.status()["detail"] == {"stored": False}
+
+
+def _in_thread(fn, *args):
+    """Run ``fn(*args)`` on a thread; the returned list receives its result or its CastError."""
+    out = []
+
+    def run():
+        try:
+            out.append(fn(*args))
+        except (AuthError, ConfigError, UpstreamError) as e:
+            out.append(e)
+    t = threading.Thread(target=run, daemon=True)
+    t.start()
+    return t, out
+
+
+def test_disconnect_while_the_consent_listener_opens(fake, monkeypatch):
+    src = GPhotosSource()
+    opening, go, flows = threading.Event(), threading.Event(), []
+    real_start = loopback.start
+
+    def slow_start(*a, **kw):
+        flow = real_start(*a, **kw)
+        flows.append(flow)
+        opening.set()
+        go.wait(5)
+        return flow
+    monkeypatch.setattr(loopback, "start", slow_start)
+    t, out = _in_thread(src.connect, {})
+    assert opening.wait(5)
+    src.disconnect()                                              # lands before the round is published
+    go.set()
+    t.join(5)
+    assert isinstance(out[0], AuthError) and out[0].code == "cancelled"
+    assert flows[0]._done.is_set()                                # the listener it opened is cancelled
+    assert src._flow is None and src.status()["state"] == "disconnected"   # not stuck "connecting"
+
+
+def test_disconnect_while_a_picker_session_opens(fake, monkeypatch):
+    src = GPhotosSource()
+    _connect(src, fake)
+    posted, go = threading.Event(), threading.Event()
+    real_call = gphotos.picker_call
+
+    def slow_call(method, path, token, body=None, timeout=30):
+        answer = real_call(method, path, token, body, timeout)
+        if method == "POST":
+            posted.set()
+            go.wait(5)
+        return answer
+    monkeypatch.setattr(gphotos, "picker_call", slow_call)
+    t, out = _in_thread(src.pick, {})
+    assert posted.wait(5)
+    src.disconnect()                                              # lands after Google opened the session
+    go.set()
+    t.join(5)
+    assert isinstance(out[0], AuthError) and out[0].code == "cancelled"
+    assert fake.deleted == ["s1"] and fake.sessions == {}         # the session it opened is not left behind
+    assert src._sessions == {} and src.status() == {"state": "disconnected", "detail": {"stored": False}}
+
+
+def test_close_is_bounded_and_final_when_google_does_not_answer(fake, monkeypatch):
+    src = GPhotosSource()
+    _connect(src, fake)
+    _pick(src, fake, [_item("a")])
+    src.pick({})                                                  # a second session, still waiting
+    hang, calls = threading.Event(), []
+
+    def silent(method, path, token, body=None, timeout=30):
+        calls.append((method, timeout))
+        hang.wait(timeout)                                        # Google never answers
+        raise UpstreamError("picker_unreachable", "timed out", source="gphotos")
+    monkeypatch.setattr(gphotos, "picker_call", silent)
+    monkeypatch.setattr(gphotos, "CLEANUP_BUDGET", 0.5)
+    started = time.monotonic()
+    src.close()
+    elapsed = time.monotonic() - started
+    hang.set()
+    assert elapsed < 1.5                                          # one deadline for them all, not 30 s each
+    deletes = [c for c in calls if c[0] == "DELETE"]
+    assert deletes and all(timeout <= 0.5 for _, timeout in deletes)
+    assert src._sessions == {} and src.list().items[0].warn == "re-pick"   # the local state went at once
+    for step in (src.pick, src.connect):
+        with pytest.raises(ConfigError) as err:
+            step({})
+        assert err.value.code == "source_closed"                  # nothing new starts after close()
+    src.close()                                                   # and a second close is a no-op
+
+
+def test_a_hanging_cleanup_does_not_keep_the_process_alive(tmp_path):
+    import subprocess
+    import sys
+    import textwrap
+    script = textwrap.dedent("""
+        import threading, time
+        from castlib.sources import gphotos
+        gphotos.CLEANUP_BUDGET = 0.3
+        src = gphotos.GPhotosSource()
+        src._sessions["s1"] = {"expire_at": time.time() + 600, "ids": set(), "picker_uri": "https://x"}
+        src._token = lambda force=False: ("at", 0)
+        gphotos.picker_call = lambda *a, **kw: threading.Event().wait()   # a DELETE that never returns
+        print("ready", flush=True)
+    """)                                                          # then the interpreter exits: atexit closes the source
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    env = dict(os.environ, HOME=str(tmp_path), PYTHONPATH=root)
+    started = time.monotonic()
+    done = subprocess.run([sys.executable, "-c", script], env=env, capture_output=True, text=True, timeout=20)
+    assert done.returncode == 0 and "ready" in done.stdout, done.stderr
+    assert time.monotonic() - started < 10
 
 
 def test_picker_401_refreshes_once_then_expires(fake):
@@ -827,16 +951,19 @@ def test_cast_photos_pick_over_the_cli(fake, monkeypatch, capsys):
         threading.Thread(target=fake.consent, args=(url,), daemon=True).start()
         return True
     monkeypatch.setattr(loopback, "open_browser", browser)
-    src = GPhotosSource()
-    real_pick = src.pick
+    def driven():
+        """A source whose picks Google makes at once; pick_photos closes it on the way out, for good."""
+        src = GPhotosSource()
+        real_pick = src.pick
 
-    def pick(params):
-        d = real_pick(params)
-        if not params.get("cancel"):
-            fake.set_pick(d["pick"]["session_id"], [_item("a"), _item("b", "VIDEO", "video/mp4")])
-        return d
-    monkeypatch.setattr(src, "pick", pick)
-    assert cli.pick_photos(tv="127.0.0.1", port=18895, source=src) == 0
+        def pick(params):
+            d = real_pick(params)
+            if not params.get("cancel"):
+                fake.set_pick(d["pick"]["session_id"], [_item("a"), _item("b", "VIDEO", "video/mp4")])
+            return d
+        monkeypatch.setattr(src, "pick", pick)
+        return src
+    assert cli.pick_photos(tv="127.0.0.1", port=18895, source=driven()) == 0
     out = capsys.readouterr().out
     assert "Consent:" in out and "Google Photos: connected." in out
     assert "https://photos.google.com/picker/s1" in out
@@ -846,7 +973,7 @@ def test_cast_photos_pick_over_the_cli(fake, monkeypatch, capsys):
     assert "s1" in fake.deleted                                  # closed on the way out
     # --url-only prints the bearer-less address (the bearer is a header, never in the URL)
     monkeypatch.setattr("builtins.input", lambda prompt="": "1")
-    assert cli.pick_photos(url_only=True, source=src) == 0
+    assert cli.pick_photos(url_only=True, source=driven()) == 0
     assert capsys.readouterr().out.strip().endswith("=d")
     monkeypatch.setattr(cli, "pick_photos", lambda **kw: kw)  # wired through the parser
     assert cli.main_photos(["--pick", "--url-only", "-p", "1234"]) == {"tv": None, "port": 1234, "url_only": True}
@@ -859,7 +986,7 @@ def test_share_link_paste_lists_a_video(fake, monkeypatch, server):
     src = GPhotosSource()
     _connect(src, fake)
     resolved = []
-    monkeypatch.setattr(sharelink, "resolve", lambda link, op: resolved.append(link) or fake.base + "/public/x=dv")
+    monkeypatch.setattr(sharelink, "resolve", lambda link, cookies_path=None: resolved.append(link) or fake.base + "/public/x=dv")
     fake.sig = 0
     with pytest.raises(ConfigError):
         src.link({"link": "photos.app.goo.gl/abc"})
@@ -872,6 +999,7 @@ def test_share_link_paste_lists_a_video(fake, monkeypatch, server):
     assert [e.id for e in src.list().items] == ["a", "link-1"]  # picks first, then links
     item = src.resolve("link-1")
     assert item.kind == "video" and item.resolve().url.endswith("/public/x=dv") and item.resolve().headers == {}
+    assert any(isinstance(h, sharelink._GooglePhotosOnly) for h in item.resolve().opener.handlers)   # relayed behind the guard
     assert resolved == ["https://photos.app.goo.gl/AbCdEf"]     # resolved once, reused on every open
     srv, base = server
     srv.registry.add(item)
@@ -883,6 +1011,112 @@ def test_share_link_paste_lists_a_video(fake, monkeypatch, server):
         src.resolve("link-9")
     src.disconnect()
     assert src.list().items == []
+
+
+class _Transport(urllib.request.BaseHandler):
+    """Answers every http(s) request from ``routes`` and records it: nothing reaches the network."""
+
+    handler_order = 100                          # ahead of urllib's own HTTP and HTTPS handlers
+
+    def __init__(self, routes):
+        self.routes, self.seen = routes, []
+
+    def _answer(self, req):
+        self.seen.append(req.full_url)
+        status, headers, body = self.routes.get(req.full_url, (404, {}, b""))
+        msg = http.client.HTTPMessage()
+        for name, value in headers.items():
+            msg[name] = value
+        resp = urllib.response.addinfourl(io.BytesIO(body), msg, req.full_url, status)
+        resp.msg = http.client.responses.get(status, "")
+        return resp
+
+    http_open = https_open = _answer
+
+
+def _scripted_links(monkeypatch, routes) -> _Transport:
+    """``sharelink.opener()`` as shipped, with ``routes`` standing in for the network behind it."""
+    transport, real = _Transport(routes), sharelink.opener
+
+    def opener(cookies_path=None):
+        op = real(cookies_path)
+        op.add_handler(transport)
+        return op
+    monkeypatch.setattr(sharelink, "opener", opener)
+    return transport
+
+
+LINK = "https://photos.app.goo.gl/AbCdEf"
+SHARE_PAGE = "https://photos.google.com/share/AF1Qip?key=k1"
+MEDIA_BASE = "https://lh3.googleusercontent.com/pw/" + "A" * 30
+DL = "https://video-downloads.googleusercontent.com/v1"
+PROBED = (206, {"Content-Type": "video/mp4", "Content-Range": "bytes 0-1/100"}, b"\0\0")
+
+
+def _page(*addresses):
+    return 200, {"Content-Type": "text/html"}, "".join('<a href="%s">' % a for a in addresses).encode()
+
+
+def test_share_link_allowlist(fake, monkeypatch):
+    for url in (LINK, SHARE_PAGE, "https://photos.google.com:443/share/x", "https://photos.google.com/share/a@b",
+                "https://photos.google.com/share/x?u=a@b", MEDIA_BASE, DL,
+                "https://photos.fife.usercontent.google.com/x", "https://rr1---sn-abc.googlevideo.com/v"):
+        assert sharelink.allowed(url), url
+    for url in ("http://photos.app.goo.gl/AbC", "photos.app.goo.gl/AbC", "https://photos.google.com.evil.test/x",
+                "https://evilgoogleusercontent.com/x", "https://other.usercontent.google.com/x",
+                "https://user@photos.google.com/x", "https://user:pw@photos.google.com/x",
+                "https://photos.google.com:8443/x", "https://photos.google.com:bad/x",
+                "https://127.0.0.1/x", "https://localhost/x", "https://192.168.1.1/x"):
+        assert not sharelink.allowed(url), url
+    transport = _scripted_links(monkeypatch, {})
+    src = GPhotosSource()
+    for url in ("http://127.0.0.1:9/secret", "https://192.168.1.1/admin"):
+        with pytest.raises(ConfigError) as err:
+            src.link({"link": url})
+        assert err.value.code == "bad_link"
+        with pytest.raises(ConfigError):
+            sharelink.resolve(url)
+    assert transport.seen == []                                 # refused before any request
+
+
+def test_share_link_follows_redirects_on_google(monkeypatch):
+    transport = _scripted_links(monkeypatch, {
+        LINK: (302, {"Location": SHARE_PAGE}, b""), SHARE_PAGE: _page(MEDIA_BASE),
+        MEDIA_BASE + "=dv": (302, {"Location": DL}, b""), DL: PROBED})
+    assert sharelink.resolve(LINK) == MEDIA_BASE + "=dv"
+    assert transport.seen == [LINK, SHARE_PAGE, MEDIA_BASE + "=dv", DL]
+
+
+@pytest.mark.parametrize("target", [
+    "http://127.0.0.1:9/secret", "https://127.0.0.1/secret", "https://10.0.0.1/admin",
+    "https://169.254.169.254/latest/meta-data/", "http://photos.google.com/share/x",
+    "https://photos.google.com.evil.test/share/x", "https://photos.google.com:8443/share/x",
+    "https://other.usercontent.google.com/x"])
+def test_share_link_redirect_off_google_is_never_requested(monkeypatch, target):
+    transport = _scripted_links(monkeypatch, {LINK: (302, {"Location": target}, b""), target: _page(MEDIA_BASE)})
+    with pytest.raises(UpstreamError) as err:
+        sharelink.resolve(LINK)
+    assert err.value.code == "redirect_refused"
+    assert transport.seen == [LINK]                             # the target was never asked
+
+
+def test_share_link_login_redirect_is_not_followed(monkeypatch):
+    login = "https://accounts.google.com/ServiceLogin?continue=x"
+    transport = _scripted_links(monkeypatch, {LINK: (302, {"Location": login}, b""), login: _page()})
+    with pytest.raises(AuthError) as err:
+        sharelink.resolve(LINK)
+    assert err.value.code == "login_required" and "cookies" in err.value.message
+    assert transport.seen == [LINK]
+
+
+def test_share_link_probe_redirect_off_google_is_never_requested(monkeypatch):
+    evil, secret = "https://video-downloads.googleusercontent.com/evil", "http://127.0.0.1:9/secret"
+    transport = _scripted_links(monkeypatch, {
+        LINK: _page(evil), evil: (302, {"Location": secret}, b""), secret: PROBED})
+    with pytest.raises(NotMedia) as err:
+        sharelink.resolve(LINK)
+    assert err.value.code == "no_stream"
+    assert transport.seen == [LINK, evil]
 
 
 # ---------------------------------------------------------------- the API
@@ -905,7 +1139,7 @@ def test_pick_and_link_over_api(fake, app, monkeypatch):
     assert [e["id"] for e in json.loads(body)["items"]] == ["a"]
     status, headers, body, conn = request(app.base_url, "GET", "/api/sources/gphotos/thumb/a", conn=conn)
     assert status == 200 and headers["Content-Type"] == "image/jpeg" and body == JPEG
-    monkeypatch.setattr(sharelink, "resolve", lambda link, op: fake.base + "/public/x=dv")
+    monkeypatch.setattr(sharelink, "resolve", lambda link, cookies_path=None: fake.base + "/public/x=dv")
     status, _, body, conn = request(app.base_url, "GET", "/api/sources/gphotos/link", conn=conn)
     assert status == 405                                         # a step is a mutation
     import http.client
@@ -1037,10 +1271,121 @@ def test_download_needs_room(fake, monkeypatch):
     from castlib import downloads
     src = _video_source(fake)
     usage = collections.namedtuple("usage", "total used free")
-    monkeypatch.setattr(downloads.shutil, "disk_usage", lambda path: usage(10, 10, 100))
+    monkeypatch.setattr(downloads.shutil, "disk_usage", lambda path: usage(100 * downloads.GIB, 0, 100))
     with pytest.raises(ConfigError) as err:
         downloads.fetch_whole(src.resolve("v1"))
     assert err.value.code == "no_space" and "free" in err.value.message
+    assert os.listdir(config.video_tmp_dir()) == []
+
+
+def _fake_disk(monkeypatch, total, free):
+    """``shutil.disk_usage`` as the downloads see it; ``free`` is a number or a function of the directory."""
+    import collections
+    from castlib import downloads
+    usage = collections.namedtuple("usage", "total used free")
+    monkeypatch.setattr(downloads.shutil, "disk_usage",
+                        lambda path: usage(total, 0, free(path) if callable(free) else free))
+
+
+def _on_disk(path):
+    return sum(os.path.getsize(os.path.join(path, name)) for name in os.listdir(path))
+
+
+def _cached(name, size, pin=False):
+    from castlib import downloads
+    from castlib.photos import Prepared
+    path = os.path.join(config.video_tmp_dir(), name)
+    with open(path, "wb") as fh:
+        fh.write(b"\0" * size)
+    key = ("gphotos", name, "")
+    if pin:
+        downloads.cache.pin(key)                                  # an item still holds it
+    downloads.cache.put(key, Prepared(path=path, mime="video/mp4", size=size, width=0, height=0, profile=""))
+    return path
+
+
+def test_download_limit_holds_without_content_length(fake, monkeypatch):
+    from castlib import downloads
+    src = _video_source(fake)
+    fake.dl_no_length = True
+    monkeypatch.setenv(downloads.MAX_ENV, "0.000001")             # about 1 KiB; the original is 2 KiB
+    with pytest.raises(ConfigError) as err:
+        downloads.fetch_whole(src.resolve("v1"))
+    assert err.value.code == "too_large" and "1080p stream" in err.value.hint
+    assert os.listdir(config.video_tmp_dir()) == []               # the partial file went too
+
+
+def test_download_limit_refuses_a_known_length_before_writing(fake, monkeypatch):
+    from castlib import downloads
+    src = _video_source(fake)
+    monkeypatch.setenv(downloads.MAX_ENV, "0.000001")
+    made = []
+    real = downloads.tempfile.mkstemp
+    monkeypatch.setattr(downloads.tempfile, "mkstemp", lambda **kw: made.append(kw) or real(**kw))
+    with pytest.raises(ConfigError) as err:
+        downloads.fetch_whole(src.resolve("v1"))
+    assert err.value.code == "too_large" and made == []           # no file was even created
+    for bad in ("lots", "0", "-1", "inf", "nan"):
+        monkeypatch.setenv(downloads.MAX_ENV, bad)
+        with pytest.raises(ConfigError) as err:
+            downloads.fetch_whole(src.resolve("v1"))
+        assert err.value.code == "bad_download_limit"
+
+
+def test_download_stops_before_the_reserve(fake, monkeypatch):
+    from castlib import downloads
+    src = _video_source(fake)
+    fake.dl_no_length = True                                      # nothing to weigh up front: every write decides
+    _fake_disk(monkeypatch, 10 * downloads.GIB, lambda path: downloads.RESERVE_MIN + 1024 - _on_disk(path))
+    with pytest.raises(ConfigError) as err:
+        downloads.fetch_whole(src.resolve("v1"))
+    assert err.value.code == "no_space" and "reserve" in err.value.message and "1080p stream" in err.value.hint
+    assert os.listdir(config.video_tmp_dir()) == []
+
+
+def test_download_makes_room_from_unheld_cache(fake, monkeypatch):
+    from castlib import downloads
+    src = _video_source(fake)
+    old = _cached("old.mp4", 2000)
+    _fake_disk(monkeypatch, 10 * downloads.GIB, lambda path: downloads.RESERVE_MIN + 3000 - _on_disk(path))
+    prep = downloads.fetch_whole(src.resolve("v1"))
+    assert prep.size == len(fake.dl_body) and not os.path.exists(old)   # the unheld download made way
+
+
+def test_download_budget_counts_held_downloads(fake, monkeypatch):
+    from castlib import downloads
+    src = _video_source(fake)
+    held = _cached("held.mp4", 2000, pin=True)
+    _fake_disk(monkeypatch, 4 * 3000, 100 * downloads.GIB)        # a 3000-byte budget, room to spare
+    with pytest.raises(ConfigError) as err:
+        downloads.fetch_whole(src.resolve("v1"))
+    assert err.value.code == "download_budget" and os.path.exists(held)   # a held file is never dropped
+    assert _on_disk(config.video_tmp_dir()) == 2000
+
+
+def test_download_reports_a_full_disk(fake, monkeypatch):
+    import errno
+    from castlib import downloads
+    src = _video_source(fake)
+    real = os.fdopen
+
+    class Full:
+        def __init__(self, fh):
+            self.fh = fh
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            self.fh.close()
+
+        def write(self, data):
+            raise OSError(errno.ENOSPC, "No space left on device")
+    monkeypatch.setattr(downloads.os, "fdopen",
+                        lambda fd, *a, **kw: Full(real(fd, *a, **kw)) if kw.get("buffering") == 0 else real(fd, *a, **kw))
+    with pytest.raises(ConfigError) as err:
+        downloads.fetch_whole(src.resolve("v1"))
+    assert err.value.code == "no_space" and "filled up" in err.value.message
     assert os.listdir(config.video_tmp_dir()) == []
 
 
@@ -1055,4 +1400,19 @@ def test_bearer_survives_a_same_host_redirect_only(fake):
         last = fake.media_requests[-1]
         assert last["path"] == "/stream/v1" and last["headers"]["Range"] == "bytes=0-3"
         assert ("Authorization" in last["headers"]) is not crosses, suffix
+
+
+def test_bearer_stays_on_its_origin():
+    from castlib.net import _DropAuthAcrossOrigins
+    hop = _DropAuthAcrossOrigins()
+
+    def carried(target):
+        req = urllib.request.Request("https://lh3.example/a", headers={"Authorization": "Bearer at1"})
+        return "Authorization" in hop.redirect_request(req, None, 302, "Found", {}, target).headers
+    assert carried("https://lh3.example/b")
+    assert carried("https://LH3.example:443/b")              # the default port spelled out, the host's case
+    assert not carried("http://lh3.example/b")               # a TLS downgrade
+    assert not carried("https://lh3.example:8443/b")         # another port
+    assert not carried("https://other.example/b")            # another host
+    assert not carried("https://lh3.example:bad/b")          # an unreadable port counts as another origin
 

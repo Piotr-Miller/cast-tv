@@ -90,3 +90,24 @@ def test_photo_tmp_dir_is_created_and_removed():
     assert config.photo_tmp_dir() == d
     config.remove_photo_tmp_dir()
     assert not os.path.exists(d)
+
+
+@pytest.mark.skipif(os.name != "posix", reason="the sweep is POSIX-only")
+def test_sweep_removes_only_dead_owners_video_dirs(tmp_path, monkeypatch):
+    import subprocess
+    import sys
+    monkeypatch.setattr(config, "VIDEO_BASE", str(tmp_path))
+    child = subprocess.Popen([sys.executable, "-c", "pass"])
+    child.wait()                                                  # its pid names no process now
+    dead = tmp_path / ("cast-tv-videos-%d-abc" % child.pid)
+    mine = tmp_path / ("cast-tv-videos-%d-def" % os.getpid())
+    legacy = tmp_path / "cast-tv-videos-12345678"                 # an older release's name: no pid to prove dead
+    other = tmp_path / "unrelated-1-dir"
+    for d in (dead, mine, legacy, other):
+        d.mkdir()
+        (d / "v.mp4").write_bytes(b"x")
+    os.symlink(str(other), str(tmp_path / ("cast-tv-videos-%d-lnk" % child.pid)))
+    assert config.sweep_stale_video_dirs() == [str(dead)]
+    assert not dead.exists() and mine.exists() and legacy.exists() and (other / "v.mp4").exists()
+    assert os.path.basename(config.video_tmp_dir()).startswith("cast-tv-videos-%d-" % os.getpid())
+    config.remove_video_tmp_dir()

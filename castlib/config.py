@@ -11,6 +11,7 @@ import atexit
 import json
 import os
 import shutil
+import stat
 import tempfile
 import threading
 
@@ -23,6 +24,7 @@ _photo_tmp: str | None = None
 # (tmpfs), /var/tmp is on disk. Elsewhere (Windows) the default temp dir is on disk.
 VIDEO_BASE: str | None = "/var/tmp" if os.path.isdir("/var/tmp") and os.access("/var/tmp", os.W_OK) else None
 _video_tmp: str | None = None
+VIDEO_PREFIX = "cast-tv-videos-"      # then "<pid>-": what a startup sweep can prove orphaned
 _photo_lock = threading.Lock()
 
 
@@ -122,11 +124,15 @@ def remove_photo_tmp_dir() -> None:
 
 
 def video_tmp_dir() -> str:
-    """The per-process directory for videos fetched whole; created on first use, removed at exit."""
+    """The per-process directory for videos fetched whole; created on first use, removed at exit.
+
+    Its name carries the process id, so a run killed before its ``atexit``
+    leaves a directory ``sweep_stale_video_dirs`` can recognise.
+    """
     global _video_tmp
     with _photo_lock:
         if _video_tmp is None or not os.path.isdir(_video_tmp):
-            _video_tmp = tempfile.mkdtemp(prefix="cast-tv-videos-", dir=VIDEO_BASE)
+            _video_tmp = tempfile.mkdtemp(prefix="%s%d-" % (VIDEO_PREFIX, os.getpid()), dir=VIDEO_BASE)
             atexit.register(remove_video_tmp_dir)
         return _video_tmp
 
@@ -138,3 +144,47 @@ def remove_video_tmp_dir() -> None:
         path, _video_tmp = _video_tmp, None
     if path:
         shutil.rmtree(path, ignore_errors=True)
+
+
+def sweep_stale_video_dirs() -> list[str]:
+    """Remove the video directories of cast-tv processes that died without cleaning up.
+
+    Only ``cast-tv-videos-<pid>-*`` directories (not symlinks) owned by this
+    user, whose process no longer exists, are removed; a name without a pid (an
+    older release's) or an owner that may be alive keeps its directory. POSIX
+    only: on Windows ``os.kill(pid, 0)`` would terminate the process. Returns
+    the removed paths.
+    """
+    if os.name != "posix":
+        return []
+    base = VIDEO_BASE or tempfile.gettempdir()
+    try:
+        names = os.listdir(base)
+    except OSError:
+        return []
+    removed = []
+    for name in names:
+        pid_text, sep, _ = name[len(VIDEO_PREFIX):].partition("-")
+        if not name.startswith(VIDEO_PREFIX) or not sep or not (pid_text.isascii() and pid_text.isdigit()):
+            continue
+        pid = int(pid_text)
+        path = os.path.join(base, name)
+        try:
+            st = os.lstat(path)
+        except OSError:
+            continue
+        if pid == os.getpid() or not stat.S_ISDIR(st.st_mode) or st.st_uid != os.getuid() or _alive(pid):
+            continue
+        shutil.rmtree(path, ignore_errors=True)
+        removed.append(path)
+    return removed
+
+
+def _alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except OSError:                          # EPERM: a live process of someone else
+        return True
+    return True

@@ -155,6 +155,16 @@ class _Cache:
             self._bytes = 0
         _unlink_all(items)
 
+    def drop_unpinned(self) -> int:
+        """Delete every unpinned entry now (a download short of room); returns how many went."""
+        with self._lock:
+            victims = list(self._items.values())
+            self._items.clear()
+            for victim in victims:
+                self._bytes -= victim.size
+        _unlink_all(victims)
+        return len(victims)
+
     @property
     def bytes(self):
         return self._bytes

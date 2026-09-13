@@ -497,8 +497,7 @@ def main_photos(argv=None):
         ap.error("give a Google Photos link, or --pick")
 
     try:
-        op = net.opener_for(args.cookies)
-        url = sharelink.resolve(args.link, op)
+        url = sharelink.resolve(args.link, args.cookies)
     except CastError as e:
         return _fail(e)
     if args.url_only:
