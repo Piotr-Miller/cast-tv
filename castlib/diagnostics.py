@@ -20,7 +20,7 @@ def explain_failure(source: str) -> tuple[str | None, list[str]]:
             ["ffprobe", "-v", "error", "-show_entries",
              "stream=codec_type,codec_name,width,height,bit_rate",
              "-of", "json", source],
-            capture_output=True, text=True, timeout=90).stdout
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=90).stdout
         streams = json.loads(out).get("streams", [])
     except Exception:
         return None, []
@@ -48,7 +48,7 @@ def check_codecs(path: str) -> tuple[list[str], str | None]:
     try:
         out = subprocess.run(["ffprobe", "-v", "error", "-show_entries",
                               "stream=codec_type,codec_name", "-of", "csv=p=0", path],
-                             capture_output=True, text=True, timeout=20).stdout
+                             capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=20).stdout
     except Exception:
         return [], None
     bad = [l.split(",")[1] for l in out.strip().splitlines()

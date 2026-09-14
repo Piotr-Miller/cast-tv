@@ -22,7 +22,7 @@ import webbrowser
 from concurrent.futures import ThreadPoolExecutor
 
 from castlib import __version__, config, dlna, downloads, photos
-from castlib.discovery import control_urls, discover, local_ip, renderer_name
+from castlib.discovery import control_urls, discover, lan_interfaces, local_ip, renderer_name
 from castlib.dlna import AVT
 from castlib.errors import CastError, ConfigError, NotMedia, TVError
 from castlib.platform import StayAwake, firewall_hint
@@ -131,6 +131,7 @@ class App:
         self.codec_check = True            # ffprobe local videos for DTS before casting
         self.tv: dict | None = None        # {ip, name, avt, state}
         self.tvs: list[dict] = []
+        self.interfaces: list[dict] = []   # where the last discovery looked: [{name, ip, responses}]
         self.discovering = False
         self.lock = threading.RLock()
         self.generation = 0
@@ -177,6 +178,11 @@ class App:
         if lan and lan != "127.0.0.1":
             app.addresses.append("http://%s:%d/ui/" % (lan, port))
             server.set_host(lan)
+        try:
+            others = [ip for _name, ip in lan_interfaces() if ip != lan]
+        except Exception:
+            others = []
+        app.addresses += ["http://%s:%d/ui/" % (ip, port) for ip in dict.fromkeys(others)]
         for address in app.addresses:
             print("  %s" % address, file=out, flush=True)
         print("  If the TV never fetches a byte, open the port:  %s" % firewall_hint(port),
@@ -277,6 +283,7 @@ class App:
         for item in self.registry.items():
             self.registry.retire(item.id)
         self._executor.shutdown(wait=False, cancel_futures=True)
+        self.stay_awake.close()             # Ctrl+C releases the inhibitor even mid-cast
         for src in self.sources.values():
             close = getattr(src, "close", None)   # Google Photos deletes its picker sessions
             if close is not None:
@@ -296,12 +303,14 @@ class App:
     def discover(self) -> list[dict]:
         """Re-run SSDP; keep the preferred TV when it answers, else take the first."""
         self.discovering = True
+        report: list[dict] = []
         try:
-            found = discover()
+            found = discover(report=report)
         except OSError:
             found = []
         finally:
             self.discovering = False
+        self.interfaces = report
         tvs = [{"ip": ip, "name": name, "avt": avt} for ip, avt, name in found]
         self.tvs = tvs
         if not tvs:
@@ -491,6 +500,7 @@ class App:
                 sources[name] = {"state": "error", "detail": {"error": e.as_dict()}}
         return {"app": APP_NAME, "version": __version__, "tv": self.public_tv(),
                 "tvs": self.public_tvs(), "discovering": self.discovering,
+                "interfaces": list(self.interfaces),
                 "cast": cast.as_dict() if cast else None,
                 "show": show.as_dict() if show else None,
                 "sources": sources, "addresses": list(self.addresses),

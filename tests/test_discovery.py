@@ -85,12 +85,12 @@ def test_rediscovery_keeps_saved_tv(app, monkeypatch):
     monkeypatch.setattr(app_module, "local_ip", lambda ip: "127.0.0.1")
     app.settings.set("tv", "192.0.2.9")                       # an explicit choice, now switched off
     app.tv = None
-    monkeypatch.setattr(app_module, "discover", lambda: [("192.0.2.5", "http://192.0.2.5/avt", "Kitchen")])
+    monkeypatch.setattr(app_module, "discover", lambda **kw: [("192.0.2.5", "http://192.0.2.5/avt", "Kitchen")])
     status, _, d = _json(app.base_url, "POST", "/api/tv/discover")
     assert status == 200 and d["tv"]["ip"] == "192.0.2.5"     # usable now
     assert app.settings.get("tv") == "192.0.2.9"              # but the saved choice survives
     app.tv = None
-    monkeypatch.setattr(app_module, "discover", lambda: [("192.0.2.5", "http://192.0.2.5/avt", "Kitchen"),
+    monkeypatch.setattr(app_module, "discover", lambda **kw: [("192.0.2.5", "http://192.0.2.5/avt", "Kitchen"),
                                                           ("192.0.2.9", "http://192.0.2.9/avt", "Bedroom")])
     status, _, d = _json(app.base_url, "POST", "/api/tv/discover")
     assert d["tv"]["ip"] == "192.0.2.9"                       # back on: preferred again
@@ -106,13 +106,13 @@ def test_discover_keeps_the_preferred_tv(app, monkeypatch):
     from castlib import app as app_module
     from tests.test_api import _json
     found = [("192.0.2.5", "http://192.0.2.5/avt", "Kitchen"), ("127.0.0.1", "http://127.0.0.1:1/avt", "Fake TV")]
-    monkeypatch.setattr(app_module, "discover", lambda: found)
+    monkeypatch.setattr(app_module, "discover", lambda **kw: found)
     monkeypatch.setattr(app_module, "local_ip", lambda ip: "127.0.0.1")
     status, _, d = _json(app.base_url, "POST", "/api/tv/discover")
     assert status == 200
     assert [t["ip"] for t in d["tvs"]] == ["192.0.2.5", "127.0.0.1"]
     assert d["tv"]["ip"] == "127.0.0.1"                        # the one already selected stays
-    monkeypatch.setattr(app_module, "discover", lambda: [])
+    monkeypatch.setattr(app_module, "discover", lambda **kw: [])
     app.tv = None
     status, _, d = _json(app.base_url, "POST", "/api/tv/discover")
     assert d["tvs"] == [] and d["tv"]["state"] == "none"

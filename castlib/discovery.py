@@ -1,7 +1,15 @@
-"""Finding the TV: SSDP discovery, control URLs, and this machine's addresses."""
+"""Finding the TV: SSDP discovery, control URLs, and this machine's addresses.
+
+M-SEARCH leaves from every LAN interface, not from whichever one the routing
+table prefers: a Windows machine typically carries Wi-Fi, Ethernet, Hyper-V,
+WSL and VPN adapters, and a search sent through the wrong one finds nothing.
+Each interface's answers are counted, so "no TV found" can say where it looked.
+"""
 from __future__ import annotations
 
+import ipaddress
 import re
+import select
 import socket
 import sys
 import time
@@ -14,24 +22,111 @@ from castlib.dlna import AVT, RC
 SSDP_ADDR, SSDP_PORT = "239.255.255.250", 1900
 
 
-def discover(timeout=4):
-    """Return [(ip, control_url, friendly_name)] for renderers on the network."""
-    msg = ("M-SEARCH * HTTP/1.1\r\nHOST:%s:%d\r\nMAN:\"ssdp:discover\"\r\n"
+MSEARCH = ("M-SEARCH * HTTP/1.1\r\nHOST:%s:%d\r\nMAN:\"ssdp:discover\"\r\n"
            "MX:2\r\nST:urn:schemas-upnp-org:device:MediaRenderer:1\r\n\r\n"
            % (SSDP_ADDR, SSDP_PORT)).encode()
+
+
+def lan_interfaces() -> list[tuple[str, str]]:
+    """``[(adapter name, ipv4)]`` M-SEARCH can leave from: loopback and link-local skipped."""
+    try:
+        import ifaddr
+    except ImportError:
+        return []
+    out = []
+    for adapter in ifaddr.get_adapters():
+        for ip in adapter.ips:
+            if not isinstance(ip.ip, str):
+                continue                        # IPv6: SSDP here is IPv4
+            try:
+                addr = ipaddress.IPv4Address(ip.ip)
+            except ValueError:
+                continue
+            if addr.is_loopback or addr.is_link_local:
+                continue
+            out.append((adapter.nice_name or adapter.name, ip.ip))
+    return out
+
+
+def _msearch_socket(ip: str | None, platform: str | None = None) -> socket.socket:
+    """A UDP socket whose multicast leaves through ``ip`` (the routing table's choice when ``None``)."""
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    s.settimeout(timeout)
-    s.sendto(msg, (SSDP_ADDR, SSDP_PORT))
-    found, deadline = {}, time.time() + timeout
-    while time.time() < deadline:
+    try:
+        if (platform or sys.platform) != "win32":
+            # on Windows SO_REUSEADDR lets another socket take the port over, not share it
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        if ip is not None:
+            s.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton(ip))
+            s.bind((ip, 0))
+        s.setblocking(False)
+    except OSError:
+        s.close()
+        raise
+    return s
+
+
+def msearch(timeout=4, interfaces=None, platform=None):
+    """Send M-SEARCH from each interface and collect the answers until ``timeout``.
+
+    Returns ``(locations, report)``: ``{renderer ip: description url}`` over
+    all interfaces, and ``[{name, ip, responses[, error]}]`` with the number of
+    distinct devices that answered on each. With no interface enumerated, one
+    socket goes out the default route, as before.
+    """
+    ifaces = lan_interfaces() if interfaces is None else list(interfaces)
+    if not ifaces:
+        ifaces = [("default route", None)]
+    socks, report = {}, []
+    for name, ip in ifaces:
+        entry = {"name": name, "ip": ip, "responses": 0}
+        report.append(entry)
         try:
-            data, addr = s.recvfrom(65507)
-        except socket.timeout:
-            break
-        m = re.search(r"(?i)^location:\s*(\S+)", data.decode("utf-8", "replace"), re.M)
-        if m and addr[0] not in found:
-            found[addr[0]] = m.group(1)
+            s = _msearch_socket(ip, platform)
+        except OSError as e:
+            entry["error"] = str(e)
+            continue
+        try:
+            s.sendto(MSEARCH, (SSDP_ADDR, SSDP_PORT))
+        except OSError as e:                    # an adapter that is down, or has no route
+            entry["error"] = str(e)
+            s.close()
+            continue
+        socks[s] = (entry, set())
+    found = {}
+    deadline = time.monotonic() + timeout
+    try:
+        while socks:
+            left = deadline - time.monotonic()
+            if left <= 0:
+                break
+            ready, _, _ = select.select(list(socks), [], [], left)
+            for s in ready:
+                try:
+                    data, addr = s.recvfrom(65507)
+                except OSError:
+                    continue
+                m = re.search(r"(?i)^location:\s*(\S+)", data.decode("utf-8", "replace"), re.M)
+                if not m:
+                    continue
+                entry, seen = socks[s]
+                if addr[0] not in seen:
+                    seen.add(addr[0])
+                    entry["responses"] += 1
+                found.setdefault(addr[0], m.group(1))
+    finally:
+        for s in socks:
+            s.close()
+    return found, report
+
+
+def discover(timeout=4, report=None):
+    """Return [(ip, control_url, friendly_name)] for renderers on the network.
+
+    ``report``, when a list, receives the per-interface answer counts (see ``msearch``).
+    """
+    found, searched = msearch(timeout)
+    if report is not None:
+        report.extend(searched)
     out = []
     for ip, loc in found.items():
         try:

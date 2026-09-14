@@ -72,7 +72,7 @@ async function api(method, path, body, opts) {
 
 function castTv() {
   return {
-    status: { tv: null, tvs: [], cast: null, show: null, sources: {}, session: [], errors: 0, settings: { interval: 8 }, firewall_hint: '' },
+    status: { tv: null, tvs: [], interfaces: [], cast: null, show: null, sources: {}, session: [], errors: 0, settings: { interval: 8 }, firewall_hint: '' },
     errors: [],
     lists: {},               // per source: { items, next, loaded, loading, error }
     tokenInput: '',
@@ -165,6 +165,7 @@ function castTv() {
         const d = await api('POST', '/api/tv/discover');
         this.status.tvs = d.tvs;
         this.status.tv = d.tv;
+        this.status.interfaces = d.interfaces || [];
         if (!d.tv || !d.tv.ip) this.flash('No DLNA renderer answered.');
       } catch (e) { this.flash(e.message); }
       this.busy.discover = false;

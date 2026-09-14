@@ -123,7 +123,7 @@ def test_status_before_and_after_connect(fake):
     assert s["state"] == "connected"
     assert s["detail"]["stored"] and s["detail"]["stored_at"] and s["detail"]["verified_at"]
     assert s["detail"]["age"] == "token stored just now"
-    assert oct(os.stat(gopro.token_file()).st_mode & 0o777) == "0o600"
+    assert os.name != "posix" or oct(os.stat(gopro.token_file()).st_mode & 0o777) == "0o600"
     assert fake.calls[-1].startswith("https://api.gopro.com/media/search?") and "per_page=1&" in fake.calls[-1]
     # a stored token is not "connected" until it is verified in this process
     fresh = GoProSource()

@@ -73,9 +73,9 @@ def test_write_private_mode(tmp_path):
     path = tmp_path / "sub" / "token"
     config.write_private(str(path), "secret")
     assert path.read_text(encoding="utf-8") == "secret"
-    assert oct(path.stat().st_mode & 0o777) == "0o600"
+    assert os.name != "posix" or oct(path.stat().st_mode & 0o777) == "0o600"
     config.write_private(str(path), "again")
-    assert oct(path.stat().st_mode & 0o777) == "0o600"
+    assert os.name != "posix" or oct(path.stat().st_mode & 0o777) == "0o600"
     assert path.read_text() == "again"
     # written beside and renamed over: a failed write leaves the old content and no temp file
     with pytest.raises(TypeError):
@@ -92,7 +92,6 @@ def test_photo_tmp_dir_is_created_and_removed():
     assert not os.path.exists(d)
 
 
-@pytest.mark.skipif(os.name != "posix", reason="the sweep is POSIX-only")
 def test_sweep_removes_only_dead_owners_video_dirs(tmp_path, monkeypatch):
     import subprocess
     import sys
@@ -106,8 +105,108 @@ def test_sweep_removes_only_dead_owners_video_dirs(tmp_path, monkeypatch):
     for d in (dead, mine, legacy, other):
         d.mkdir()
         (d / "v.mp4").write_bytes(b"x")
-    os.symlink(str(other), str(tmp_path / ("cast-tv-videos-%d-lnk" % child.pid)))
+    if os.name == "posix":                                        # Windows symlinks need a privilege
+        os.symlink(str(other), str(tmp_path / ("cast-tv-videos-%d-lnk" % child.pid)))
     assert config.sweep_stale_video_dirs() == [str(dead)]
     assert not dead.exists() and mine.exists() and legacy.exists() and (other / "v.mp4").exists()
     assert os.path.basename(config.video_tmp_dir()).startswith("cast-tv-videos-%d-" % os.getpid())
     config.remove_video_tmp_dir()
+
+
+def test_paths_per_platform(monkeypatch, tmp_path):
+    import platformdirs.windows
+    # Linux: the directories cast-tv used before platformdirs, so nothing migrates
+    home = str(tmp_path / "home")
+    for var in ("XDG_CONFIG_HOME", "XDG_CACHE_HOME"):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("HOME", home)
+    monkeypatch.setenv("USERPROFILE", home)                   # what expanduser reads on Windows
+    cfg, cache = config.platform_dirs("linux")
+    assert os.path.normpath(cfg) == os.path.normpath(os.path.join(home, ".config", "cast-tv"))
+    assert os.path.normpath(cache) == os.path.normpath(os.path.join(home, ".cache", "cast-tv"))
+    # Windows: %APPDATA%\\cast-tv and %LOCALAPPDATA%\\cast-tv\\Cache, the name not doubled
+    folders = {"CSIDL_APPDATA": os.path.join(home, "AppData", "Roaming"),
+               "CSIDL_LOCAL_APPDATA": os.path.join(home, "AppData", "Local")}
+    monkeypatch.setattr(platformdirs.windows, "get_win_folder", lambda csidl: folders[csidl])
+    cfg, cache = config.platform_dirs("win32")
+    assert cfg == os.path.join(folders["CSIDL_APPDATA"], "cast-tv")
+    assert cache == os.path.join(folders["CSIDL_LOCAL_APPDATA"], "cast-tv", "Cache")
+
+
+def _text_mode_violations(tree):
+    """``(line, call)`` for every text-mode open or subprocess call without ``encoding``."""
+    import ast
+    bad = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        f = node.func
+        name = f.id if isinstance(f, ast.Name) else (f.attr if isinstance(f, ast.Attribute) else None)
+        base = f.value.id if isinstance(f, ast.Attribute) and isinstance(f.value, ast.Name) else None
+        kw = {k.arg: k.value for k in node.keywords}
+        # the builtin, io.open and os.fdopen; not opener.open, webbrowser.open, Image.open, ...
+        if ((isinstance(f, ast.Name) and name == "open")
+                or (base == "io" and name == "open") or (base == "os" and name == "fdopen")):
+            mode = kw.get("mode", node.args[1] if len(node.args) > 1 else None)
+            binary = isinstance(mode, ast.Constant) and isinstance(mode.value, str) and "b" in mode.value
+            if not binary and "encoding" not in kw:
+                bad.append((node.lineno, name))
+        elif name in ("read_text", "write_text") and "encoding" not in kw:
+            bad.append((node.lineno, name))
+        elif base == "subprocess" and name in ("run", "Popen", "check_output", "call"):
+            text = any(isinstance(kw.get(k), ast.Constant) and kw[k].value for k in ("text", "universal_newlines"))
+            if text and "encoding" not in kw:
+                bad.append((node.lineno, "subprocess." + name))
+    return bad
+
+
+def test_utf8_everywhere():
+    """Every text-mode file or pipe in castlib names its encoding; never the ANSI code page."""
+    import ast
+    root = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "castlib")
+    found = {}
+    for folder, _dirs, files in os.walk(root):
+        for name in files:
+            if name.endswith(".py"):
+                path = os.path.join(folder, name)
+                with open(path, encoding="utf-8") as fh:
+                    bad = _text_mode_violations(ast.parse(fh.read(), path))
+                if bad:
+                    found[os.path.relpath(path, root)] = bad
+    assert found == {}
+    # the checker itself catches what it is there for
+    sample = ast.parse("open(p)\nopen(p, 'w')\nos.fdopen(fd, 'w')\nopen(p, 'rb')\n"
+                       "Path(p).read_text()\nsubprocess.run(a, text=True)\n"
+                       "open(p, encoding='utf-8')\nwebbrowser.open(u)\n(a or b).open(r)\n")
+    assert [line for line, _ in _text_mode_violations(sample)] == [1, 2, 3, 5, 6]
+
+
+class _FakeKernel32:
+    """Enough of kernel32 for ``_alive_windows``: OpenProcess, GetExitCodeProcess, CloseHandle."""
+
+    def __init__(self, handle, error=0, exit_code=259):
+        self.handle, self.error, self.exit_code, self.closed = handle, error, exit_code, []
+
+    def OpenProcess(self, access, inherit, pid):
+        return self.handle
+
+    def last_error(self):
+        return self.error
+
+    def GetExitCodeProcess(self, handle, ref):
+        ref._obj.value = self.exit_code
+        return 1
+
+    def CloseHandle(self, handle):
+        self.closed.append(handle)
+
+
+def test_windows_liveness_without_os_kill():
+    def alive(k32):
+        return config._alive_windows(4242, k32, k32.last_error)
+    assert alive(_FakeKernel32(0, error=87)) is False                           # no such process
+    assert alive(_FakeKernel32(0, error=5)) is True                             # someone else's
+    running = _FakeKernel32(77, exit_code=259)
+    assert alive(running) is True and running.closed == [77]
+    ended = _FakeKernel32(78, exit_code=0)                                     # exited, handle still held elsewhere
+    assert alive(ended) is False and ended.closed == [78]

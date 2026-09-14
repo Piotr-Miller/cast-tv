@@ -2,8 +2,10 @@
 
 ``config_dir()`` holds tokens and settings, ``cache_dir()`` metadata such as the
 GoPro listing, never media bytes. Converted photos live in a per-process
-temporary directory that disappears with the process. Paths are hard-coded to
-the Linux locations until Phase 7 swaps in platformdirs.
+temporary directory that disappears with the process. ``platformdirs`` places
+them: ``~/.config/cast-tv`` and ``~/.cache/cast-tv`` on Linux (the paths used
+before it arrived, so nothing moves), ``%APPDATA%\\cast-tv`` and
+``%LOCALAPPDATA%\\cast-tv\\Cache`` on Windows.
 """
 from __future__ import annotations
 
@@ -12,13 +14,34 @@ import json
 import os
 import shutil
 import stat
+import sys
 import tempfile
 import threading
 
 from castlib.errors import ConfigError
 
-_CONFIG = os.path.expanduser("~/.config/cast-tv")
-_CACHE = os.path.expanduser("~/.cache/cast-tv")
+APP_DIR = "cast-tv"
+
+
+def platform_dirs(platform: str | None = None) -> tuple[str, str]:
+    """``(config, cache)`` directories for ``platform`` (default: this one).
+
+    ``appauthor=False`` keeps Windows from nesting the name twice
+    (``cast-tv\\cast-tv``); ``roaming=True`` puts the config under ``%APPDATA%``,
+    where Windows keeps per-user settings, and changes nothing elsewhere.
+    """
+    platform = platform or sys.platform
+    if platform == "win32":
+        from platformdirs.windows import Windows as Dirs
+    elif platform == "darwin":
+        from platformdirs.macos import MacOS as Dirs
+    else:
+        from platformdirs.unix import Unix as Dirs
+    dirs = Dirs(APP_DIR, appauthor=False, roaming=True)
+    return dirs.user_config_dir, dirs.user_cache_dir
+
+
+_CONFIG, _CACHE = platform_dirs()
 _photo_tmp: str | None = None
 # Videos fetched whole (castlib.downloads) can be gigabytes: on Fedora /tmp is RAM-backed
 # (tmpfs), /var/tmp is on disk. Elsewhere (Windows) the default temp dir is on disk.
@@ -92,7 +115,8 @@ def write_private(path: str, text: str) -> None:
     os.makedirs(directory, exist_ok=True)
     fd, tmp = tempfile.mkstemp(prefix=os.path.basename(path) + ".", dir=directory)   # mkstemp creates it 0600
     try:
-        os.fchmod(fd, 0o600)
+        if hasattr(os, "fchmod"):            # POSIX; on Windows the per-user profile directory guards it
+            os.fchmod(fd, 0o600)
         with os.fdopen(fd, "w", encoding="utf-8") as fh:
             fh.write(text)
         os.replace(tmp, path)
@@ -151,12 +175,11 @@ def sweep_stale_video_dirs() -> list[str]:
 
     Only ``cast-tv-videos-<pid>-*`` directories (not symlinks) owned by this
     user, whose process no longer exists, are removed; a name without a pid (an
-    older release's) or an owner that may be alive keeps its directory. POSIX
-    only: on Windows ``os.kill(pid, 0)`` would terminate the process. Returns
-    the removed paths.
+    older release's) or an owner that may be alive keeps its directory. On
+    Windows the directory sits in the per-user ``%TEMP%``, so ownership is not
+    checked, and liveness is asked of ``OpenProcess`` rather than ``os.kill``
+    (which would terminate the process there). Returns the removed paths.
     """
-    if os.name != "posix":
-        return []
     base = VIDEO_BASE or tempfile.gettempdir()
     try:
         names = os.listdir(base)
@@ -173,7 +196,8 @@ def sweep_stale_video_dirs() -> list[str]:
             st = os.lstat(path)
         except OSError:
             continue
-        if pid == os.getpid() or not stat.S_ISDIR(st.st_mode) or st.st_uid != os.getuid() or _alive(pid):
+        if (pid == os.getpid() or not stat.S_ISDIR(st.st_mode)
+                or (hasattr(os, "getuid") and st.st_uid != os.getuid()) or _alive(pid)):
             continue
         shutil.rmtree(path, ignore_errors=True)
         removed.append(path)
@@ -181,6 +205,8 @@ def sweep_stale_video_dirs() -> list[str]:
 
 
 def _alive(pid: int) -> bool:
+    if sys.platform == "win32":
+        return _alive_windows(pid)
     try:
         os.kill(pid, 0)
     except ProcessLookupError:
@@ -188,3 +214,31 @@ def _alive(pid: int) -> bool:
     except OSError:                          # EPERM: a live process of someone else
         return True
     return True
+
+
+def _alive_windows(pid: int, kernel32=None, last_error=None) -> bool:
+    """Whether ``pid`` names a running process, asked without touching it.
+
+    ``OpenProcess`` fails with ERROR_INVALID_PARAMETER for a pid no process
+    holds; any other failure (access denied: someone else's process) counts as
+    alive, and so does an open handle whose exit code is still STILL_ACTIVE.
+    """
+    import ctypes
+    from ctypes import wintypes
+    if kernel32 is None:
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.OpenProcess.restype = wintypes.HANDLE      # the default int would truncate a 64-bit handle
+        kernel32.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+        kernel32.GetExitCodeProcess.argtypes = (wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD))
+        kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
+    PROCESS_QUERY_LIMITED_INFORMATION, STILL_ACTIVE, ERROR_INVALID_PARAMETER = 0x1000, 259, 87
+    handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+    if not handle:
+        return (last_error or ctypes.get_last_error)() != ERROR_INVALID_PARAMETER
+    try:
+        code = wintypes.DWORD()
+        if not kernel32.GetExitCodeProcess(handle, ctypes.byref(code)):
+            return True
+        return code.value == STILL_ACTIVE
+    finally:
+        kernel32.CloseHandle(handle)
