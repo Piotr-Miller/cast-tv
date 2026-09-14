@@ -1209,7 +1209,7 @@ mocked).
 - [x] 4.3 Token paste shows the list with thumbnails or placeholders and the token age — fcffb7e
 - [x] 4.4 Heavy clip preselects proxy; source choice reports the refusal — fcffb7e
 - [x] 4.5 Expired token shows the banner over the list; re-paste restores it — fcffb7e
-- [ ] 4.6 Paste and cast from the phone
+- [x] 4.6 Paste and cast from the phone
 
 ### Phase 5: OneDrive tab
 
@@ -1248,7 +1248,7 @@ mocked).
 
 - [ ] 7.3 Windows: pipx install, UI opens, firewall accepted, TV found, cast plays, 30-min slideshow without sleep
 - [x] 7.4 Fedora: 30-min slideshow without sleep; Ctrl+C releases the inhibitor — a91a87f
-- [x] 7.5 OneDrive film paused over an hour, then a seek: the relay re-resolves
+- [x] 7.5 OneDrive film paused over an hour, then a seek: the relay re-resolves — 6acb54d
 
 ## Addenda
 

@@ -1154,3 +1154,39 @@ sent as SOAP from a script (`row75.py`), as the remote would.
 
 The relay's re-resolve-on-403 path did not fire (no `resolving again` line): OneDrive's resolver
 fetches a new address on every open, so the TV's post-pause request never met a dead one.
+
+### Row 4.6 — first attempt (2026-09-15, 00:51–00:53, Piotr with the phone, Claude watching the laptop) — the cast passed, the paste did not count
+
+Watched every 3 s: the peers connected to 8895 (`ss`), the GoPro source's state and the cast.
+The phone is `192.168.50.140` (`Pixel-9-Pro-Fold` in DNS, `Android_UH2L45TJ.local` over mDNS); the
+laptop's own address is `192.168.50.198` (`wlo1`); the TV is `.142`.
+
+- 00:52:20 `.198` connected (a browser on the laptop, via the LAN address); the stored token from
+  2026-09-12 was checked and refused: GoPro state `expired` (`token_rejected`, 401).
+- 00:52:23 a fresh token was stored and verified (`connected`, "token stored just now") while
+  **only `.198` was connected**: the paste was made on the laptop, as Piotr confirmed. It does not
+  count for this row.
+- 00:52:41 the phone `.140` connected; 00:53:02 a GoPro cast (`6a6e66e18c0501028937540b`, 2:02)
+  started while laptop, phone and TV were connected - ambiguous; `playing` at 00:53:11.
+- 00:53:20 the laptop's browser went; 00:53:26 a second GoPro cast (`69bd8021dcdf0360fdd164fd`,
+  0:56) started with **only the phone and the TV connected**: `starting` → `TRANSITIONING` →
+  `playing` at 00:53:35, 8 TV requests. **The cast from the phone works.** No error in the ring.
+
+The paste is redone from the phone: the source was disconnected through the API (the token file
+removed) and the same token pasted again on the phone (below).
+
+### Row 4.6 — second attempt: paste and cast from the phone (2026-09-15, 00:54–00:56) — passed
+
+The GoPro source was disconnected through `POST /api/sources/gopro/disconnect` at 00:54 (state
+`disconnected`, `stored: false`, the token file gone); Piotr closed the UI on the laptop and
+reloaded it on the phone. Watched every 2 s as before:
+
+- 00:54:52 the only peer on 8895 was the phone `192.168.50.140`.
+- **00:56:13 the token pasted on the phone was stored and verified** (`connected`, "token stored
+  just now") with **only `.140` connected**.
+- 00:56:20 a GoPro cast (`6a6e5e39bbf79a2b637bd876`, 0:14) from the phone, with only the phone and
+  the TV (`.142`) connected: `starting` → `TRANSITIONING` → `playing` at 00:56:30 (8 TV requests);
+  the clip ran to its end, `STOPPED` at 00:56:42.
+
+Together with the first attempt's second cast (00:53:26, phone and TV only), the gate and the
+cast both work from the phone.
