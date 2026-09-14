@@ -154,7 +154,7 @@ class FakeTV:
         from xml.sax.saxutils import unescape
         if self.fail:
             raise OSError("unreachable")
-        t0 = time.monotonic()
+        t0 = time.perf_counter()          # fine-grained on Windows too, where monotonic ticks every ~15 ms
         answer = ""
         with self._lock:
             if action == "SetAVTransportURI":
@@ -177,7 +177,7 @@ class FakeTV:
         if action == "Play" and self.play_delay:
             time.sleep(self.play_delay)
         with self._lock:
-            self.calls.append((action, body, t0, time.monotonic()))
+            self.calls.append((action, body, t0, time.perf_counter()))
             hook = self.hooks.pop(action, None)
         if hook is not None:
             hook()

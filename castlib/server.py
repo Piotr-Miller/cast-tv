@@ -14,6 +14,7 @@ import json
 import os
 import re
 import secrets
+import socket
 import socketserver
 import sys
 import urllib.parse
@@ -322,7 +323,15 @@ def _host_only(host_header):
 
 class Server(socketserver.ThreadingTCPServer):
     daemon_threads = True
-    allow_reuse_address = True
+    # SO_REUSEADDR on Windows lets a second process bind a port that is in use - two
+    # cast-tv would share 8895 and split its requests; SO_EXCLUSIVEADDRUSE makes the
+    # second bind fail instead, so it can attach to the first (App.start)
+    allow_reuse_address = sys.platform != "win32"
+
+    def server_bind(self):
+        if sys.platform == "win32" and hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        super().server_bind()
 
     def __init__(self, address, handler=Handler, registry=None, allowed_hosts=None):
         super().__init__(address, handler)

@@ -98,7 +98,7 @@ class _Handler(http.server.BaseHTTPRequestHandler):
         except (BrokenPipeError, ConnectionResetError):
             return
         with f.lock:
-            f.dl_finished.append(time.monotonic())
+            f.dl_finished.append(time.perf_counter())
 
     def _video(self):
         data = VIDEO
@@ -278,7 +278,7 @@ class FakeGoogle:
         self.dl_body = VIDEO                    # what the original's host serves, whole
         self.dl_delay = 0.0                     # seconds per 256-byte chunk of it
         self.dl_no_length = False               # answer without Content-Length
-        self.dl_finished = []                   # monotonic times its answers finished
+        self.dl_finished = []                   # perf_counter times its answers finished (the FakeTV's clock)
         self.lock = threading.Lock()
         self.base = ""
 
