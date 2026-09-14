@@ -191,3 +191,34 @@ def test_ui_prints_addresses_and_exits_cleanly_on_sigint(tmp_path):
     assert len(addresses) >= 1
     assert "Stopped." in out
     assert proc.returncode == 0, out
+
+
+def test_ctrl_c_while_the_handler_is_installed_still_stops(app, monkeypatch, capsys):
+    """CI caught SIGINT landing inside ``signal.signal``: it must still take the Ctrl+C path."""
+    from castlib import app as app_module
+
+    def interrupted(*a):
+        raise KeyboardInterrupt
+    monkeypatch.setattr(app_module.signal, "signal", interrupted)
+    assert app.run_forever() == 0
+    assert "Stopped." in capsys.readouterr().out
+    assert "Stop" in app.tv_fake.actions()
+    assert app._closed.is_set()
+
+
+def test_ctrl_c_before_run_forever_takes_over(monkeypatch):
+    from castlib import cli
+    done = []
+
+    class Early:
+        def run_forever(self):
+            raise KeyboardInterrupt              # arrived before run_forever's own try
+
+        def interrupted(self):
+            done.append("interrupted")
+
+        def close(self):
+            done.append("close")
+    monkeypatch.setattr(cli.App, "start", classmethod(lambda cls, *a, **k: Early()))
+    assert cli.ui(port=1, browser=False) == 0
+    assert done == ["interrupted", "close"]

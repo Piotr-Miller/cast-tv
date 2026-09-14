@@ -249,26 +249,32 @@ class App:
 
     def run_forever(self) -> int:
         """Block until Ctrl+C (or SIGTERM); stops the TV and releases everything. Returns an exit code."""
-        if threading.current_thread() is threading.main_thread():
-            # a plain ``kill`` ends the process the way Ctrl+C does: the TV is stopped and
-            # every source closed (Google Photos deletes its picker sessions); neither
-            # ``close()`` nor ``atexit`` would run on the default SIGTERM disposition
-            def _term(signum, frame):
-                raise KeyboardInterrupt
-            try:
-                signal.signal(signal.SIGTERM, _term)
-            except (ValueError, OSError):
-                pass
         try:
+            # inside the try: a Ctrl+C that lands while the handler is being installed
+            # still takes the path below (found by CI: SIGINT arrived in signal.signal)
+            if threading.current_thread() is threading.main_thread():
+                # a plain ``kill`` ends the process the way Ctrl+C does: the TV is stopped and
+                # every source closed (Google Photos deletes its picker sessions); neither
+                # ``close()`` nor ``atexit`` would run on the default SIGTERM disposition
+                def _term(signum, frame):
+                    raise KeyboardInterrupt
+                try:
+                    signal.signal(signal.SIGTERM, _term)
+                except (ValueError, OSError):
+                    pass
             while not self._closed.wait(1.0):
                 pass
         except KeyboardInterrupt:
-            print()
-            self.stop()
-            print("   Stopped.", flush=True)
+            self.interrupted()
         finally:
             self.close()
         return 0
+
+    def interrupted(self) -> None:
+        """What Ctrl+C does: stop the TV and say so."""
+        print()
+        self.stop()
+        print("   Stopped.", flush=True)
 
     def close(self) -> None:
         if self._closed.is_set():
