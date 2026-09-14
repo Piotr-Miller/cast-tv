@@ -1127,3 +1127,30 @@ matching on exact `argv` (below).
   `systemd-inhibit --list` had no `cast-tv` line.
 - Afterwards the suspend timeout was restored to 900 (checked with `gsettings get`) and the UI
   server brought back (pid 881551).
+
+### Row 7.5 — OneDrive video paused over an hour, then a seek (2026-09-14 23:42 – 2026-09-15 00:48, Claude on the laptop, the Samsung playing) — passed
+
+Criterion as changed by Piotr (plan addendum): no film longer than an hour exists on the drive
+(whole-drive walk: 1372 folders, 18 videos, longest 180 s), so the seek is within the clip.
+Material: `/Dokumenty/Videos/Przejazd - SuperCars.mp4` (180 s, 2560x1440, 414 615 615 bytes),
+cast through `POST /api/cast` on the live server (Phase 7 code, `--debug`); Pause, Seek and Play
+sent as SOAP from a script (`row75.py`), as the remote would.
+
+- 23:42:17 OneDrive `connect` → `connected`; the stored Graph access token expired at **00:36:05**.
+- 23:42:55 the TV at `PLAYING 0:00:30.145 / 0:02:59`; 23:42:58 Pause → `PAUSED_PLAYBACK 0:00:30.145`,
+  the cast `paused`.
+- Every 5 min for 65 min: the TV still `PAUSED_PLAYBACK 0:00:30.145`, the cast `paused` - the
+  Samsung holds a DLNA pause for over an hour. The token passed its expiry at 00:36 during the
+  pause.
+- 00:47:58 Seek `REL_TIME 0:02:00` → `SeekResponse` (no fault); the TV resumed playback on the
+  seek by itself, so the `Play` sent after it was answered with HTTP 500 (already playing - a TV
+  answer to a redundant command, not a cast-tv path; cast-tv sends no Seek).
+- The seek's request, from the `--debug` log: `GET /m/<token>/<item>  Range=bytes=269885526-` →
+  `upstream: 206 video/mp4, 144730089 bytes`. That request needed a fresh download address, and
+  getting one needed the expired access token refreshed: after it the token's expiry read
+  **01:47:57**, so the refresh happened silently at the seek, and no error reached the UI.
+- 00:48:04 the TV at `PLAYING 0:02:07.415`, the cast `playing`; 20 s later `PLAYING 0:02:29.255`
+  - playback continued past the seek target. Stopped through `/api/stop` at 00:48:24.
+
+The relay's re-resolve-on-403 path did not fire (no `resolving again` line): OneDrive's resolver
+fetches a new address on every open, so the TV's post-pause request never met a dead one.

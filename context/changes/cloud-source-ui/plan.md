@@ -1247,8 +1247,8 @@ mocked).
 #### Manual
 
 - [ ] 7.3 Windows: pipx install, UI opens, firewall accepted, TV found, cast plays, 30-min slideshow without sleep
-- [x] 7.4 Fedora: 30-min slideshow without sleep; Ctrl+C releases the inhibitor
-- [ ] 7.5 OneDrive film paused over an hour, then a seek: the relay re-resolves
+- [x] 7.4 Fedora: 30-min slideshow without sleep; Ctrl+C releases the inhibitor — a91a87f
+- [x] 7.5 OneDrive film paused over an hour, then a seek: the relay re-resolves
 
 ## Addenda
 
@@ -1471,3 +1471,13 @@ the plan as the source of truth. Each names the review finding that raised it.
   an interrupt that lands before `run_forever` takes over, and both paths end in
   `App.interrupted()` + `close()` (`test_cli.py::test_ctrl_c_while_the_handler_is_installed_still_stops`,
   `::test_ctrl_c_before_run_forever_takes_over`).
+- **Row 7.5's criterion changed, Piotr's decision (2026-09-14).** No film longer than an hour
+  exists on the owner's OneDrive (a walk of the whole drive through `/api/sources/onedrive/list`,
+  2026-09-14: 1372 folders, 18 videos, the longest `Przejazd - SuperCars.mp4` at 180 s), so
+  "seek an hour in" cannot be done. The row is run as: a OneDrive video paused for more than an
+  hour, then a seek *within the clip* and Play; it passes when playback continues past the seek
+  target. Read against the code it tests the right thing: `OneDriveSource.resolve`'s callable
+  asks Graph for a new `@microsoft.graph.downloadUrl` on every open and caches nothing, so after
+  the pause the TV's next range request needs a silently refreshed Graph access token (it lives
+  about an hour) and a fresh download address; the relay's re-resolve-on-403 path is not what
+  carries OneDrive here.
