@@ -1242,7 +1242,7 @@ mocked).
 #### Automated
 
 - [ ] 7.1 Tests pass on `ubuntu-latest` and `windows-latest`
-- [x] 7.2 `pipx install .` on Fedora puts `cast-tv` on the path
+- [x] 7.2 `pipx install .` on Fedora puts `cast-tv` on the path — 471ca16
 
 #### Manual
 
@@ -1457,3 +1457,11 @@ the plan as the source of truth. Each names the review finding that raised it.
   because Windows cannot deliver either to a child's handler; the mode-0600 assertions hold on
   POSIX only. `Ctrl+C` on Windows is part of manual row 7.3.
 - **CI runs pyflakes as well as pytest** (`.github/workflows/test.yml`, both runners).
+- **The first Windows CI run (34865489954) found a real bug: two cast-tv could share a port.**
+  `Server.allow_reuse_address = True` set `SO_REUSEADDR`, which on Windows lets a second process bind
+  a port already in use, so the second `cast-tv` never saw `EADDRINUSE` and split 8895's requests
+  with the first (`test_addrinuse_attaches_to_running_instance`). `Server` now sets
+  `SO_EXCLUSIVEADDRUSE` on Windows and `SO_REUSEADDR` elsewhere, and `App.start` also recognises
+  `WSAEADDRINUSE` (10048), the errno Windows sockets report. The run's other failure was the test
+  clock: `time.monotonic()` ticks every ~15 ms there, so a download end and the `SetAVTransportURI`
+  after it got the same timestamp; the fakes now stamp with `time.perf_counter()`.

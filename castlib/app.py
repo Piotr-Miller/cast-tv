@@ -39,6 +39,8 @@ EVICT_EVERY = 10.0
 TV_WATCH_EVERY = 15.0      # idle liveness check of the selected TV
 INTERVAL_DEFAULT = 8
 INTERVAL_MIN, INTERVAL_MAX = 2, 600
+# a port in use: EADDRINUSE on POSIX; Windows sockets report WSAEADDRINUSE (10048)
+ADDR_IN_USE = {errno.EADDRINUSE, getattr(errno, "WSAEADDRINUSE", 10048)}
 
 
 class AlreadyRunning(Exception):
@@ -162,7 +164,7 @@ class App:
         try:
             server = Server(("0.0.0.0", port))
         except OSError as e:
-            if e.errno == errno.EADDRINUSE:
+            if e.errno in ADDR_IN_USE:
                 url = "http://127.0.0.1:%d/ui/" % port
                 if _is_cast_tv("http://127.0.0.1:%d/api/status" % port):
                     raise AlreadyRunning(url)
