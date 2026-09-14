@@ -580,7 +580,7 @@ def test_token_file_mode_0600(fake):
     src = OneDriveSource()
     _sign_in(src, fake)
     path = _token_file()
-    assert oct(os.stat(path).st_mode & 0o777) == "0o600"
+    assert os.name != "posix" or oct(os.stat(path).st_mode & 0o777) == "0o600"
     with open(path, encoding="utf-8") as fh:
         stored = json.load(fh)
     assert stored["access_token"] == "at1" and stored["refresh_token"] == "rt1"
@@ -592,7 +592,7 @@ def test_token_file_mode_0600(fake):
     with fake.lock:
         fake.valid.discard("at1")
     src.list()                                                # a refresh rewrites the file
-    assert oct(os.stat(path).st_mode & 0o777) == "0o600"
+    assert os.name != "posix" or oct(os.stat(path).st_mode & 0o777) == "0o600"
     with open(path, encoding="utf-8") as fh:
         assert json.load(fh)["access_token"] == "at2"
     src.disconnect()

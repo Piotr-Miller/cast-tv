@@ -248,6 +248,7 @@ def test_prefetch_does_not_block(tmp_path, monkeypatch):
     assert prep.width == 64
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows cannot deliver SIGINT/SIGTERM to a child's handler")
 def test_tmp_dir_removed_at_exit():
     code = ("import sys, time; from castlib import config; "
             "print(config.photo_tmp_dir(), flush=True); time.sleep(30)")

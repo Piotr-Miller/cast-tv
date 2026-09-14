@@ -14,6 +14,7 @@ import urllib.request
 import urllib.response
 
 import pytest
+import sys
 
 from castlib import config, photos
 from castlib.auth import loopback
@@ -431,7 +432,7 @@ def test_loopback_pkce_and_state(fake):
     with open(_token_file(), encoding="utf-8") as fh:
         stored = json.load(fh)
     assert stored["access_token"] == "at1" and stored["refresh_token"] == "rt1" and stored["scope"] == gphotos.SCOPES
-    assert oct(os.stat(_token_file()).st_mode & 0o777) == "0o600"
+    assert os.name != "posix" or oct(os.stat(_token_file()).st_mode & 0o777) == "0o600"
 
 
 def test_connect_timeout(fake, monkeypatch):
@@ -1155,6 +1156,7 @@ def test_pick_and_link_over_api(fake, app, monkeypatch):
     assert isinstance(item, MediaItem) and item.kind == "photo"
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows cannot deliver SIGINT/SIGTERM to a child's handler")
 def test_sigterm_closes_sources_like_ctrl_c(tmp_path):
     """A plain ``kill`` runs the Ctrl+C path: the sources are closed (picker sessions deleted) and the TV stopped."""
     import signal
@@ -1163,7 +1165,7 @@ def test_sigterm_closes_sources_like_ctrl_c(tmp_path):
     code = (
         "import sys, socket; from castlib import app as m, config, dlna\n"
         "config._CONFIG = %r; config._CACHE = %r\n"
-        "m.discover = lambda: []\n"
+        "m.discover = lambda **kw: []\n"
         "dlna.soap = lambda *a, **kw: print('soap', a[2], flush=True) or ''\n"
         "s = socket.socket(); s.bind(('127.0.0.1', 0)); port = s.getsockname()[1]; s.close()\n"
         "app = m.App.start(port, browser=False)\n"

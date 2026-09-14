@@ -1242,7 +1242,7 @@ mocked).
 #### Automated
 
 - [ ] 7.1 Tests pass on `ubuntu-latest` and `windows-latest`
-- [ ] 7.2 `pipx install .` on Fedora puts `cast-tv` on the path
+- [x] 7.2 `pipx install .` on Fedora puts `cast-tv` on the path
 
 #### Manual
 
@@ -1414,3 +1414,46 @@ the plan as the source of truth. Each names the review finding that raised it.
   now watched for `PLAY_701_GRACE` seconds, then `Play` is sent once more; a stop or newer cast in
   the window sends none; a refusal's message lists the states the TV reported.
 
+
+### 2026-09-13 — Phase 7 implementation
+
+- **`discover()` keeps its return shape; the per-interface report rides on a `report=` list.**
+  `discovery.msearch(timeout, interfaces=None, platform=None)` sends M-SEARCH from one socket per
+  `ifaddr` IPv4 address (loopback and link-local skipped; `IP_MULTICAST_IF` and a bind to that
+  address; `SO_REUSEADDR` off on Windows) and returns `({ip: location}, [{name, ip, responses[,
+  error]}])`, `responses` counting distinct devices that answered on that interface; an interface
+  whose socket or `sendto` fails reports `error` instead of failing the search. With no interface
+  enumerated, one socket goes out the default route as before. `discover(timeout, report=None)`
+  still returns `[(ip, control_url, name)]`, so `cast-tv --list` and the CLI are unchanged.
+  `App.interfaces` keeps the last report; `GET /api/status` and `POST /api/tv/discover` carry it as
+  `interfaces`, and the "No TV found" banner lists it.
+- **Every LAN address is printed at start.** `App.start` prints `localhost`, then the address on
+  the route to the network (still the media host handed to the TV), then every other `ifaddr`
+  IPv4 address.
+- **The Linux inhibitor blocks on `cat`, not `sleep infinity`.** `systemd-inhibit
+  --what=idle:sleep --who=cast-tv --why="casting to the TV" --mode=block cat` reads a pipe held by
+  cast-tv; `release()` closes it. The contract's `sleep infinity` would outlive a SIGKILLed
+  cast-tv and hold the lock until reboot; the pipe closes with the process (verified on Fedora,
+  `research.md`). `StayAwake` stays counted as in Phase 3 (the supervisor holds it per promoted
+  cast and per running show); the backend is taken on the 0→1 edge and let go on 1→0, its
+  failures are swallowed, and `App.close()` calls the new `StayAwake.close()` so `Ctrl+C` releases
+  it mid-cast. The test suite swaps in `NullBackend` (autouse fixture).
+- **Windows config is roaming, and the name is not doubled.** `config.platform_dirs()` builds
+  platformdirs with `appauthor=False, roaming=True`: without them Windows gets
+  `%LOCALAPPDATA%\cast-tv\cast-tv`; with them `%APPDATA%\cast-tv` and `%LOCALAPPDATA%\cast-tv\Cache`
+  as the contract says. Linux is unchanged (`~/.config/cast-tv`, `~/.cache/cast-tv`).
+- **The stale-download sweep runs on Windows (follow-up from the Phase 6 review, F3).**
+  `config._alive_windows()` asks `OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION)` +
+  `GetExitCodeProcess` instead of `os.kill(pid, 0)`; ownership is not checked there (the directory
+  is in the per-user `%TEMP%`). `write_private` calls `os.fchmod` only where it exists (Windows
+  Python 3.12 has none).
+- **The encoding audit covers pipes too.** `test_utf8_everywhere` walks the AST of `castlib/` for
+  the builtin `open`, `io.open`, `os.fdopen`, `read_text`/`write_text` and `subprocess` calls in
+  text mode without `encoding`; it found the two `ffprobe` calls in `diagnostics.py`, which now
+  decode `utf-8` with `errors="replace"`.
+- **Three tests are POSIX-only**: the subprocess tests that end cast-tv with `SIGINT`/`SIGTERM`
+  (`test_cli.py::test_ui_prints_addresses_and_exits_cleanly_on_sigint`,
+  `test_photos.py::test_tmp_dir_removed_at_exit`, `test_gphotos.py::test_sigterm_closes_sources_like_ctrl_c`),
+  because Windows cannot deliver either to a child's handler; the mode-0600 assertions hold on
+  POSIX only. `Ctrl+C` on Windows is part of manual row 7.3.
+- **CI runs pyflakes as well as pytest** (`.github/workflows/test.yml`, both runners).

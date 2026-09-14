@@ -109,7 +109,8 @@ def _route(app, handler, method: str, path: str, params: dict) -> None:
     if path == "/api/tv/discover":
         if _method(handler, method, ("POST",)):
             _body(handler)
-            handler._json(200, {"tvs": app.discover(), "tv": app.public_tv()})
+            handler._json(200, {"tvs": app.discover(), "tv": app.public_tv(),
+                                "interfaces": list(app.interfaces)})
         return
     if path == "/api/tv/select":
         if _method(handler, method, ("POST",)):

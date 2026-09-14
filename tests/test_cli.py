@@ -161,6 +161,7 @@ def test_slideshow_refuses_addresses_and_subs(cli_env, tmp_path, capsys):
         cli.main_tv([str(p), str(p), "-s", "x.srt"])
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows cannot deliver SIGINT/SIGTERM to a child's handler")
 def test_ui_prints_addresses_and_exits_cleanly_on_sigint(tmp_path):
     port = _free_port()
     env = dict(os.environ, HOME=str(tmp_path), PYTHONUNBUFFERED="1")

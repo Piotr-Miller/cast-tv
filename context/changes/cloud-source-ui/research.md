@@ -1028,3 +1028,36 @@ limit, the budget and the reserve) — and the TV's ranges were answered from th
 (Piotr: "6.3 zrobione, film zagrał"); cast `stopped` with no error, duration `0:00:11`, six TV
 requests. The file stays in the download LRU after the cast (for a re-cast) and goes on eviction
 or at exit.
+
+## Follow-up 2026-09-13 — Phase 7: packaging and the Linux stay-awake
+
+### Row 7.2 — `pipx install .` on Fedora (2026-09-13, 23:21, Claude on the laptop)
+
+pipx was not installed on the laptop and `~/.local/bin/cast-{tv,gopro,photos}` are the symlinks
+into the checkout, so the install was made into the session scratchpad rather than over them:
+pipx 1.x in its own venv, `PIPX_HOME` and `PIPX_BIN_DIR` pointing into the scratchpad,
+`pipx install .` from the working tree (Python 3.14.7). Result: "installed package cast-tv 0.2.0
+… These apps are now available: cast-gopro, cast-photos, cast-tv"; the three entries in
+`PIPX_BIN_DIR` link into the pipx venv; `cast-tv --list` through that entry point printed
+`192.168.50.142   83" OLED`; `cast-gopro --help` and `cast-photos --help` answered. Run from `/`,
+the venv's `castlib` is the one in its own `site-packages` (not the checkout) and carries
+`ui/{alpine.min.js,app.js,index.html,style.css}`; `ifaddr` and `platformdirs` were pulled in as
+dependencies. **On the path (23:31, Piotr's condition for ticking the row):** in a shell whose `PATH` starts
+with the scratchpad `PIPX_BIN_DIR`, working directory `/` (outside the checkout), `command -v
+cast-tv` answered `<scratchpad>/bin/cast-tv`, which `readlink -f` resolves to
+`<scratchpad>/pipx/venvs/cast-tv/bin/cast-tv`; `cast-gopro` and `cast-photos` resolved to the
+same `bin`; `cast-tv --list` printed `192.168.50.142   83" OLED` and exited 0. **Not done:** replacing the symlinks in `~/.local/bin` with a real pipx install -
+that changes Piotr's own environment and waits for him.
+
+### The inhibitor on Fedora 44 (2026-09-13, 23:19, Claude on the laptop)
+
+`StayAwake(SystemdInhibit())`: after `start()`, `systemd-inhibit --list` showed
+`cast-tv 1000 piotrmiller … systemd-inhibit sleep:idle casting to the TV block`; after `stop()`,
+nothing with `cast-tv`. A child process that took the lock and was then `SIGKILL`ed left no
+`cast-tv` line either: the pipe closed, `cat` ended and logind dropped the lock. The laptop's
+GNOME power settings suspend after 900 s idle on AC and on battery
+(`sleep-inactive-{ac,battery}-timeout`, type `suspend`), so row 7.4's 30-minute show is a real
+test: without the lock the laptop would suspend halfway through.
+
+Real discovery through the new per-interface sockets, same evening: `[{'name': 'wlo1', 'ip':
+'192.168.50.198', 'responses': 1}]`, the TV found as before, 4.0 s.

@@ -48,7 +48,12 @@
 </header>
 
 <div class="banner bad" x-show="status.tv && status.tv.state === 'none' && !busy.discover" x-cloak>
-  <div class="text"><div class="title">No TV found</div><div class="small muted">Switch the TV on and search again, or enter its address.</div></div>
+  <div class="text"><div class="title">No TV found</div><div class="small muted">Switch the TV on and search again, or enter its address.</div>
+    <div class="small muted" x-show="status.interfaces && status.interfaces.length" style="margin-top: 6px">Searched on:
+      <template x-for="i in status.interfaces" :key="i.name + (i.ip || '')">
+        <div class="mono tiny"><span x-text="i.name"></span> <span x-text="i.ip || ''"></span> — <span x-text="i.error ? 'failed: ' + i.error : i.responses + (i.responses === 1 ? ' response' : ' responses')"></span></div>
+      </template>
+    </div></div>
   <div class="actions"><button @click="rediscover()">Search again</button><button @click="tvMenu = true">Enter IP</button></div>
 </div>
 <div class="banner warn" x-show="status.tv && status.tv.state === 'unreachable'" x-cloak>

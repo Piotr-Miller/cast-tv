@@ -207,6 +207,13 @@ class FakeTV:
             return [u.rsplit("/", 1)[-1] for u in self.uris]
 
 
+@pytest.fixture(autouse=True)
+def _no_stay_awake(monkeypatch):
+    """No test spawns ``systemd-inhibit`` or touches the Windows execution state."""
+    from castlib import platform
+    monkeypatch.setattr(platform, "default_backend", lambda: platform.NullBackend())
+
+
 @pytest.fixture
 def fast_supervisor(monkeypatch):
     """Poll and budget constants scaled so a whole cast lifecycle takes well under a second."""
