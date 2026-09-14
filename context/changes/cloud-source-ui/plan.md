@@ -1241,13 +1241,13 @@ mocked).
 
 #### Automated
 
-- [ ] 7.1 Tests pass on `ubuntu-latest` and `windows-latest`
+- [x] 7.1 Tests pass on `ubuntu-latest` and `windows-latest` — 92bdfc2
 - [x] 7.2 `pipx install .` on Fedora puts `cast-tv` on the path — 471ca16
 
 #### Manual
 
 - [ ] 7.3 Windows: pipx install, UI opens, firewall accepted, TV found, cast plays, 30-min slideshow without sleep
-- [ ] 7.4 Fedora: 30-min slideshow without sleep; Ctrl+C releases the inhibitor
+- [x] 7.4 Fedora: 30-min slideshow without sleep; Ctrl+C releases the inhibitor
 - [ ] 7.5 OneDrive film paused over an hour, then a seek: the relay re-resolves
 
 ## Addenda

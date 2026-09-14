@@ -1061,3 +1061,69 @@ test: without the lock the laptop would suspend halfway through.
 
 Real discovery through the new per-interface sockets, same evening: `[{'name': 'wlo1', 'ip':
 '192.168.50.198', 'responses': 1}]`, the TV found as before, 4.0 s.
+
+### Row 7.1 — the CI matrix (2026-09-14, GitHub Actions, workflow `test`)
+
+Three runs on PR #1, each on `ubuntu-latest` and `windows-latest` with Python 3.12
+(`pip install -e .[test]`, pyflakes, pytest):
+
+| Run | Commit | Ubuntu | Windows | What it found |
+| --- | --- | --- | --- | --- |
+| 34865489954 | `471ca16` | 250 passed | 2 failed, 244 passed, 4 skipped | `SO_REUSEADDR` let a second cast-tv bind 8895 on Windows (`test_addrinuse_attaches_to_running_instance`); the fakes' `monotonic()` stamps tied at Windows' ~15 ms tick |
+| 34866064345 | `6d682f6` | 1 failed, 249 passed | passed | a SIGINT inside `run_forever`'s `signal.signal` escaped as a bare `KeyboardInterrupt` (`test_ui_prints_addresses_and_exits_cleanly_on_sigint`) |
+| 34866545503 | `92bdfc2` | **252 passed** | **248 passed, 4 skipped** | nothing |
+
+The four Windows skips are the three signal-driven subprocess tests and the Linux-only
+`fib_trie` cross-check, as the plan addendum lists. Python on the runners: 3.12.14 (Ubuntu),
+3.12.10 (Windows).
+
+### Row 7.4 — first attempt (2026-09-14, 20:11–20:43, Claude on the laptop, the Samsung showing) — row stays open
+
+`cast-tv <20 Olympus JPEGs from ~/.onedrive-sync> -i 120 --show` on 8895 (the live server stopped
+for it), on AC power; SIGINT delivered with the default handler, as Ctrl+C in a terminal does.
+Logged once a minute: GNOME's idle time (`org.gnome.Mutter.IdleMonitor.GetIdletime`), the
+`cast-tv` lines in `systemd-inhibit --list`, and `/api/status`.
+
+- **The lock held throughout:** one `cast-tv … systemd-inhibit sleep:idle casting to the TV
+  block` line at every one of the 32 samples; the show reached photo 16 of 20, every cast
+  `playing`, the TV `ready`.
+- **Ctrl+C released it:** SIGINT at 20:43:24 → the show printed `Stopped.`, exit code 0; at
+  20:43:26 `systemd-inhibit --list` had no `cast-tv` line.
+- **No suspend:** the journal from 20:11:24 has no suspend, sleep or lid entry.
+- **Not proven: "without sleep".** The longest idle stretch was 528 s (20:31–20:40); GNOME
+  registered input around 20:13–20:21, 20:27, 20:31 and 20:41. The suspend timeout is 900 s, so
+  the laptop would not have slept without the lock either. The only suspend earlier that day
+  (19:55) was a lid close, not idle, so there is no idle-suspend baseline yet.
+
+### Row 7.4 — second attempt, part 1: the control (2026-09-14, 20:54–21:10)
+
+With Piotr's consent, GNOME's `sleep-inactive-ac-timeout` was set to 120 s for the test (it was
+900). With nothing casting and no `cast-tv` lock, the laptop suspended by itself at 21:01:44
+(`PM: suspend entry (s2idle)`; the last idle reading before it was 111 s) and returned at 21:10:05
+when Piotr woke it. **So idle suspend works on this laptop**, and a show that keeps it awake
+through idle stretches past 120 s is a real test.
+
+The show that followed never started: it was launched at 21:10:07, two seconds after the wake,
+before Wi-Fi was back, and SSDP found nothing (`No DLNA renderer answered`). This was a fault of
+the test script, not of cast-tv. The same script killed its own parent shell with a `pgrep -f`
+pattern (exit 144); its `finally` still restored the timeout to 900 at 21:10:38 and brought the UI
+server back. The show part was run again with `-t 192.168.50.142`, a wait for the TV, and process
+matching on exact `argv` (below).
+
+### Row 7.4 — second attempt, part 2: the show (2026-09-14, 21:11:36–21:41:38) — passed
+
+`cast-tv <the same 20 Olympus JPEGs> -i 90 --show -t 192.168.50.142`, on AC, suspend timeout 120 s
+(the control above showed the laptop suspends at that setting with nothing casting). Sampled every
+30 s:
+
+- **Idle and awake:** GNOME idle time climbed without a break from 15.6 s to **1786 s** (nobody
+  touched the laptop for the whole show): nearly fifteen times the 120 s timeout in force, and
+  twice the usual 900 s. The laptop never suspended: the journal from 21:11:36 has no suspend,
+  sleep or lid entry, and the samples ran uninterrupted.
+- **The lock:** one `cast-tv … systemd-inhibit sleep:idle casting to the TV block` line at every
+  sample; the show went through all 20 photos (photo 20 `playing` at the end), each cast
+  `preparing` → `starting` → `playing`, the TV showing them.
+- **Ctrl+C:** SIGINT at 21:41:37 with the default handler → `Stopped.`, exit code 0; at 21:41:38
+  `systemd-inhibit --list` had no `cast-tv` line.
+- Afterwards the suspend timeout was restored to 900 (checked with `gsettings get`) and the UI
+  server brought back (pid 881551).
