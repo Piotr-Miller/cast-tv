@@ -1465,3 +1465,9 @@ the plan as the source of truth. Each names the review finding that raised it.
   `WSAEADDRINUSE` (10048), the errno Windows sockets report. The run's other failure was the test
   clock: `time.monotonic()` ticks every ~15 ms there, so a download end and the `SetAVTransportURI`
   after it got the same timestamp; the fakes now stamp with `time.perf_counter()`.
+- **The second CI run (34866064345) found a Ctrl+C race on Linux.** A SIGINT that arrived while
+  `run_forever` was installing its SIGTERM handler escaped as a bare `KeyboardInterrupt`: no
+  "Stopped.", no `Stop` to the TV. The handler is now installed inside the `try`, `cli.ui` catches
+  an interrupt that lands before `run_forever` takes over, and both paths end in
+  `App.interrupted()` + `close()` (`test_cli.py::test_ctrl_c_while_the_handler_is_installed_still_stops`,
+  `::test_ctrl_c_before_run_forever_takes_over`).
