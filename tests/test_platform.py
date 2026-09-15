@@ -57,8 +57,8 @@ IFACES = [("Wi-Fi", "192.168.1.5"), ("vEthernet (WSL)", "172.20.0.1"), ("VPN", "
 @pytest.mark.parametrize("plat, reuse", [("linux", True), ("win32", False)])
 def test_multicast_socket_per_interface(monkeypatch, plat, reuse):
     _FakeSocket.made = []
-    monkeypatch.setattr(discovery.socket, "socket", _FakeSocket)
-    monkeypatch.setattr(discovery.select, "select", _fake_select)
+    monkeypatch.setattr(discovery, "_new_socket", _FakeSocket)
+    monkeypatch.setattr(discovery, "_select", _fake_select)
     found, report = discovery.msearch(timeout=0.05, interfaces=IFACES, platform=plat)
     assert found == {"192.168.1.20": "http://192.168.1.20:9197/dmr",
                      "192.168.1.21": "http://192.168.1.21:9197/dmr"}
@@ -77,8 +77,8 @@ def test_multicast_socket_per_interface(monkeypatch, plat, reuse):
 
 def test_no_interface_falls_back_to_the_default_route(monkeypatch):
     _FakeSocket.made = []
-    monkeypatch.setattr(discovery.socket, "socket", _FakeSocket)
-    monkeypatch.setattr(discovery.select, "select", _fake_select)
+    monkeypatch.setattr(discovery, "_new_socket", _FakeSocket)
+    monkeypatch.setattr(discovery, "_select", _fake_select)
     monkeypatch.setattr(discovery, "lan_interfaces", lambda: [])
     found, report = discovery.msearch(timeout=0.02)
     assert found == {} and report == [{"name": "default route", "ip": None, "responses": 0}]
