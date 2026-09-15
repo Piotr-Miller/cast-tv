@@ -1204,4 +1204,32 @@ different items the second would fail with an error and the TV would stay on the
 as a follow-up (`follow-ups/review-fixes.md`).
 **Fixed the same night (2026-09-15, Piotr's decision):** a 701 on `SetAVTransportURI` now waits
 for the transport to leave `TRANSITIONING` and retries once, and the UI disables Cast while a
-request is in flight (plan addendum, Phase 7). Not yet re-run on the TV.
+request is in flight (plan addendum, Phase 7). **Re-run on the TV (2026-09-15, Piotr on the phone,
+server on `4978b73`):** a quick double tap on Cast for a Google Photos clip - the clip played
+(cast from 18:52:45, 6 TV requests, ran to its end) and the error ring stayed empty (`errors: 0`,
+`errors_seq: 0` since the server started). Which half of the fix carried it (the button ignoring
+the second tap, or the server retrying after a 701) cannot be told from the status: the
+generation counter (4) also counts the session's other casts and stops.
+
+### Row 5.5 — the app revoked in the Microsoft account (2026-09-15, 18:58–19:14, Piotr in the account, Claude on the laptop) — passed
+
+Before: the server (on `4978b73`) had not touched OneDrive since its restart - state
+`disconnected`, `stored: true`, `verified_at: null` - and the stored access token had expired at
+01:47:57, so the next Graph call had to use the refresh token. Nobody opened the OneDrive tab in
+between (a refresh before the revoke would have bought an hour of valid access token). A passive
+watch read `/api/status` and `/api/errors` every 3 s from 18:58:37, making no Graph call.
+
+- Piotr removed cast-tv's access at account.live.com → consent management (before 19:13).
+- 19:13:47 the next call, `GET /api/sources/onedrive/list`, answered **HTTP 401** `refresh_rejected`:
+  "The OneDrive sign-in is no longer valid (invalid_grant). Connect again.", hint from Microsoft:
+  "AADSTS70000: The request was denied because one or more scopes requested are unauthorized or
+  expired. The user must first sign in and grant the client application access to the requested
+  scope. Trace …".
+- 19:13:50 the watch saw the source flip `disconnected` → **`expired`**, with the same error under
+  `detail.error` - what the UI's gate renders ("Connect again"; the rendering itself was not
+  looked at). The refresh token stays on disk until the next sign-in replaces it.
+
+Two small things seen: the hint is cut at 200 characters in the middle of Microsoft's "Trace ID"
+(`devicecode.refresh`, `[:200]`), and an API 4xx reaches the caller and the source's
+`detail.error` but not the error ring (as in earlier phases). OneDrive needs a new device-code
+sign-in to be used again.
