@@ -20,6 +20,10 @@ from xml.sax.saxutils import unescape
 from castlib.dlna import AVT, RC
 
 SSDP_ADDR, SSDP_PORT = "239.255.255.250", 1900
+# the one socket constructor and select() discovery uses: tests replace these module
+# attributes, never ``socket.socket`` or ``select.select``, which every thread shares
+_new_socket = socket.socket
+_select = select.select
 
 
 MSEARCH = ("M-SEARCH * HTTP/1.1\r\nHOST:%s:%d\r\nMAN:\"ssdp:discover\"\r\n"
@@ -50,7 +54,7 @@ def lan_interfaces() -> list[tuple[str, str]]:
 
 def _msearch_socket(ip: str | None, platform: str | None = None) -> socket.socket:
     """A UDP socket whose multicast leaves through ``ip`` (the routing table's choice when ``None``)."""
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s = _new_socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
         if (platform or sys.platform) != "win32":
             # on Windows SO_REUSEADDR lets another socket take the port over, not share it
@@ -99,7 +103,7 @@ def msearch(timeout=4, interfaces=None, platform=None):
             left = deadline - time.monotonic()
             if left <= 0:
                 break
-            ready, _, _ = select.select(list(socks), [], [], left)
+            ready, _, _ = _select(list(socks), [], [], left)
             for s in ready:
                 try:
                     data, addr = s.recvfrom(65507)
