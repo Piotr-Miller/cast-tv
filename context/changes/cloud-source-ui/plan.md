@@ -1209,7 +1209,7 @@ mocked).
 - [x] 4.3 Token paste shows the list with thumbnails or placeholders and the token age — fcffb7e
 - [x] 4.4 Heavy clip preselects proxy; source choice reports the refusal — fcffb7e
 - [x] 4.5 Expired token shows the banner over the list; re-paste restores it — fcffb7e
-- [x] 4.6 Paste and cast from the phone
+- [x] 4.6 Paste and cast from the phone — 8c4f3b2
 
 ### Phase 5: OneDrive tab
 
@@ -1481,3 +1481,14 @@ the plan as the source of truth. Each names the review finding that raised it.
   the pause the TV's next range request needs a silently refreshed Graph access token (it lives
   about an hour) and a fresh download address; the relay's re-resolve-on-403 path is not what
   carries OneDrive here.
+- **A 701 on `SetAVTransportURI` no longer loses the newer cast (found at manual row 4.6, Piotr's
+  decision to fix it now).** A double tap on the phone sent two casts within a second; the second
+  `SetAVTransportURI` reached the Samsung while it was `TRANSITIONING` into the first and was
+  refused with UPnP 701, which `Cast.run` treated as a refusal - contrary to the `cast (while
+  playing)` definition, "the request accepted second wins". Now a 701 there waits (bounded by
+  `PLAY_701_GRACE`) until the transport leaves `TRANSITIONING` and sends `SetAVTransportURI` once
+  more, unless a newer cast or a stop took over meanwhile (then `cancelled`, nothing sent); a
+  second refusal is still `tv_rejected`, its message listing the states seen
+  (`test_supervisor.py::test_double_tap_the_second_cast_wins_after_a_701_on_set_uri`,
+  `::test_a_persistent_701_on_set_uri_is_still_a_refusal`). The UI's Cast buttons are disabled
+  while a cast request is in flight (`busy.cast`), so an accidental double tap sends one request.

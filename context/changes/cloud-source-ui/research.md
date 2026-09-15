@@ -1190,3 +1190,18 @@ reloaded it on the phone. Watched every 2 s as before:
 
 Together with the first attempt's second cast (00:53:26, phone and TV only), the gate and the
 cast both work from the phone.
+
+**One more observation from the second attempt (read afterwards from `/api/errors`).** At
+00:56:19 the ring got `tv_rejected` for the same clip (`6a6e5e39bbf79a2b637bd876`): "The TV
+rejected the request: HTTP Error 500 (UPnP 701: Transition not available)", with no "after it
+the TV reported …" suffix - so the 701 answered `SetAVTransportURI`, not `Play`
+(`supervisor.py`: a 701 on `Play` goes through `_settles_playing`, which records states). Piotr
+tapped Cast twice: the first tap's cast went out and played; the second reached the TV while it
+was still `TRANSITIONING`, its `SetAVTransportURI` was refused, and that cast ended `failed`
+while the first kept playing. Here it was harmless (the same clip), but it contradicts the
+`cast (while playing)` definition in the plan ("the request accepted second wins"): with two
+different items the second would fail with an error and the TV would stay on the first. Recorded
+as a follow-up (`follow-ups/review-fixes.md`).
+**Fixed the same night (2026-09-15, Piotr's decision):** a 701 on `SetAVTransportURI` now waits
+for the transport to leave `TRANSITIONING` and retries once, and the UI disables Cast while a
+request is in flight (plan addendum, Phase 7). Not yet re-run on the TV.

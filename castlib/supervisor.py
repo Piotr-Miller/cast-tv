@@ -128,10 +128,23 @@ class Cast:
             return
         self._register()
         url = app.server.media_url(self.item)
+        set_uri = ("<CurrentURI>%s</CurrentURI><CurrentURIMetaData>%s</CurrentURIMetaData>"
+                   % (escape(url), didl(self.item, url)))
         try:
-            dlna.soap(avt, AVT, "SetAVTransportURI",
-                      "<CurrentURI>%s</CurrentURI><CurrentURIMetaData>%s</CurrentURIMetaData>"
-                      % (escape(url), didl(self.item, url)))
+            try:
+                dlna.soap(avt, AVT, "SetAVTransportURI", set_uri)
+            except urllib.error.HTTPError as e:
+                # A Samsung still TRANSITIONING into an earlier cast (a double tap, two
+                # devices within a second) refuses a new SetAVTransportURI with 701.
+                # The request accepted second must win: let the transport settle, then
+                # send it once more - unless a newer cast or a stop took over meanwhile.
+                if upnp_error(e)[0] != "701":
+                    raise
+                self._wait_out_transition(avt)
+                if not app.is_current(self.generation):
+                    self._finish("cancelled")
+                    return
+                dlna.soap(avt, AVT, "SetAVTransportURI", set_uri)
             try:
                 dlna.soap(avt, AVT, "Play", "<Speed>1</Speed>")
             except urllib.error.HTTPError as e:
@@ -180,6 +193,22 @@ class Cast:
         except Exception:
             return None
 
+    def _wait_out_transition(self, avt) -> None:
+        """After a 701 on SetAVTransportURI: wait until the TV leaves TRANSITIONING.
+
+        Bounded by ``PLAY_701_GRACE``; returns early when a newer cast or a stop
+        takes over. The states seen are kept for the error message, should the
+        second SetAVTransportURI be refused as well.
+        """
+        self._after_701 = []
+        deadline = time.monotonic() + PLAY_701_GRACE
+        while self.app.is_current(self.generation):
+            state = self._transport_state(avt)
+            self._after_701.append(state or "no answer")
+            if state != "TRANSITIONING" or time.monotonic() >= deadline:
+                return
+            time.sleep(PLAY_701_STEP)
+
     def _settles_playing(self, avt) -> bool:
         """After a 701 on Play: does the TV get to playing by itself, or after one more Play?
 
@@ -191,7 +220,7 @@ class Cast:
         cast in that window is left to ``_promote`` (no second Play goes out). The
         states seen are kept for the error message.
         """
-        self._after_701 = []
+        self._after_701 = self._after_701 + ["then Play refused (701)"] if self._after_701 else []
         deadline = time.monotonic() + PLAY_701_GRACE
         retried = False
         while True:
