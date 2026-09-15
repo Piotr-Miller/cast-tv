@@ -1222,7 +1222,7 @@ mocked).
 - [x] 5.2 Device code sign-in completed from the phone
 - [x] 5.3 Folder with more than 200 items pages; thumbnails show
 - [x] 5.4 HEIC and 4K video cast; relay re-resolves after an hour
-- [x] 5.5 Revoked app flips the gate to expired
+- [x] 5.5 Revoked app flips the gate to expired — 5e71550
 
 ### Phase 6: Google Photos tab
 
