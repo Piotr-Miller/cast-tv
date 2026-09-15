@@ -1233,3 +1233,9 @@ Two small things seen: the hint is cut at 200 characters in the middle of Micros
 (`devicecode.refresh`, `[:200]`), and an API 4xx reaches the caller and the source's
 `detail.error` but not the error ring (as in earlier phases). OneDrive needs a new device-code
 sign-in to be used again.
+
+**Afterwards (19:19–19:21): getting access back needs no separate step.** Revoking in the account
+removes the user's consent, not the Entra registration. A fresh device-code flow
+(`POST /api/sources/onedrive/connect {"fresh": true}` → code at `https://www.microsoft.com/link`)
+showed Microsoft's consent screen again; Piotr accepted it and the source went `connecting` →
+`connected` at 19:20:51, and a root listing answered (7 folders).
