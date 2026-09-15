@@ -18,3 +18,7 @@ cookies.txt
 .claude/settings.local.json
 scripts/local/
 .ai-toolkit/
+
+.venv/
+build/
+*.egg-info/

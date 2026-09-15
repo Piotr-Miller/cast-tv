@@ -1,0 +1,462 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>cast-tv</title>
+<link rel="stylesheet" href="/ui/style.css">
+<script src="/ui/app.js"></script>
+<script defer src="/ui/alpine.min.js"></script>
+</head>
+<body x-data="castTv()" x-init="init()" x-cloak>
+
+<header class="top">
+  <div class="brand">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#e8a33d" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="13" rx="2"></rect><path d="M8 21h8"></path><path d="M12 17v4"></path></svg>
+    <span class="name">cast-tv</span>
+    <span class="badge" x-show="showActive()">Slideshow</span>
+  </div>
+  <div class="right">
+    <button class="ghost diag" @click="togglePanel()" title="Diagnostics">
+      <span class="lbl">Diagnostics</span>
+      <span class="count" :class="{zero: !status.errors}" x-text="status.errors || 0"></span>
+    </button>
+    <button class="pill" @click="tvMenu = !tvMenu" :title="tvTitle()">
+      <span class="dot" :class="tvDot()"></span>
+      <span x-text="tvLabel()"></span>
+      <span class="ip" x-show="status.tv && status.tv.ip" x-text="status.tv && status.tv.ip"></span>
+    </button>
+    <div class="menu" x-show="tvMenu" x-cloak @click.outside="tvMenu = false">
+      <template x-for="t in status.tvs" :key="t.ip">
+        <button class="item" :class="{on: status.tv && status.tv.ip === t.ip}" @click="selectTv(t.ip)">
+          <span class="dot" :class="status.tv && status.tv.ip === t.ip ? tvDot() : ''"></span>
+          <span x-text="t.name"></span>
+          <span class="mono tiny muted" x-text="t.ip"></span>
+        </button>
+      </template>
+      <div class="small muted" style="padding: 6px 10px" x-show="!status.tvs.length">No renderer found yet.</div>
+      <div class="sep"></div>
+      <button class="item" @click="rediscover()" :disabled="busy.discover">
+        <span x-text="busy.discover ? 'Searching…' : 'Search again'"></span>
+      </button>
+      <form @submit.prevent="selectTv(manualIp)">
+        <input type="text" x-model="manualIp" placeholder="192.168.1.50" aria-label="TV address">
+        <button type="submit" :disabled="!manualIp">Use</button>
+      </form>
+    </div>
+  </div>
+</header>
+
+<div class="banner bad" x-show="status.tv && status.tv.state === 'none' && !busy.discover" x-cloak>
+  <div class="text"><div class="title">No TV found</div><div class="small muted">Switch the TV on and search again, or enter its address.</div>
+    <div class="small muted" x-show="status.interfaces && status.interfaces.length" style="margin-top: 6px">Searched on:
+      <template x-for="i in status.interfaces" :key="i.name + (i.ip || '')">
+        <div class="mono tiny"><span x-text="i.name"></span> <span x-text="i.ip || ''"></span> — <span x-text="i.error ? 'failed: ' + i.error : i.responses + (i.responses === 1 ? ' response' : ' responses')"></span></div>
+      </template>
+    </div></div>
+  <div class="actions"><button @click="rediscover()">Search again</button><button @click="tvMenu = true">Enter IP</button></div>
+</div>
+<div class="banner warn" x-show="status.tv && status.tv.state === 'unreachable'" x-cloak>
+  <div class="text"><div class="title">The TV is not answering</div><div class="small muted">Check it is on and on the same network, then retry.</div></div>
+  <div class="actions"><button @click="rediscover()" :disabled="busy.discover" x-text="busy.discover ? 'Searching…' : 'Retry'"></button></div>
+</div>
+<div class="banner" x-show="busy.discover" x-cloak>
+  <div class="text"><span class="dot busy" style="display:inline-block; margin-right: 8px"></span>Looking for a TV…</div>
+</div>
+<div class="banner warn" x-show="offline" x-cloak>
+  <div class="text"><div class="title">cast-tv is not answering</div><div class="small muted">The process may have stopped. Start it again and reload this page.</div></div>
+</div>
+
+<main>
+  <!-- slideshow -->
+  <section class="show" x-show="status.show && !showDismissed()" x-cloak>
+    <div class="head">
+      <h2>Slideshow <span class="mono muted" x-text="showPos()"></span></h2>
+      <span class="small muted" x-text="showStateLabel()"></span>
+    </div>
+    <template x-if="status.show && showActive()">
+      <div class="body">
+        <div class="stage">
+          <div class="now">
+            <div style="min-width:0">
+              <div class="title" x-text="status.show.current ? status.show.current.name : '…'"></div>
+              <div class="sub">
+                <span x-text="status.show.current ? metaOf(status.show.current) : ''"></span>
+                <span class="conv" x-show="status.show.current && status.show.current.converted">HEIC → JPEG</span>
+                <span x-show="status.cast && status.cast.state === 'preparing'">preparing…</span>
+              </div>
+            </div>
+            <div class="pos" x-text="castTimes()"></div>
+          </div>
+          <div class="progress"><div :style="'width:' + showProgress() + '%'"></div></div>
+          <div class="nextline">
+            <span x-text="nextLabel()"></span>
+            <span class="mono" x-text="status.show.next ? status.show.next.name : 'last one'"></span>
+          </div>
+          <div class="controls">
+            <div class="group">
+              <button class="icon" @click="showCtl('prev')" title="Previous" :disabled="status.show.index <= 0">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M18 5v14L7 12z"></path><rect x="4" y="5" width="2.2" height="14" rx="1"></rect></svg>
+              </button>
+              <button class="round primary" @click="showCtl(status.show.state === 'paused' ? 'resume' : 'pause')" :title="status.show.state === 'paused' ? 'Resume' : 'Pause'">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path :d="status.show.state === 'paused' ? 'M8 5v14l11-7z' : 'M8 5h3v14H8zM13 5h3v14h-3z'"></path></svg>
+              </button>
+              <button class="icon" @click="showCtl('next')" title="Next" :disabled="!status.show.next">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M6 5v14l11-7z"></path><rect x="17.8" y="5" width="2.2" height="14" rx="1"></rect></svg>
+              </button>
+            </div>
+            <div class="group">
+              <span class="small muted">Change every</span>
+              <div class="stepper">
+                <button @click="setInterval(interval - 1)" title="Shorter">−</button>
+                <template x-for="v in presets" :key="v"><button :class="{on: interval === v}" @click="setInterval(v)" x-text="v + ' s'"></button></template>
+                <button @click="setInterval(interval + 1)" title="Longer">+</button>
+              </div>
+            </div>
+            <button @click="stopAll()" style="margin-left:auto">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="1.5"></rect></svg>
+              End show
+            </button>
+          </div>
+        </div>
+        <div class="queue">
+          <h3>Queue <span class="mono" x-text="status.show.total + ' items'"></span></h3>
+          <ol>
+            <template x-for="(it, i) in status.show.items" :key="i">
+              <li :class="{on: i === status.show.index, done: i < status.show.index}">
+                <span class="sw" :style="'--hue:' + hueOf(it.name)"></span>
+                <span class="qn" x-text="it.name"></span>
+                <span class="conv" x-show="it.converted" title="Converted for the TV">HEIC</span>
+                <span class="qk" x-text="it.kind"></span>
+              </li>
+            </template>
+          </ol>
+        </div>
+      </div>
+    </template>
+    <template x-if="status.show && !showActive()">
+      <div class="ended">
+        <div class="t" x-text="status.show.state === 'finished' ? 'Show finished' : 'Show ended'"></div>
+        <div class="s" x-text="status.show.state === 'finished' ? 'The TV is back on its own input.' : (status.show.state === 'cancelled' ? 'Something else was cast in the meantime.' : 'Stopped.')"></div>
+        <div class="actions">
+          <button class="primary" @click="restartShow()">From the start</button>
+          <button @click="dismissShow()">Dismiss</button>
+        </div>
+      </div>
+    </template>
+  </section>
+
+  <!-- tabs -->
+  <nav class="tabs">
+    <div class="list">
+      <template x-for="s in sourceTabs" :key="s.name">
+        <button class="tab" :class="{on: tab === s.name}" @click="tab = s.name">
+          <span class="label" x-text="s.label"></span>
+          <span class="hint" x-text="sourceHint(s.name)"></span>
+        </button>
+      </template>
+    </div>
+    <div class="filters">
+      <button :class="{on: filter === 'all'}" @click="filter = 'all'">All</button>
+      <button :class="{on: filter === 'video'}" @click="filter = 'video'">Video</button>
+      <button :class="{on: filter === 'photo'}" @click="filter = 'photo'">Photos</button>
+    </div>
+  </nav>
+
+  <!-- items the command line handed to this process -->
+  <section class="section" x-show="status.session.length" x-cloak>
+    <h2>From the command line <span class="n" x-text="status.session.length"></span></h2>
+    <div class="grid">
+      <template x-for="it in visible(status.session)" :key="it.source + ':' + it.id">
+        <div class="tile" :class="{on: isSelected(it)}">
+          <div class="card">
+            <div class="thumb" :style="'--hue:' + hueOf(it.name)" @click="toggle(it)" role="button" tabindex="0" @keydown.enter="toggle(it)">
+              <template x-if="it.thumb"><img :src="it.thumb" :alt="it.name" loading="lazy" @error="$el.hidden = true"></template>
+              <span class="kind" x-text="it.kind"></span>
+              <button class="tick" @click.stop="toggle(it)" :title="isSelected(it) ? 'Remove from the show' : 'Add to the show'">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>
+              </button>
+              <button class="play" @click.stop="castNow(it)" :disabled="busy.cast" title="Cast now">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"></path></svg>
+              </button>
+              <span class="dur" x-show="it.duration" x-text="fmtDur(it.duration)"></span>
+              <span class="warn" x-show="it.warn"><span x-text="it.warn"></span></span>
+            </div>
+            <div class="meta">
+              <div class="name" x-text="it.name" :title="it.name"></div>
+              <div class="sub"><span x-text="metaOf(it)"></span></div>
+            </div>
+          </div>
+        </div>
+      </template>
+    </div>
+  </section>
+
+  <!-- the active tab: a gate until its source is connected -->
+  <template x-if="!listVisible(tab)">
+    <section class="gate">
+      <div class="box">
+        <div class="glyph">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#e8a33d" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 18a4.5 4.5 0 0 1-.6-8.96 6 6 0 0 1 11.6-1.5A4.5 4.5 0 0 1 18 18z"></path></svg>
+        </div>
+        <h3 x-text="gate(tab).title"></h3>
+        <p x-text="gate(tab).body"></p>
+        <template x-if="gate(tab).paste">
+          <div>
+            <ol class="steps">
+              <template x-for="(step, i) in gate(tab).steps" :key="i"><li x-text="step"></li></template>
+            </ol>
+            <form class="paste" @submit.prevent="saveToken(tab)">
+              <input type="text" x-model="tokenInput" placeholder="eyJhbGc…" autocomplete="off" spellcheck="false" aria-label="GoPro token">
+              <button type="submit" class="primary" :disabled="busy.connect || !tokenInput.trim()" x-text="busy.connect ? 'Checking…' : gate(tab).cta"></button>
+            </form>
+            <div class="later" x-show="expired(tab)">The stored token was rejected (401). Paste a fresh one.</div>
+          </div>
+        </template>
+        <template x-if="!gate(tab).paste">
+          <div>
+            <!-- Google consent: runs in a browser on the computer hosting cast-tv; this page flips by itself -->
+            <template x-if="connecting(tab) && connectStep(tab) === 'consent'">
+              <div class="devicecode consent">
+                <div class="lead">A Google consent page opened in the browser of the computer running cast-tv. Sign in there and allow access.</div>
+                <div class="wait"><span class="dot busy"></span><span>waiting for consent…</span><span class="muted mono" x-text="'valid ' + Math.max(1, Math.round(source(tab).detail.expires_in / 60)) + ' min'"></span></div>
+                <div class="phone small muted" x-text="source(tab).detail.note + ' If no browser tab opened, copy the link and open it on that computer.'"></div>
+                <div class="phone small muted" x-show="source(tab).detail.attempt > 1">Google asked for consent a second time so that it issues a refresh token; allow it once more.</div>
+                <div class="cta">
+                  <button @click="copy(source(tab).detail.auth_url)">Copy link</button>
+                  <button class="ghost" @click="cancelConnect(tab)">Cancel</button>
+                </div>
+              </div>
+            </template>
+            <!-- device code: the code is typed on any device, this page flips by itself -->
+            <template x-if="connecting(tab) && connectStep(tab) === 'code'">
+              <div class="devicecode">
+                <div class="lead">Open <a :href="source(tab).detail.verification_uri" target="_blank" rel="noopener" x-text="source(tab).detail.verification_uri"></a> on any device, sign in, and enter this code:</div>
+                <div class="code" x-text="source(tab).detail.user_code"></div>
+                <div class="wait"><span class="dot busy"></span><span>waiting for confirmation…</span><span class="muted mono" x-text="'code valid ' + Math.max(1, Math.round(source(tab).detail.expires_in / 60)) + ' min'"></span></div>
+                <div class="phone small muted">On a phone: open the link in this phone’s browser and type the code there. This page shows your files as soon as Microsoft confirms it.</div>
+                <div class="cta">
+                  <button @click="copy(source(tab).detail.user_code)">Copy code</button>
+                  <button class="ghost" @click="cancelConnect(tab)">Cancel</button>
+                </div>
+              </div>
+            </template>
+            <template x-if="!connecting(tab)">
+              <div class="cta">
+                <button class="primary" @click="connect(tab)" :disabled="busy.connect" x-text="busy.connect ? 'Starting…' : (expired(tab) ? 'Connect again' : gate(tab).cta)"></button>
+              </div>
+            </template>
+            <div class="later" x-show="expired(tab) && !connecting(tab)" x-text="expiredText(tab)"></div>
+            <div class="later" x-show="flowError(tab) && !connecting(tab)" x-text="flowError(tab)"></div>
+          </div>
+        </template>
+        <div class="note" x-text="gate(tab).note"></div>
+        <div class="later" x-show="gateNote[tab]" x-text="gateNote[tab]"></div>
+      </div>
+    </section>
+  </template>
+  <template x-if="listVisible(tab)">
+    <section class="section">
+      <!-- an expired token: the banner sits over the list that was fetched last -->
+      <div class="banner warn expired" x-show="expired(tab)" x-cloak>
+        <div class="text"><div class="title" x-text="gate(tab).expired || 'The connection expired'"></div><div class="small muted" x-text="gate(tab).expiredBody || expiredText(tab)"></div></div>
+        <template x-if="gate(tab).paste">
+          <form class="paste" @submit.prevent="saveToken(tab)">
+            <input type="text" x-model="tokenInput" placeholder="eyJhbGc…" autocomplete="off" spellcheck="false" aria-label="GoPro token">
+            <button type="submit" class="primary" :disabled="busy.connect || !tokenInput.trim()" x-text="busy.connect ? 'Checking…' : 'Save token'"></button>
+          </form>
+        </template>
+        <template x-if="!gate(tab).paste">
+          <div class="actions"><button class="primary" @click="connect(tab)" :disabled="busy.connect" x-text="busy.connect ? 'Starting…' : 'Connect again'"></button></div>
+        </template>
+        <div class="later" x-show="gateNote[tab]" x-text="gateNote[tab]"></div>
+      </div>
+      <h2>
+        <span x-text="(sourceTabs.find(s => s.name === tab) || {label: tab}).label"></span>
+        <span class="n" x-text="items(tab).length"></span>
+        <button class="ghost tiny" @click="loadList(tab)" :disabled="listOf(tab).loading || expired(tab)" title="Fetch the list again">Refresh</button>
+        <span class="age" x-text="headerLine(tab)"></span>
+      </h2>
+      <!-- Google Photos: the pick happens in Google's own picker, on any device; the picks land here -->
+      <div class="pickbar" x-show="tab === 'gphotos' && !expired(tab)" x-cloak>
+        <template x-if="!pickWaiting()">
+          <div class="row">
+            <button class="primary" @click="startPick()" :disabled="busy.connect" x-text="busy.connect ? 'Opening…' : (items(tab).length ? 'Pick more' : 'Pick in Google Photos')"></button>
+            <span class="small muted">Google’s picker opens in a new tab; choose photos and videos, press Done, and they appear here. Works from this phone too.</span>
+          </div>
+        </template>
+        <template x-if="pickWaiting()">
+          <div class="row">
+            <a class="button primary" :href="pickState().picker_uri" target="_blank" rel="noopener">Open the picker</a>
+            <span class="wait"><span class="dot busy"></span><span>waiting for your pick…</span><span class="muted mono" x-text="'valid ' + Math.max(1, Math.round(pickState().expires_in / 60)) + ' min'"></span></span>
+            <button class="ghost" @click="copy(pickState().picker_uri)">Copy link</button>
+            <button class="ghost" @click="cancelPick()">Cancel</button>
+          </div>
+        </template>
+        <div class="later" x-show="pickNote" x-text="pickNote"></div>
+      </div>
+      <!-- folders: breadcrumbs from the drive root, then the folders in this one -->
+      <nav class="crumbs" x-show="listOf(tab).crumbs.length" x-cloak aria-label="Folder path">
+        <template x-for="(c, i) in listOf(tab).crumbs" :key="i">
+          <span class="crumb">
+            <button :class="{on: i === listOf(tab).crumbs.length - 1}" @click="openFolder(tab, c.id)" :disabled="i === listOf(tab).crumbs.length - 1 || listOf(tab).loading" x-text="c.name"></button>
+            <span class="sep" x-show="i < listOf(tab).crumbs.length - 1">/</span>
+          </span>
+        </template>
+      </nav>
+      <div class="folders" x-show="listOf(tab).folders.length" x-cloak>
+        <template x-for="f in listOf(tab).folders" :key="f.id">
+          <button class="folder" @click="openFolder(tab, f.id)" :disabled="listOf(tab).loading" :title="f.name">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>
+            <span class="fn" x-text="f.name"></span>
+            <span class="fc" x-show="f.count != null" x-text="f.count"></span>
+          </button>
+        </template>
+      </div>
+      <div class="grid" x-show="visible(items(tab)).length">
+        <template x-for="it in visible(items(tab))" :key="it.source + ':' + it.id">
+          <div class="tile" :class="{on: isSelected(it)}">
+            <div class="card">
+              <div class="thumb" :style="'--hue:' + hueOf(it.name)" @click="toggle(it)" role="button" tabindex="0" @keydown.enter="toggle(it)">
+                <template x-if="it.thumb"><img :src="it.thumb" :alt="it.name" loading="lazy" @error="$el.hidden = true"></template>
+                <span class="kind" x-text="it.kind"></span>
+                <button class="tick" @click.stop="toggle(it)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg></button>
+                <button class="play" @click.stop="castNow(it)" :disabled="busy.cast" :title="it.variants ? 'Choose a variant' : 'Cast now'"><svg width="16" height="16" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"></path></svg></button>
+                <span class="dur" x-show="it.duration" x-text="fmtDur(it.duration)"></span>
+                <span class="warn" x-show="it.warn"><span x-text="it.warn"></span></span>
+              </div>
+              <div class="meta">
+                <div class="name" x-text="it.name" :title="it.name"></div>
+                <div class="sub"><span x-text="metaOf(it)"></span></div>
+              </div>
+              <!-- a heavy clip: the variant choice covers the card until one is picked -->
+              <div class="chooser" x-show="chooser === key(it)" x-cloak @click.stop @click.outside="chooser = null">
+                <div class="t">Cast which variant?</div>
+                <template x-for="v in (it.variants || [])" :key="v.quality">
+                  <button :class="{rec: v.default}" :disabled="busy.cast" @click.stop="castNow(it, v.quality)">
+                    <span class="vl" x-text="v.label"></span><span class="vn" x-text="v.note"></span>
+                  </button>
+                </template>
+              </div>
+            </div>
+          </div>
+        </template>
+      </div>
+      <div class="empty" x-show="listOf(tab).loading && !items(tab).length">Fetching the list…</div>
+      <div class="empty" x-show="!listOf(tab).loading && listOf(tab).loaded && !visible(items(tab)).length" x-text="emptyText(tab)"></div>
+      <div class="empty bad" x-show="listOf(tab).error && !expired(tab)" x-text="listOf(tab).error"></div>
+      <div class="more" x-show="listOf(tab).next && !expired(tab)">
+        <button @click="loadList(tab, true)" :disabled="listOf(tab).loading" x-text="listOf(tab).loading ? 'Loading…' : 'Load more'"></button>
+      </div>
+      <!-- a share link from someone else's library: no picker session exists for it, the page is scraped -->
+      <form class="paste linkpaste" x-show="tab === 'gphotos' && !expired(tab)" x-cloak @submit.prevent="addLink()">
+        <span class="small muted">A video from a shared link:</span>
+        <input type="url" x-model="linkInput" placeholder="a photos.app.goo.gl link" autocomplete="off" spellcheck="false" aria-label="Google Photos share link">
+        <button type="submit" :disabled="busy.connect || !linkInput.trim()" x-text="busy.connect ? 'Checking…' : 'Add link'"></button>
+      </form>
+    </section>
+  </template>
+</main>
+
+<!-- bottom bar: selection, the current cast, an error, or idle -->
+<footer class="bar">
+  <template x-if="selection.length">
+    <div class="fill" style="display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap">
+      <div class="sel">
+        <div class="n" x-text="selection.length"></div>
+        <div>
+          <div class="lbl" x-text="selection.length === 1 ? '1 item selected' : selection.length + ' items selected'"></div>
+          <button class="clear" @click="clearSelection()">Clear selection</button>
+        </div>
+      </div>
+      <div class="actions">
+        <span class="small muted">Change every</span>
+        <div class="stepper">
+          <button @click="setInterval(interval - 1)" title="Shorter">−</button>
+          <template x-for="v in presets" :key="v"><button :class="{on: interval === v}" @click="setInterval(v)" x-text="v + ' s'"></button></template>
+          <button @click="setInterval(interval + 1)" title="Longer">+</button>
+        </div>
+        <button class="primary" @click="startShow()" :disabled="busy.show || !status.tv || !status.tv.ip">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="13" rx="2"></rect><path d="M8 21h8"></path></svg>
+          Start show
+        </button>
+      </div>
+    </div>
+  </template>
+  <template x-if="!selection.length && castActive()">
+    <div class="fill" style="display:flex; align-items:center; gap:16px">
+      <div class="fill">
+        <div class="castname">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style="color: var(--live)"><path d="M8 5v14l11-7z"></path></svg>
+          <span x-text="status.cast.name"></span>
+          <span class="conv" x-show="status.cast.converted">HEIC → JPEG</span>
+          <span class="st" x-text="castStateLabel()"></span>
+        </div>
+        <div class="progress"><div :style="'width:' + castProgress() + '%'"></div></div>
+        <div class="times"><span x-text="status.cast.position || '-'"></span><span x-text="status.cast.duration || (status.cast.kind === 'photo' ? 'photo' : '-')"></span></div>
+      </div>
+      <button @click="stopAll()" :disabled="busy.stop">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="1.5"></rect></svg>
+        Stop
+      </button>
+    </div>
+  </template>
+  <template x-if="!selection.length && !castActive() && castFailed()">
+    <div class="err">
+      <span class="dot unreachable"></span>
+      <div class="msg">
+        <div class="m" x-text="status.cast.name + ': ' + status.cast.error.message"></div>
+        <div class="h" x-show="status.cast.error.hint" x-text="status.cast.error.hint"></div>
+      </div>
+      <button @click="togglePanel()">Details</button>
+      <button class="ghost" @click="dismissedCast = status.cast.generation" title="Dismiss">✕</button>
+    </div>
+  </template>
+  <template x-if="!selection.length && !castActive() && !castFailed()">
+    <div class="idle"><span class="dot" :class="tvDot()"></span><span x-text="idleLabel()"></span></div>
+  </template>
+</footer>
+
+<!-- diagnostics -->
+<div class="scrim" x-show="panel" x-cloak @click="panel = false"></div>
+<aside class="panel" x-show="panel" x-cloak>
+  <div class="head">
+    <h2>Diagnostics</h2>
+    <button class="ghost" @click="panel = false">Close</button>
+  </div>
+  <div class="list">
+    <div class="card" x-show="!errors.length">
+      <div class="msg">Nothing has gone wrong yet.</div>
+      <div class="hint">Every failure the command line used to print lands here, newest first: what the TV said, what the source answered, and the command that fixes it when there is one.</div>
+    </div>
+    <template x-for="e in errors" :key="e.n">
+      <div class="card" :class="cardClass(e)">
+        <div class="row"><span class="code" x-text="e.code"></span><span class="when" x-text="fmtTime(e.at)"></span></div>
+        <div class="msg" x-text="e.message"></div>
+        <div class="where" x-show="e.item" x-text="(e.source ? e.source + ' · ' : '') + (e.item || '')"></div>
+        <template x-if="e.code === 'tv_fetched_nothing'">
+          <div>
+            <div class="hint">Not one byte was fetched: the Samsung probes the address and refuses it outright when the port is closed; other renderers accept it and stay silent. That is almost always the firewall, not the codec.</div>
+            <div class="cmd" x-text="status.firewall_hint"></div>
+            <div class="actions"><button @click="copy(status.firewall_hint)">Copy command</button></div>
+          </div>
+        </template>
+        <template x-if="e.code === 'dts_audio'">
+          <div>
+            <div class="hint">Checked before sending, not after. The command re-encodes only the audio; the picture is copied untouched.</div>
+            <div class="cmd" x-text="e.hint"></div>
+            <div class="actions"><button @click="copy(e.hint)">Copy command</button></div>
+          </div>
+        </template>
+        <template x-if="e.hint && e.code !== 'tv_fetched_nothing' && e.code !== 'dts_audio'">
+          <div class="hint" x-text="e.hint"></div>
+        </template>
+      </div>
+    </template>
+  </div>
+</aside>
+
+<div class="toast" x-show="toast" x-cloak x-text="toast" @click="toast = ''"></div>
+
+</body>
+</html>

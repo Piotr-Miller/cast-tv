@@ -1,0 +1,92 @@
+{
+  "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#Collection(driveItem)",
+  "value": [
+    {
+      "id": "f-pictures",
+      "name": "Pictures",
+      "size": 8123456789,
+      "lastModifiedDateTime": "2026-08-30T10:00:00Z",
+      "folder": {"childCount": 2},
+      "parentReference": {"driveId": "d1", "driveType": "personal", "id": "root-id", "path": "/drive/root:"}
+    },
+    {
+      "id": "f-docs",
+      "name": "Documents",
+      "size": 12345,
+      "lastModifiedDateTime": "2026-08-01T10:00:00Z",
+      "folder": {"childCount": 0},
+      "parentReference": {"driveId": "d1", "driveType": "personal", "id": "root-id", "path": "/drive/root:"}
+    },
+    {
+      "id": "doc-1",
+      "name": "notes.pdf",
+      "size": 12345,
+      "lastModifiedDateTime": "2026-08-01T10:00:00Z",
+      "file": {"mimeType": "application/pdf", "hashes": {"quickXorHash": "AAAA"}},
+      "parentReference": {"driveId": "d1", "driveType": "personal", "id": "root-id", "path": "/drive/root:"}
+    },
+    {
+      "id": "heic-1",
+      "name": "IMG_0001.HEIC",
+      "size": 2456789,
+      "lastModifiedDateTime": "2026-07-27T09:30:00Z",
+      "file": {"mimeType": "image/heic", "hashes": {"quickXorHash": "BBBB"}},
+      "image": {"width": 4032, "height": 3024},
+      "photo": {"takenDateTime": "2026-07-26T18:12:00Z", "cameraMake": "Apple", "cameraModel": "iPhone 15"},
+      "thumbnails": [{"id": "0",
+        "medium": {"width": 176, "height": 132, "url": "https://cdn.test/thumbs/heic-1/medium?sig=1"},
+        "large": {"width": 800, "height": 600, "url": "https://cdn.test/thumbs/heic-1/large?sig=1"}}],
+      "parentReference": {"driveId": "d1", "driveType": "personal", "id": "root-id", "path": "/drive/root:"}
+    },
+    {
+      "id": "vid-1",
+      "name": "clip.mp4",
+      "size": 13906000,
+      "lastModifiedDateTime": "2026-07-27T09:31:00Z",
+      "file": {"mimeType": "video/mp4", "hashes": {"quickXorHash": "CCCC"}},
+      "video": {"bitrate": 12000000, "duration": 9280, "width": 3840, "height": 2160, "fourCC": "H264"},
+      "parentReference": {"driveId": "d1", "driveType": "personal", "id": "root-id", "path": "/drive/root:"}
+    },
+    {
+      "id": "vid-heavy",
+      "name": "GX011767.MOV",
+      "size": 138000000,
+      "lastModifiedDateTime": "2026-07-27T09:32:00Z",
+      "file": {"mimeType": "video/quicktime", "hashes": {"quickXorHash": "DDDD"}},
+      "video": {"bitrate": 119000000, "duration": 9280, "width": 3840, "height": 3360, "fourCC": "hvc1"},
+      "thumbnails": [{"id": "0",
+        "large": {"width": 800, "height": 700, "url": "https://cdn.test/thumbs/vid-heavy/large?sig=1"}}],
+      "parentReference": {"driveId": "d1", "driveType": "personal", "id": "root-id", "path": "/drive/root:"}
+    },
+    {
+      "id": "gif-1",
+      "name": "anim.gif",
+      "size": 45678,
+      "lastModifiedDateTime": "2026-07-27T09:33:00Z",
+      "file": {"mimeType": "image/gif", "hashes": {"quickXorHash": "EEEE"}},
+      "image": {"width": 320, "height": 240},
+      "thumbnails": [{"id": "0",
+        "large": {"width": 320, "height": 240, "url": "https://cdn.test/thumbs/gif-1/large?sig=1"}}],
+      "parentReference": {"driveId": "d1", "driveType": "personal", "id": "root-id", "path": "/drive/root:"}
+    },
+    {
+      "id": "raw-1",
+      "name": "DSC_0001.DNG",
+      "size": 34567890,
+      "lastModifiedDateTime": "2026-07-27T09:34:00Z",
+      "file": {"mimeType": "image/x-adobe-dng", "hashes": {"quickXorHash": "FFFF"}},
+      "parentReference": {"driveId": "d1", "driveType": "personal", "id": "root-id", "path": "/drive/root:"}
+    },
+    {
+      "id": "png-1",
+      "name": "screen.png",
+      "size": 234567,
+      "lastModifiedDateTime": "2026-07-27T09:35:00Z",
+      "file": {"mimeType": "image/png", "hashes": {"quickXorHash": "GGGG"}},
+      "image": {"width": 1920, "height": 1080},
+      "thumbnails": [{"id": "0",
+        "medium": {"width": 176, "height": 99, "url": "https://cdn.test/thumbs/png-1/medium?sig=1"}}],
+      "parentReference": {"driveId": "d1", "driveType": "personal", "id": "root-id", "path": "/drive/root:"}
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#Collection(driveItem)",
+  "value": [
+    {
+      "id": "f-camera",
+      "name": "Camera Roll",
+      "size": 7000000000,
+      "lastModifiedDateTime": "2026-08-30T10:00:00Z",
+      "folder": {"childCount": 250},
+      "parentReference": {"driveId": "d1", "driveType": "personal", "id": "f-pictures", "path": "/drive/root:/Pictures"}
+    },
+    {
+      "id": "jpg-0",
+      "name": "wallpaper.jpg",
+      "size": 1234567,
+      "lastModifiedDateTime": "2026-06-01T10:00:00Z",
+      "file": {"mimeType": "image/jpeg", "hashes": {"quickXorHash": "HHHH"}},
+      "image": {"width": 2560, "height": 1440},
+      "thumbnails": [{"id": "0",
+        "large": {"width": 800, "height": 450, "url": "https://cdn.test/thumbs/jpg-0/large?sig=1"}}],
+      "parentReference": {"driveId": "d1", "driveType": "personal", "id": "f-pictures", "path": "/drive/root:/Pictures"}
+    }
+  ]
+}
