@@ -36,3 +36,18 @@ same H.264 file.
   variant:  cast-gopro <n> -q proxy" to every `tv_never_started` hint, whatever the source; for
   Google Photos the lighter choice is the tile's "1080p stream" variant. (`castlib/cli.py:179`
   is the GoPro CLI and is right as it is.)
+
+## From manual row 4.6 (2026-09-15)
+
+- **Done 2026-09-15 (plan addendum, Phase 7).** ~~A 701 on `SetAVTransportURI` fails the newer cast; the older one keeps the TV.~~ Two casts
+  within a second (a double tap on the phone): the first went out and played; the second's
+  `SetAVTransportURI` reached the Samsung while it was `TRANSITIONING` and was refused with UPnP
+  701, and `Cast.run` ends such a cast as `tv_rejected` at once (`castlib/supervisor.py`, the
+  `except` around `SetAVTransportURI`; only a 701 on `Play` gets the `_settles_playing` window).
+  That breaks the plan's `cast (while playing)` rule, "the request accepted second wins", and
+  shows an error for a cast the user can see playing (the same clip here). Likely fix: on a 701
+  from `SetAVTransportURI`, wait for the transport to leave `TRANSITIONING` (bounded, as
+  `PLAY_701_GRACE`) and send `SetAVTransportURI` once more, provided the cast is still current;
+  plus a scripted-fake test where the FakeTV answers 701 to a `SetAVTransportURI` during
+  `TRANSITIONING`. Also worth debouncing the UI's Cast button while a cast request is in flight.
+  Source: `research.md`, "Row 4.6 — second attempt".

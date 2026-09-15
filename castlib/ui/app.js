@@ -90,7 +90,7 @@ function castTv() {
     panel: false,
     toast: '',
     offline: false,
-    busy: { discover: false, connect: false, show: false, stop: false },
+    busy: { discover: false, connect: false, show: false, stop: false, cast: false },
     gateNote: {},
     dismissedCast: null,
     dismissedShowId: null,
@@ -400,6 +400,8 @@ function castTv() {
         return;
       }
       this.chooser = null;
+      if (this.busy.cast) return;                 // a double tap sends one cast, not two
+      this.busy.cast = true;
       try {
         const body = { source: it.source, id: it.id };
         if (quality) body.quality = quality;
@@ -407,6 +409,7 @@ function castTv() {
         this.dismissedCast = null;
         await this.refresh();
       } catch (e) { this.flash(e.message); }
+      finally { this.busy.cast = false; }
     },
     async startShow() {
       if (!this.selection.length) return;

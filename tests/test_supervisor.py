@@ -463,3 +463,32 @@ def test_show_next_and_prev(app, tmp_path):
     assert sh.as_dict()["index"] == 0
     app.stop()
     assert sh.done.wait(5)
+
+
+def test_double_tap_the_second_cast_wins_after_a_701_on_set_uri(app, tmp_path):
+    """Seen live at row 4.6: the second SetAVTransportURI hit the TV while it was TRANSITIONING into the first."""
+    tv = app.tv_fake
+    tv.video_script = ["TRANSITIONING", "PLAYING", "PLAYING", "PLAYING", "PLAYING", "PLAYING"]
+    first = app.cast(_video(tmp_path, "a.mkv"))
+    assert first.sent.wait(5)
+    tv.faults_once = {"SetAVTransportURI": "701"}
+    tv.video_script = ["TRANSITIONING", "TRANSITIONING", "PLAYING", "PLAYING", "PLAYING", "PLAYING"]
+    second = app.cast(_video(tmp_path, "b.mkv"))
+    assert second.sent.wait(5)
+    wait_for(lambda: second.state == "playing")
+    assert second.reason is None
+    assert app.current is second and first.state == "replaced"
+    assert tv.uri_ids() == [first.item.id, second.item.id, second.item.id]   # refused once, then accepted
+    assert [c["code"] for c in app.errors.list()] == []
+
+
+def test_a_persistent_701_on_set_uri_is_still_a_refusal(app, tmp_path):
+    tv = app.tv_fake
+    tv.faults = {"SetAVTransportURI": "701"}
+    tv.video_script = ["TRANSITIONING"]
+    c = app.cast(_video(tmp_path))
+    assert c.done.wait(5)
+    assert c.state == "failed" and c.reason.code == "tv_rejected"
+    assert "UPnP 701: Transition not available" in c.reason.message
+    assert "after it the TV reported TRANSITIONING" in c.reason.message
+    assert tv.actions().count("SetAVTransportURI") == 2 and "Play" not in tv.actions()

@@ -176,7 +176,7 @@
               <button class="tick" @click.stop="toggle(it)" :title="isSelected(it) ? 'Remove from the show' : 'Add to the show'">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>
               </button>
-              <button class="play" @click.stop="castNow(it)" title="Cast now">
+              <button class="play" @click.stop="castNow(it)" :disabled="busy.cast" title="Cast now">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"></path></svg>
               </button>
               <span class="dur" x-show="it.duration" x-text="fmtDur(it.duration)"></span>
@@ -321,7 +321,7 @@
                 <template x-if="it.thumb"><img :src="it.thumb" :alt="it.name" loading="lazy" @error="$el.hidden = true"></template>
                 <span class="kind" x-text="it.kind"></span>
                 <button class="tick" @click.stop="toggle(it)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg></button>
-                <button class="play" @click.stop="castNow(it)" :title="it.variants ? 'Choose a variant' : 'Cast now'"><svg width="16" height="16" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"></path></svg></button>
+                <button class="play" @click.stop="castNow(it)" :disabled="busy.cast" :title="it.variants ? 'Choose a variant' : 'Cast now'"><svg width="16" height="16" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"></path></svg></button>
                 <span class="dur" x-show="it.duration" x-text="fmtDur(it.duration)"></span>
                 <span class="warn" x-show="it.warn"><span x-text="it.warn"></span></span>
               </div>
@@ -333,7 +333,7 @@
               <div class="chooser" x-show="chooser === key(it)" x-cloak @click.stop @click.outside="chooser = null">
                 <div class="t">Cast which variant?</div>
                 <template x-for="v in (it.variants || [])" :key="v.quality">
-                  <button :class="{rec: v.default}" @click.stop="castNow(it, v.quality)">
+                  <button :class="{rec: v.default}" :disabled="busy.cast" @click.stop="castNow(it, v.quality)">
                     <span class="vl" x-text="v.label"></span><span class="vn" x-text="v.note"></span>
                   </button>
                 </template>
