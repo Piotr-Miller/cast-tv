@@ -162,7 +162,6 @@ because it carries course-licensed material that must not enter a public reposit
 
 Samsung QE83S85FAEXXH (83" OLED, Tizen, 2025) from Fedora 44, against a live GoPro cloud
 library and a live Google Photos share link — and from Windows 11 Pro 26200 against the
-same TV: discovery, a file served off disk and fetched by the TV with its own range
-requests, a relayed remote clip played through to the end, and the page starting and
-stopping both. Any DLNA renderer exposing `AVTransport:1` should work; the subtitle path
-is Samsung-specific.
+same TV: discovery, a file played off disk and a remote stream relayed through to the end,
+both serving the TV's own range requests, and the page starting and stopping either. Any
+DLNA renderer exposing `AVTransport:1` should work; the subtitle path is Samsung-specific.
