@@ -76,10 +76,11 @@ needed the TV on the same network. Both sections below close that, from Windows.
 - **Thumbnails.** `/media/search` returns no thumbnail address with the fields asked
   for, and guessing an undocumented endpoint - one call per row - was not worth it
   against a listing that already shows name, date, resolution and size.
-- **Duration.** `cast-gopro` asks `/media/search` for it and the answer never contains
-  it: against a live library the field comes back absent on every item, so the listing
-  cannot show a length no matter what is done at this end. This was written down twice as
-  a one-line change worth making, which a live token then disproved.
+- **Duration.** Written off here as impossible, then found: the field is
+  `source_duration`, in milliseconds, and it has been in every answer all along.
+  `cast-gopro` asked for `duration`, which does not exist, so the API returned nothing
+  and the conclusion drawn from that was "the API cannot tell us" rather than "the wrong
+  field was asked for". The listing now caches it; showing it is UI work still to do.
 
 ## Windows 11 as well as Linux
 
@@ -175,3 +176,44 @@ one on that machine. It reaches Google over plain HTTP and hands off through the
 every other path here proved, so what is untested is Google's own answer rather than
 anything the platform does differently - and its failure path was seen, since a
 deliberately bad link produced the cookie advice as intended.
+
+## What a live library showed, and where this stands
+
+A real token turned up three things that no amount of testing against my own fakes
+would have.
+
+**Photos are in the library, and casting one asked the TV to play a picture as a
+film.** 12 of the 60 items are Photos - phone pictures synced into the GoPro cloud - and
+a Photo carries exactly one variation, a jpg. `library_url` filtered that out as "not
+video", which left only the `files` entry; the CDN labels that `binary/octet-stream`,
+`is_video()` accepts octet-stream because GoPro's source mp4s arrive that way, and so a
+JPEG sailed through as video and was announced to the TV as `object.item.videoItem`.
+The TV answered that the file is not supported, which was the only honest thing in the
+whole chain. Stills are now recognised before the video ranking runs, `cast-tv` knows
+the image mime types, announces `object.item.imageItem.photo`, sends `Interactive`
+rather than `Streaming` transfer mode and a JPEG profile in contentFeatures. Verified:
+the TV fetched the jpg and displayed it.
+
+**Thumbnails are reachable after all.** `/media/{id}/thumbnail` answers 406 to every
+Accept header tried, and the `sprites` array is empty - but `available_labels` lists a
+`large` label that `/download` does not return by default, and
+`/download?labels=large` hands over a jpg at 1280x1120. For a Photo there is no `large`
+and the only still is the 4000x3000 source, so a photo's thumbnail costs 3.6 MB unless
+something downsizes it. One signed URL per item, so a page wanting 60 of them needs 60
+calls - which argues for resolving them lazily, per row, as the rows come into view.
+Not built yet.
+
+**The design in the canvas is a wider thing than what exists.** Five artboards - the
+app with a gate and a list, a slideshow, a phone layout, three gates side by side, and a
+states-and-diagnostics board. Its own annotations carry the reasoning: clicking a video
+throws it at the TV while clicking a photo *selects it for a slideshow*, and the queue
+may mix GoPro with OneDrive; the slideshow is driven by the laptop because DLNA has no
+playlist, so the queue and the timer live at our end; the phone layout wants a device
+code rather than a redirect to localhost, because it is the same server opened from the
+LAN. So a photo was never meant to be cast on its own - it was meant to join a queue.
+What exists today is the list, three tabs, and the states. The gate, the slideshow, the
+phone layout and the tiled grid with thumbnails are all still design rather than code.
+
+Also settled: the thumbnails I sketched in the option preview when asking which shape
+this UI should take were never built, and saying so only in this file was not enough -
+they were taken, reasonably, for something the tool already did on another machine.
