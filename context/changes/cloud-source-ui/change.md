@@ -3,7 +3,7 @@ change_id: cloud-source-ui
 title: Pick media from GoPro, Google Photos and OneDrive in a UI, and cast it
 status: new
 created: 2026-09-07
-updated: 2026-09-07
+updated: 2026-09-17
 archived_at: null
 ---
 
@@ -35,3 +35,46 @@ choosing what to cast. Worth carrying over: the TV refuses camera originals
 
 Undecided, and deliberately left to planning: whether this is a local web UI served
 by the same process that already runs an HTTP server for the TV, or a desktop app.
+
+## Decision
+
+A local web page, served by `cast-ui` on port 8896 - not a desktop app. The process
+already speaks HTTP for the TV's benefit, the page needs no toolchain and no
+dependency beyond the standard library the rest of the tool holds to, and a browser
+renders a media list better than Tk would.
+
+The page does not reimplement any of the resolving or relaying. It builds the command
+line a person would have typed - `cast-gopro 3 -q proxy`, `cast-photos <link> -c
+cookies.txt`, `cast-tv <path>` - runs it as a child, and shows its output. So the path
+verified against the TV stays the path that runs, and the page is only the argument
+list.
+
+## What was built
+
+- `cast-ui`, with the three tabs the notes called for, and a per-row quality choice on
+  GoPro so the dead end the CLI had to learn is not reachable from the page.
+- Token expiry read from the JWT payload and shown as time remaining, which is the
+  answer to "make that visible rather than failing with a bare 401".
+- Google Photos history in `~/.config/cast-tv/photos-history.json`, since with nothing
+  to browse the links already pasted are the closest thing to a library.
+- OneDrive browse rooted at `~/.onedrive-sync`, configurable, and refusing to cast
+  anything outside that root - a page open in a browser should not be able to name an
+  arbitrary file.
+- One cast at a time, and Stop sends the same SIGINT as Ctrl+C so the TV stops with it.
+
+Verified: the page and every endpoint answer; a failing helper reports a sentence
+instead of dropping the connection; the child-process plumbing was tested against a
+stand-in that redraws its status line with `\r`, as `cast-tv` does; both the
+choice-to-command layer and the token reader were tested including their refusals.
+
+Not verified: a cast started from the page onto the real TV. That needs the Linux
+laptop and the TV on the same network.
+
+## Left out
+
+- **Thumbnails.** `/media/search` returns no thumbnail address with the fields asked
+  for, and guessing an undocumented endpoint - one call per row - was not worth it
+  against a listing that already shows name, date, resolution and size.
+- **Duration.** The API is already asked for it and the answer is discarded before the
+  cache is written; carrying it through is a one-line change to `cast-gopro`, worth
+  making next time that file is touched with a live token to test against.
