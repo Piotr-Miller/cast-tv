@@ -6,9 +6,9 @@
     cast-tv "https://example.com/clip.mp4"
     cast-tv --stop
 """
-import argparse, http.cookiejar, http.server, json, os, re, socket, socketserver
-import subprocess, sys, threading, time
-import urllib.parse, urllib.request
+import argparse, http.cookiejar, http.server, json, os, re, select, socket
+import socketserver, subprocess, sys, threading, time
+import urllib.error, urllib.parse, urllib.request
 from xml.sax.saxutils import escape, unescape
 
 SSDP_ADDR, SSDP_PORT = "239.255.255.250", 1900
@@ -28,24 +28,68 @@ DLNA_FEATURES = ("DLNA.ORG_OP=01;DLNA.ORG_CI=0;DLNA.ORG_FLAGS="
 
 
 # ----------------------------------------------------------------- discovery
+def local_addresses():
+    """Every IPv4 address this machine holds, link-local and loopback aside."""
+    out = []
+    try:
+        for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
+            ip = info[4][0]
+            if ip not in out and not ip.startswith(("127.", "169.254.")):
+                out.append(ip)
+    except OSError:
+        pass
+    return out
+
+
+def search_sockets(msg, timeout):
+    """One socket per interface, each having already sent the search.
+
+    A single unbound send is enough on a machine with one network. With several
+    - a Wi-Fi card, a Hyper-V switch, a couple of adapters that go nowhere -
+    the routing table picks just one, and on Windows it picks the virtual
+    switch: the search leaves where no TV can hear it and nothing answers.
+    So ask through each of them and let the answers arrive where they may.
+    """
+    socks = []
+    for source in [None] + local_addresses():
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            if source:
+                s.bind((source, 0))
+                s.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF,
+                             socket.inet_aton(source))
+            s.settimeout(timeout)
+            s.sendto(msg, (SSDP_ADDR, SSDP_PORT))
+        except OSError:
+            s.close()          # an adapter that is up but unroutable
+            continue
+        socks.append(s)
+    return socks
+
+
 def discover(timeout=4):
     """Return [(ip, control_url, friendly_name)] for renderers on the network."""
     msg = ("M-SEARCH * HTTP/1.1\r\nHOST:%s:%d\r\nMAN:\"ssdp:discover\"\r\n"
            "MX:2\r\nST:urn:schemas-upnp-org:device:MediaRenderer:1\r\n\r\n"
            % (SSDP_ADDR, SSDP_PORT)).encode()
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    s.settimeout(timeout)
-    s.sendto(msg, (SSDP_ADDR, SSDP_PORT))
+    socks = search_sockets(msg, timeout)
     found, deadline = {}, time.time() + timeout
-    while time.time() < deadline:
-        try:
-            data, addr = s.recvfrom(65507)
-        except socket.timeout:
+    while socks and time.time() < deadline:
+        ready, _, _ = select.select(socks, [], [], max(0.1, deadline - time.time()))
+        if not ready:
             break
-        m = re.search(r"(?i)^location:\s*(\S+)", data.decode("utf-8", "replace"), re.M)
-        if m and addr[0] not in found:
-            found[addr[0]] = m.group(1)
+        for s in ready:
+            try:
+                data, addr = s.recvfrom(65507)
+            except OSError:
+                continue
+            m = re.search(r"(?i)^location:\s*(\S+)",
+                          data.decode("utf-8", "replace"), re.M)
+            if m and addr[0] not in found:
+                found[addr[0]] = m.group(1)
+    for s in socks:
+        s.close()
     out = []
     for ip, loc in found.items():
         try:
@@ -102,11 +146,29 @@ def tag(xml, name):
     return m.group(1) if m else ""
 
 
+def upnp_error(exc):
+    """The reason inside a SOAP fault, which a bare "HTTP 500" hides.
+
+    Worth unwrapping because one of these codes is not about the request at
+    all: 716 is the TV reporting that it could not fetch the address we handed
+    it, which is a network problem at our end, not a malformed call.
+    """
+    try:
+        body = exc.read().decode("utf-8", "replace")
+    except Exception:
+        return None, ""
+    code = re.search(r"<errorCode>\s*(\d+)\s*</errorCode>", body)
+    desc = re.search(r"<errorDescription>(.*?)</errorDescription>", body, re.S)
+    return (int(code.group(1)) if code else None,
+            desc.group(1).strip() if desc else "")
+
+
 # -------------------------------------------------------------- file serving
 class RangeHandler(http.server.BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
     files = {}          # url path -> path on disk
     remote = {}         # url path -> upstream url (relay mode)
+    hits = 0            # requests the TV made, to tell a refusal from a block
     debug = False       # log what the TV asks for
     opener = None       # urllib opener carrying cookies, for relay mode
     caption_url = None
@@ -251,6 +313,7 @@ class RangeHandler(http.server.BaseHTTPRequestHandler):
                 pass
 
     def do_HEAD(self):
+        RangeHandler.hits += 1
         if self._remote():
             self._proxy(body=False); return
         disk = self._resolve()
@@ -261,6 +324,7 @@ class RangeHandler(http.server.BaseHTTPRequestHandler):
         self._headers(disk, size, start, end, partial)
 
     def do_GET(self):
+        RangeHandler.hits += 1
         if self._remote():
             self._proxy(); return
         disk = self._resolve()
@@ -286,6 +350,18 @@ class RangeHandler(http.server.BaseHTTPRequestHandler):
 class Server(socketserver.ThreadingTCPServer):
     daemon_threads = True
     allow_reuse_address = True
+
+    def handle_error(self, request, client_address):
+        """A TV that seeks just drops the connection, which is not an error.
+
+        socketserver answers that with a full traceback, and Windows makes it
+        worse by delivering a reset where Linux often gives a clean close - so
+        a few seeks bury everything else in stack traces.
+        """
+        if isinstance(sys.exc_info()[1], (ConnectionResetError, BrokenPipeError,
+                                          ConnectionAbortedError, TimeoutError)):
+            return
+        super().handle_error(request, client_address)
 
 
 def local_ip(target):
@@ -314,6 +390,18 @@ def didl(url, title, disk, caption=None):
             "&lt;/item&gt;&lt;/DIDL-Lite&gt;"
             % (escape(title), cap.replace("<", "&lt;").replace(">", "&gt;"),
                mime, DLNA_FEATURES, escape(url)))
+
+
+def blocked_hint(port):
+    """Not one request arrived, so the port is shut between here and the TV."""
+    if os.name == "nt":
+        return ('   Windows blocks incoming connections unless told otherwise.\n'
+                '   Once, in a terminal opened as administrator:\n'
+                '     netsh advfirewall firewall add rule name="cast-tv" '
+                'dir=in action=allow protocol=TCP localport=%d' % port)
+    return ("   Check the firewall, and that the TV shares this network:\n"
+            "     sudo firewall-cmd --add-port=%d/tcp   (--permanent to keep it)"
+            % port)
 
 
 def explain_failure(source):
@@ -474,6 +562,16 @@ def main():
              "<CurrentURI>%s</CurrentURI><CurrentURIMetaData>%s</CurrentURIMetaData>"
              % (escape(url), didl(url, title, path, caption)))
         soap(avt, AVT, "Play", "<Speed>1</Speed>")
+    except urllib.error.HTTPError as e:
+        code, desc = upnp_error(e)
+        print("The TV rejected the request: %s"
+              % ("UPnP error %d, %s" % (code, desc or "no description") if code
+                 else e))
+        if code == 716:
+            print("   It could not reach %s to fetch the file - the request "
+                   "never arrived." % base)
+            print(blocked_hint(args.port))
+        return 1
     except Exception as e:
         print("The TV rejected the request: %s" % e)
         return 1
@@ -502,6 +600,10 @@ def main():
                 waited += 2
                 if waited >= (40 if state == "TRANSITIONING" else 24):
                     print("\n   The TV never started playing.")
+                    if not RangeHandler.hits:
+                        print("   It never asked for a single byte, so this is not "
+                              "the file:\n   nothing reached port %d." % args.port)
+                        print(blocked_hint(args.port))
                     explain_failure(args.source if relaying else path)
                     break
                 continue

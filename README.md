@@ -1,7 +1,7 @@
 # cast-tv
 
-Push a local video file — or a remote stream — to a Samsung TV from Linux, with no app
-installed on either end. A single Python file, standard library only.
+Push a local video file — or a remote stream — to a Samsung TV from Linux or Windows, with
+no app installed on either end. A single Python file, standard library only.
 
 ```bash
 cast-tv film.mkv                       # find the TV, serve the file, start playback
@@ -25,6 +25,27 @@ ln -s ~/Source/cast-tv/cast-tv ~/.local/bin/cast-tv
 
 Needs Python 3 and nothing else. `ffprobe` is used, when present, only to warn about audio
 codecs the TV cannot decode.
+
+On Windows there is no shebang and no symlink, so the interpreter is named instead:
+
+```powershell
+git clone <this repo> C:\Source\cast-tv
+cd C:\Source\cast-tv
+python cast-ui                        # the page; everything else follows from it
+python cast-tv film.mkv               # or a single cast, as on Linux
+```
+
+Two things differ there, and both are handled rather than documented away:
+
+- **The TV has to be allowed in.** Windows blocks incoming connections by default, so the
+  TV cannot fetch the file and answers the control call with UPnP error 716. `cast-tv`
+  now reports that code by name and prints the one-off rule to add:
+  `netsh advfirewall firewall add rule name="cast-tv" dir=in action=allow protocol=TCP
+  localport=8895` (as administrator).
+- **Discovery asks through every interface.** One multicast search leaves by whichever
+  route the table prefers, and on a machine with a Hyper-V switch and a few idle adapters
+  Windows prefers the wrong one — the search goes where no TV can hear it and nothing
+  answers at all. The search now goes out of each address the machine holds.
 
 ## Options
 
@@ -139,6 +160,9 @@ because it carries course-licensed material that must not enter a public reposit
 
 ## Tested on
 
-Samsung QE83S85FAEXXH (83" OLED, Tizen, 2025) and Fedora 44, against a live GoPro cloud library
-and a live Google Photos share link. Any DLNA renderer exposing
-`AVTransport:1` should work; the subtitle path is Samsung-specific.
+Samsung QE83S85FAEXXH (83" OLED, Tizen, 2025) from Fedora 44, against a live GoPro cloud
+library and a live Google Photos share link — and from Windows 11 Pro 26200 against the
+same TV: discovery, a file served off disk and fetched by the TV with its own range
+requests, a relayed remote clip played through to the end, and the page starting and
+stopping both. Any DLNA renderer exposing `AVTransport:1` should work; the subtitle path
+is Samsung-specific.
