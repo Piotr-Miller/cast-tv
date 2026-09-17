@@ -117,8 +117,7 @@ Two things found while testing there, both fixed and both improvements on Linux 
 
 Verified on Win11 against 192.168.50.142: discovery in 4.5s; a local file served with the
 TV making ten requests including the tail-of-file range it uses to find the MP4 index; a
-relayed remote clip playing 0:00 to 0:10 and reporting Finished; the page starting a cast,
-showing the command's own output, and stopping it; and a two-deep cast leaving nothing
-behind. Not shown: a decodable local file playing, since this machine has no ffmpeg to
-make one - but the byte path off disk and decoding through the relay were each proven
-separately.
+relayed remote clip playing 0:00 to 0:10 and reporting Finished; a local file off disk
+doing the same, the TV asking for a range from the middle of it on the way; the page
+starting a cast, showing the command's own output, and stopping it; and a two-deep cast
+leaving nothing behind.
