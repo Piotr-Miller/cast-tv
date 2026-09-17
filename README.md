@@ -87,6 +87,38 @@ without notice: when nothing resolves, the command says what it saw instead of f
 a real share link the page yielded eight candidates, of which `=dv` - the original, not a
 downscaled stream - was the one that answered as video.
 
+## A page for picking
+
+Casting was solved before choosing was. `cast-ui` serves one page on localhost that browses
+the three sources and then runs exactly the command you would have typed, so nothing about
+the verified path changes - the page only decides its arguments.
+
+```bash
+cast-ui                        # serve on http://localhost:8896 and open a browser
+cast-ui --no-open              # just serve it
+cast-ui -t 192.168.1.50        # skip discovery, and remember the address
+cast-ui --onedrive ~/OneDrive  # a mirror kept somewhere else
+```
+
+The three tabs are shaped by what each source will allow, and the asymmetry is the point:
+
+- **GoPro** is the only one that browses. The token is a JWT, so the page reads its expiry
+  and says `token: 2h 14m left` instead of letting a bearer token die mid-resolve; a new one
+  is pasted into the same bar. Every row carries the quality choice `cast-gopro -q` already
+  had, because camera originals are what the TV refuses.
+- **Google Photos** cannot be browsed, so that tab is a paste field and a record of what has
+  been pasted before - which is as close to a library as the API restriction permits.
+- **OneDrive** needs no API at all: the mirror is a directory, so the tab is a directory
+  browse and `cast-tv` serves the file off disk. Only paths inside that folder can be cast,
+  since a page in a browser should not be able to name any file on the machine.
+
+One cast runs at a time, because the TV plays one thing, and the page shows that command's
+own output - the variant that answered, what the TV asks for, why it refused to start. Stop
+sends the same interrupt that Ctrl+C does, so the TV stops too.
+
+It listens on `127.0.0.1` only. `--bind 0.0.0.0` reaches it from a phone on the same
+network, and hands everyone there a button that starts a cast; there is no password.
+
 ## Limitations
 
 **Audio codecs.** Video is passed through untouched, so the TV has to decode it. H.264, HEVC,

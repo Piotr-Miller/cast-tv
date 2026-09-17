@@ -1,0 +1,875 @@
+#!/usr/bin/env python3
+"""A page on localhost for picking what to cast, instead of typing it.
+
+    cast-ui                serve the page and open it in a browser
+    cast-ui --no-open      only serve it
+    cast-ui -p 8896        a different port
+
+Casting is already solved: cast-tv relays the stream and the two resolvers turn
+a cloud item into an address. This only chooses the material, and then runs the
+command a person would otherwise have typed - so whatever was verified against
+the TV on the command line behaves the same way here.
+
+The three sources are not alike, and the tabs admit it: GoPro browses over its
+API (with a browser token that expires), Google Photos cannot be browsed at all
+and starts from a pasted link, and OneDrive is a directory already mirrored to
+disk.
+"""
+import argparse
+import base64
+import binascii
+import http.server
+import json
+import os
+import re
+import signal
+import socketserver
+import subprocess
+import sys
+import threading
+import time
+import webbrowser
+from collections import deque
+
+sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+import castcloud as cc  # noqa: E402
+
+HERE = os.path.dirname(os.path.realpath(__file__))
+UI_CONFIG = os.path.join(cc.CONFIG, "ui.json")
+GOPRO_TOKEN = os.path.join(cc.CONFIG, "gopro-token")
+PHOTOS_HISTORY = os.path.join(cc.CONFIG, "photos-history.json")
+ONEDRIVE_DEFAULT = os.path.expanduser("~/.onedrive-sync")
+VIDEO_EXT = (".mp4", ".m4v", ".mov", ".mkv", ".avi", ".ts", ".m2ts", ".webm",
+             ".mpg", ".mpeg", ".wmv")
+LIST_COUNT = 60          # one API page is more than enough to pick from
+
+
+def config():
+    try:
+        with open(UI_CONFIG) as fh:
+            return json.load(fh)
+    except Exception:
+        return {}
+
+
+def config_set(**kv):
+    data = config()
+    data.update({k: v for k, v in kv.items() if v is not None})
+    os.makedirs(cc.CONFIG, exist_ok=True)
+    with open(UI_CONFIG, "w") as fh:
+        json.dump(data, fh, indent=1)
+    return data
+
+
+def tv_address():
+    return config().get("tv") or os.environ.get("CAST_TV") or None
+
+
+def onedrive_root():
+    return config().get("onedrive") or ONEDRIVE_DEFAULT
+
+
+# ------------------------------------------------------------------- sources
+def token_state():
+    """What the stored GoPro token is worth, without asking GoPro.
+
+    The token is a JWT, so its expiry is readable straight from the payload.
+    Saying "2h left" up front is the whole point: on the command line expiry
+    could only be discovered as a 401, half way through resolving something.
+    """
+    try:
+        with open(GOPRO_TOKEN) as fh:
+            raw = fh.read().strip()
+    except FileNotFoundError:
+        return {"state": "missing"}
+    if not raw:
+        return {"state": "missing"}
+    parts = raw.split(".")
+    if len(parts) != 3:
+        # not a JWT - it may still work, we just cannot say for how long
+        return {"state": "unknown"}
+    try:
+        pad = "=" * (-len(parts[1]) % 4)
+        claims = json.loads(base64.urlsafe_b64decode(parts[1] + pad))
+    except (ValueError, binascii.Error, UnicodeDecodeError):
+        return {"state": "unknown"}
+    exp = claims.get("exp")
+    if not isinstance(exp, (int, float)):
+        return {"state": "unknown"}
+    left = int(exp - time.time())
+    return {"state": "valid" if left > 0 else "expired", "left": left}
+
+
+def gopro_items(refresh=False):
+    """The cloud library. cast-gopro caches its own listing, so we reuse that."""
+    if refresh:
+        done = subprocess.run(cc.sibling("cast-gopro") + ["-n", str(LIST_COUNT)],
+                              capture_output=True, text=True, timeout=180)
+        if done.returncode != 0:
+            # the token expiring is the common case, and it explains itself
+            return {"error": (done.stderr or done.stdout).strip()
+                    or "cast-gopro failed without saying why"}
+    items = cc.cache_read("gopro-list.json")
+    if items is None:
+        return {"items": [], "never_listed": True}
+    return {"items": items}
+
+
+def onedrive_items(root):
+    """Video files in the mirrored account - an ordinary directory walk."""
+    if not os.path.isdir(root):
+        return {"root": root,
+                "error": "%s is not a directory - the OneDrive mirror lives "
+                         "somewhere else, or is not set up yet." % root}
+    found = []
+    for base, dirs, names in os.walk(root):
+        dirs[:] = [d for d in dirs if not d.startswith(".")]
+        for name in names:
+            if name.lower().endswith(VIDEO_EXT):
+                full = os.path.join(base, name)
+                try:
+                    st = os.stat(full)
+                except OSError:
+                    continue      # a placeholder the mirror has not filled in
+                found.append({"path": full, "name": os.path.relpath(full, root),
+                              "size": st.st_size,
+                              "date": time.strftime("%Y-%m-%d",
+                                                    time.localtime(st.st_mtime))})
+    found.sort(key=lambda i: i["date"], reverse=True)
+    return {"root": root, "items": found}
+
+
+def photos_history():
+    try:
+        with open(PHOTOS_HISTORY) as fh:
+            return json.load(fh)
+    except Exception:
+        return []
+
+
+def photos_remember(link):
+    """With no library to browse, the links pasted so far are the library."""
+    hist = [h for h in photos_history() if h.get("link") != link]
+    hist.insert(0, {"link": link, "at": time.strftime("%Y-%m-%d %H:%M")})
+    hist = hist[:40]
+    os.makedirs(cc.CONFIG, exist_ok=True)
+    with open(PHOTOS_HISTORY, "w") as fh:
+        json.dump(hist, fh, indent=1)
+    return hist
+
+
+def renderers():
+    """Whatever answers SSDP, via the discovery cast-tv already does."""
+    done = subprocess.run(cc.sibling("cast-tv") + ["--list"], capture_output=True,
+                          text=True, timeout=40)
+    out = []
+    for line in done.stdout.splitlines():
+        ip, _, name = line.strip().partition(" ")
+        if re.match(r"^\d+\.\d+\.\d+\.\d+$", ip):
+            out.append({"ip": ip, "name": name.strip() or ip})
+    return out
+
+
+# ------------------------------------------------------------------- casting
+class Cast:
+    """The one running cast. The TV plays one thing, so one child at a time."""
+    lock = threading.Lock()
+    proc = None
+    title = None
+    command = None
+    log = deque(maxlen=60)
+    started = 0
+
+    @classmethod
+    def state(cls):
+        proc = cls.proc
+        running = proc is not None and proc.poll() is None
+        return {"running": running, "title": cls.title, "command": cls.command,
+                "exit": None if running or proc is None else proc.returncode,
+                "log": list(cls.log),
+                "seconds": int(time.time() - cls.started) if cls.started else 0}
+
+    @classmethod
+    def start(cls, cmd, title):
+        with cls.lock:
+            if cls.proc is not None and cls.proc.poll() is None:
+                return {"error": "Something is already playing - stop that first."}
+            # without this the child's prints sit in a pipe buffer and the page
+            # shows nothing until the cast is over
+            env = dict(os.environ, PYTHONUNBUFFERED="1")
+            # A GoPro or Photos cast is two processes deep, because the resolver
+            # runs cast-tv itself. Signalling the one pid we hold would leave
+            # cast-tv behind, still serving and still playing, so the child gets
+            # its own group and Stop signals the group.
+            group = ({"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
+                     if os.name == "nt" else {"start_new_session": True})
+            try:
+                cls.proc = subprocess.Popen(
+                    cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                    env=env, cwd=HERE, **group)
+            except OSError as e:
+                return {"error": "Could not run this:\n%s\n%s"
+                                 % (" ".join(cmd), e)}
+            cls.title, cls.command = title, " ".join(cmd)
+            cls.started = time.time()
+            cls.log.clear()
+            threading.Thread(target=cls._read, args=(cls.proc,), daemon=True).start()
+        return cls.state()
+
+    @classmethod
+    def _read(cls, proc):
+        r"""cast-tv redraws its status line with \r, so a line can end either way."""
+        buf = b""
+        while True:
+            chunk = proc.stdout.read(256)
+            if not chunk:
+                break
+            buf += chunk
+            parts = re.split(rb"[\r\n]", buf)
+            buf = parts.pop()
+            for part in parts:
+                text = part.decode("utf-8", "replace").rstrip()
+                if text:
+                    cls.log.append(text)
+        if buf.strip():
+            cls.log.append(buf.decode("utf-8", "replace").rstrip())
+        proc.wait()
+        cls.log.append("-- the command exited (%d)" % proc.returncode)
+
+    @classmethod
+    def stop(cls):
+        with cls.lock:
+            proc = cls.proc
+            if proc is None or proc.poll() is not None:
+                return cls.state()
+            told_the_tv = False
+            if os.name == "posix":
+                # cast-tv stops the TV on Ctrl+C, and every process in the
+                # group gets this, so the whole cast unwinds by itself
+                try:
+                    os.killpg(os.getpgid(proc.pid), signal.SIGINT)
+                    proc.wait(timeout=8)
+                    told_the_tv = True
+                except (subprocess.TimeoutExpired, OSError):
+                    pass
+            else:
+                # CTRL_BREAK does clear the group, but Windows kills the
+                # processes outright (0xC000013A) rather than raising
+                # KeyboardInterrupt, so nothing gets the chance to tell the TV
+                try:
+                    proc.send_signal(signal.CTRL_BREAK_EVENT)
+                    proc.wait(timeout=8)
+                except (subprocess.TimeoutExpired, OSError, ValueError):
+                    pass
+            if proc.poll() is None:
+                proc.terminate()
+                try:
+                    proc.wait(timeout=4)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+            if not told_the_tv:
+                cls.log.append("-- asking the TV to stop as well")
+                # naming the TV skips a second round of discovery
+                stop = cc.sibling("cast-tv") + ["--stop"]
+                tv = tv_address()
+                try:
+                    subprocess.run(stop + (["-t", tv] if tv else []),
+                                   capture_output=True, text=True, timeout=60)
+                except (OSError, subprocess.TimeoutExpired) as e:
+                    cls.log.append("-- could not reach the TV to stop it: %s" % e)
+        return cls.state()
+
+
+def cast_command(req):
+    """Build the command line this choice corresponds to, or say what is missing."""
+    source = req.get("source")
+    tv = tv_address()
+    extra = ["-t", tv] if tv else []
+
+    if source == "gopro":
+        index = req.get("index")
+        if not isinstance(index, int) or index < 1:
+            return None, None, "No entry picked."
+        quality = req.get("quality") or "auto"
+        if quality not in ("auto", "source", "proxy"):
+            return None, None, "Unknown quality %r." % quality
+        cmd = cc.sibling("cast-gopro") + [str(index), "-q", quality] + extra
+        return cmd, req.get("title") or ("GoPro #%d" % index), None
+
+    if source == "photos":
+        link = (req.get("link") or "").strip()
+        if not link.startswith(("http://", "https://")):
+            return None, None, "That is not a link to a Google Photos video."
+        cmd = cc.sibling("cast-photos") + [link]
+        cookies = (req.get("cookies") or "").strip()
+        if cookies:
+            cookies = os.path.expanduser(cookies)
+            if not os.path.isfile(cookies):
+                return None, None, "No cookie jar at %s." % cookies
+            cmd += ["-c", cookies]
+        photos_remember(link)
+        return cmd + extra, "Google Photos", None
+
+    if source == "onedrive":
+        path = req.get("path") or ""
+        root = os.path.realpath(onedrive_root())
+        full = os.path.realpath(os.path.expanduser(path))
+        # the page may be open in a browser, so only the mirror is castable
+        if not full.startswith(root + os.sep) or not os.path.isfile(full):
+            return None, None, "Not a file inside %s." % root
+        return cc.sibling("cast-tv") + [full] + extra, os.path.basename(full), None
+
+    return None, None, "Unknown source %r." % source
+
+
+# ---------------------------------------------------------------------- page
+PAGE = r"""<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>cast-tv</title>
+<style>
+  :root {
+    --bg: #14161a; --panel: #1c1f25; --line: #2c313a; --text: #e6e8ec;
+    --dim: #949aa6; --accent: #5aa9ff; --warn: #ffb454; --bad: #ff6b6b;
+    --ok: #64d18a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  header {
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    padding: 14px 16px; border-bottom: 1px solid var(--line);
+  }
+  h1 { font-size: 17px; margin: 0; font-weight: 600; letter-spacing: .2px; }
+  h1 span { color: var(--dim); font-weight: 400; }
+  .grow { flex: 1; }
+  main { padding: 16px; max-width: 1000px; margin: 0 auto; }
+  button {
+    font: inherit; color: var(--text); background: #262b33;
+    border: 1px solid var(--line); border-radius: 6px; padding: 5px 11px;
+    cursor: pointer;
+  }
+  button:hover:not(:disabled) { border-color: var(--accent); }
+  button:disabled { opacity: .45; cursor: default; }
+  button.go { background: var(--accent); border-color: var(--accent); color: #0b1320;
+              font-weight: 600; }
+  input, select {
+    font: inherit; color: var(--text); background: #12141a;
+    border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px;
+  }
+  input { min-width: 0; }
+  input:focus, select:focus { outline: 1px solid var(--accent); }
+  nav { display: flex; gap: 6px; margin-bottom: 16px; }
+  nav button.on { background: var(--panel); border-color: var(--accent);
+                  color: var(--accent); }
+  .panel {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    padding: 14px; margin-bottom: 14px;
+  }
+  .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .dim { color: var(--dim); }
+  .small { font-size: 13px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line);
+           vertical-align: middle; }
+  th { color: var(--dim); font-weight: 500; font-size: 13px; }
+  tr:last-child td { border-bottom: 0; }
+  td.name { word-break: break-all; }
+  td.right, th.right { text-align: right; white-space: nowrap; }
+  .pill { font-size: 12px; padding: 2px 8px; border-radius: 99px;
+          border: 1px solid var(--line); white-space: nowrap; }
+  .pill.ok { color: var(--ok); border-color: #2d5c40; }
+  .pill.warn { color: var(--warn); border-color: #5c4526; }
+  .pill.bad { color: var(--bad); border-color: #5c2d2d; }
+  pre {
+    margin: 0; padding: 10px; background: #0f1116; border: 1px solid var(--line);
+    border-radius: 6px; font-size: 12.5px; line-height: 1.45;
+    max-height: 240px; overflow: auto; white-space: pre-wrap; color: #c7ccd6;
+  }
+  .note { color: var(--dim); font-size: 13px; margin: 0 0 12px; }
+  .err { color: var(--bad); font-size: 13.5px; white-space: pre-wrap; }
+  .empty { color: var(--dim); padding: 8px 0; }
+  .playing { border-color: var(--accent); }
+  label.inline { color: var(--dim); font-size: 13px; }
+  #say:not(:empty) {
+    padding: 10px 12px; border-radius: 8px; margin-bottom: 14px; font-size: 13.5px;
+    border: 1px solid var(--line); background: var(--panel); white-space: pre-wrap;
+  }
+  #say.bad { color: var(--bad); border-color: #5c2d2d; }
+</style>
+</head>
+<body>
+<header>
+  <h1>cast-tv <span id="tvname">&mdash;</span></h1>
+  <button id="find">Find the TV</button>
+  <span class="grow"></span>
+</header>
+<main>
+  <div id="say"></div>
+  <div id="now"></div>
+  <nav>
+    <button data-tab="gopro" class="on">GoPro</button>
+    <button data-tab="photos">Google Photos</button>
+    <button data-tab="onedrive">OneDrive</button>
+  </nav>
+  <section id="tab-gopro"></section>
+  <section id="tab-photos" hidden></section>
+  <section id="tab-onedrive" hidden></section>
+</main>
+<script>
+let tab = "gopro", state = null, busy = false;
+const data = { gopro: null, onedrive: null, photos: null };
+const $ = (id) => document.getElementById(id);
+
+const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g,
+  (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+function size(n) {
+  if (!n) return "?";
+  const u = ["B", "KB", "MB", "GB"];
+  let i = 0;
+  while (n >= 1024 && i < 3) { n /= 1024; i++; }
+  return (i > 1 ? n.toFixed(1) : Math.round(n)) + " " + u[i];
+}
+
+function clock(s) {
+  const m = Math.floor(s / 60), r = s % 60;
+  return m + ":" + String(r).padStart(2, "0");
+}
+
+function left(seconds) {
+  if (seconds <= 0) return "expired";
+  const h = Math.floor(seconds / 3600), m = Math.floor((seconds % 3600) / 60);
+  return h ? h + "h " + m + "m left" : m + "m left";
+}
+
+/* Said on the page rather than in an alert(): a modal dialog blocks everything
+   the page does, and a resolver's complaint is usually worth reading twice. */
+let saying = null;
+function say(text, bad) {
+  const box = $("say");
+  box.textContent = text || "";
+  box.className = bad ? "bad" : "";
+  clearTimeout(saying);
+  if (text) saying = setTimeout(() => { if ($("say").textContent === text) say(""); },
+                                12000);
+}
+
+async function api(path, body) {
+  const r = await fetch(path, body === undefined ? {} : {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return r.json();
+}
+
+/* Deliberately redraws only the header and the cast: the poll runs every two
+   seconds, and redrawing a tab would wipe a token being pasted or a link half
+   typed. Whoever changes the data redraws its own tab afterwards. */
+async function refreshState() {
+  state = await api("/api/state");
+  $("tvname").textContent = state.tv ? "→ " + state.tv : "— no TV chosen";
+  drawNow();
+}
+
+function drawNow() {
+  const c = state && state.cast;
+  if (!c || (!c.running && !c.log.length)) { $("now").innerHTML = ""; return; }
+  const log = $("now").querySelector("pre");
+  const pinned = !log || log.scrollTop + log.clientHeight >= log.scrollHeight - 24;
+  $("now").innerHTML =
+    '<div class="panel' + (c.running ? " playing" : "") + '">' +
+      '<div class="row">' +
+        '<strong>' + (c.running ? "Playing" : "Last cast") + ":</strong> " +
+        esc(c.title || "?") +
+        (c.running ? ' <span class="dim small">' + clock(c.seconds) + "</span>" : "") +
+        '<span class="grow"></span>' +
+        (c.running ? '<button id="stop">Stop</button>' : "") +
+      "</div>" +
+      '<div class="small dim" style="margin:6px 0 8px">' +
+        esc(c.command || "") + "</div>" +
+      "<pre>" + esc(c.log.join("\n")) + "</pre>" +
+    "</div>";
+  const fresh = $("now").querySelector("pre");
+  if (fresh && pinned) fresh.scrollTop = fresh.scrollHeight;
+  const stop = $("stop");
+  if (stop) stop.onclick = async () => {
+    stop.disabled = true;
+    state.cast = await api("/api/stop", {});
+    drawNow();
+  };
+}
+
+async function cast(payload, button) {
+  if (busy) return;
+  busy = true;
+  if (button) button.disabled = true;
+  const out = await api("/api/cast", payload);
+  busy = false;
+  if (button) button.disabled = false;
+  if (out.error) { say(out.error, true); return; }
+  say("");
+  state.cast = out;
+  drawNow();
+}
+
+/* ------------------------------------------------------------------ GoPro */
+function drawGopro() {
+  const t = state ? state.token : null;
+  const d = data.gopro;
+  let pill = '<span class="pill">unknown</span>';
+  if (t && t.state === "valid") {
+    pill = '<span class="pill ' + (t.left < 900 ? "warn" : "ok") + '">token: ' +
+           left(t.left) + "</span>";
+  } else if (t && t.state === "expired") {
+    pill = '<span class="pill bad">token: expired</span>';
+  } else if (t && t.state === "missing") {
+    pill = '<span class="pill bad">no token</span>';
+  }
+
+  let body;
+  if (!d) {
+    body = '<div class="empty">Loading...</div>';
+  } else if (d.asking) {
+    body = '<div class="empty">Asking GoPro for the library...</div>';
+  } else if (d.error) {
+    body = '<div class="err">' + esc(d.error) + "</div>";
+  } else if (d.never_listed) {
+    body = '<div class="empty">The library has never been listed on this machine ' +
+           "&mdash; reload it.</div>";
+  } else if (!d.items.length) {
+    body = '<div class="empty">The library came back empty.</div>';
+  } else {
+    body = '<table><thead><tr><th>#</th><th>Name</th><th>Date</th>' +
+      '<th>Resolution</th><th class="right">Size</th><th class="right">Quality</th>' +
+      "<th></th></tr></thead><tbody>" +
+      d.items.map((i, n) =>
+        "<tr><td class=\"dim\">" + (n + 1) + '</td><td class="name">' + esc(i.name) +
+        '</td><td class="dim small">' + esc(i.date || "") + "</td>" +
+        '<td class="dim small">' + esc(i.res || "") + "</td>" +
+        '<td class="right dim small">' + size(i.size) + "</td>" +
+        '<td class="right"><select data-q="' + (n + 1) + '">' +
+          '<option value="auto">auto</option>' +
+          '<option value="source">original</option>' +
+          '<option value="proxy">proxy</option>' +
+        "</select></td>" +
+        '<td class="right"><button class="go" data-cast="' + (n + 1) + '" data-title="' +
+          esc(i.name) + '">Cast</button></td></tr>').join("") +
+      "</tbody></table>";
+  }
+
+  $("tab-gopro").innerHTML =
+    '<p class="note">The only source that can be browsed. The token is copied out ' +
+    "of a logged-in browser and lasts a few hours; when it runs out, paste a new " +
+    "one.</p>" +
+    '<div class="panel"><div class="row">' + pill +
+      '<input id="tok" placeholder="paste gp_access_token (eyJ...)" style="flex:1">' +
+      '<button id="savetok">Store it</button>' +
+      '<button id="reload">Reload the library</button>' +
+    "</div></div>" +
+    '<div class="panel">' + body + "</div>";
+
+  $("savetok").onclick = async () => {
+    const value = $("tok").value.trim();
+    if (!value) return;
+    $("savetok").disabled = true;
+    const out = await api("/api/gopro/token", { token: value });
+    $("savetok").disabled = false;
+    if (out.error) { say(out.error, true); return; }
+    say("Token stored.");
+    $("tok").value = "";
+    await refreshState();
+    loadGopro(true);
+  };
+  $("reload").onclick = () => loadGopro(true);
+  $("tab-gopro").querySelectorAll("button[data-cast]").forEach((b) => {
+    b.onclick = () => {
+      const n = Number(b.dataset.cast);
+      const q = $("tab-gopro").querySelector('select[data-q="' + n + '"]').value;
+      cast({ source: "gopro", index: n, quality: q, title: b.dataset.title }, b);
+    };
+  });
+}
+
+async function loadGopro(refresh) {
+  data.gopro = refresh ? { asking: true } : null;
+  drawGopro();
+  data.gopro = await api("/api/gopro" + (refresh ? "?refresh=1" : ""));
+  await refreshState();      // a refresh may have consumed the last of the token
+  drawGopro();
+}
+
+/* ---------------------------------------------------------- Google Photos */
+function drawPhotos() {
+  const hist = (data.photos && data.photos.history) || [];
+  $("tab-photos").innerHTML =
+    '<p class="note">This cannot be browsed at all: since 31 March 2025 the Library ' +
+    "API only exposes items you pick by hand, so the entry point is a link to one " +
+    "video. A share link needs nothing; a private one needs your cookie jar.</p>" +
+    '<div class="panel">' +
+      '<div class="row"><input id="link" style="flex:1" ' +
+        'placeholder="https://photos.app.goo.gl/..."> ' +
+        '<button class="go" id="castlink">Cast</button></div>' +
+      '<div class="row" style="margin-top:10px">' +
+        '<label class="inline" for="ck">cookies.txt, for a private link</label>' +
+        '<input id="ck" style="flex:1" placeholder="(none)"></div>' +
+    "</div>" +
+    '<div class="panel"><div class="small dim" style="margin-bottom:8px">' +
+      "Pasted before</div>" +
+      (hist.length
+        ? "<table><tbody>" + hist.map((h) =>
+            '<tr><td class="name small">' + esc(h.link) + "</td>" +
+            '<td class="right dim small">' + esc(h.at) + "</td>" +
+            '<td class="right"><button data-again="' + esc(h.link) +
+            '">Cast</button></td></tr>').join("") + "</tbody></table>"
+        : '<div class="empty">Nothing yet.</div>') +
+    "</div>";
+
+  const go = (link, button) => cast({
+    source: "photos", link, cookies: $("ck").value.trim(),
+  }, button);
+  $("castlink").onclick = () => go($("link").value.trim(), $("castlink"));
+  $("link").onkeydown = (e) => { if (e.key === "Enter") $("castlink").click(); };
+  $("tab-photos").querySelectorAll("button[data-again]").forEach((b) => {
+    b.onclick = () => go(b.dataset.again, b);
+  });
+}
+
+async function loadPhotos() {
+  data.photos = await api("/api/photos");
+  drawPhotos();
+}
+
+/* --------------------------------------------------------------- OneDrive */
+function drawOnedrive() {
+  const d = data.onedrive;
+  let body = '<div class="empty">Loading...</div>';
+  if (d && d.error) body = '<div class="err">' + esc(d.error) + "</div>";
+  else if (d && !d.items.length) body = '<div class="empty">No video files there.</div>';
+  else if (d) {
+    body = '<table><thead><tr><th>File</th><th>Date</th><th class="right">Size</th>' +
+      "<th></th></tr></thead><tbody>" +
+      d.items.map((i) =>
+        '<tr><td class="name">' + esc(i.name) + "</td>" +
+        '<td class="dim small">' + esc(i.date) + "</td>" +
+        '<td class="right dim small">' + size(i.size) + "</td>" +
+        '<td class="right"><button class="go" data-path="' + esc(i.path) +
+        '">Cast</button></td></tr>').join("") + "</tbody></table>";
+  }
+  $("tab-onedrive").innerHTML =
+    '<p class="note">No API needed: the account is mirrored to disk, so this is a ' +
+    "directory browse, and cast-tv serves the file straight off it.</p>" +
+    '<div class="panel"><div class="row">' +
+      '<label class="inline" for="root">folder</label>' +
+      '<input id="root" style="flex:1" value="' + esc((d && d.root) || "") + '">' +
+      '<button id="setroot">Use it</button>' +
+    "</div></div>" +
+    '<div class="panel">' + body + "</div>";
+
+  $("setroot").onclick = async () => {
+    await api("/api/settings", { onedrive: $("root").value.trim() });
+    loadOnedrive();
+  };
+  $("tab-onedrive").querySelectorAll("button[data-path]").forEach((b) => {
+    b.onclick = () => cast({ source: "onedrive", path: b.dataset.path }, b);
+  });
+}
+
+async function loadOnedrive() {
+  data.onedrive = null;
+  drawOnedrive();
+  data.onedrive = await api("/api/onedrive");
+  drawOnedrive();
+}
+
+/* ------------------------------------------------------------------- wiring */
+document.querySelectorAll("nav button").forEach((b) => {
+  b.onclick = () => {
+    tab = b.dataset.tab;
+    document.querySelectorAll("nav button").forEach(
+      (o) => o.classList.toggle("on", o === b));
+    ["gopro", "photos", "onedrive"].forEach(
+      (name) => { $("tab-" + name).hidden = name !== tab; });
+    if (tab === "gopro" && !data.gopro) loadGopro(false);
+    if (tab === "photos" && !data.photos) loadPhotos();
+    if (tab === "onedrive" && !data.onedrive) loadOnedrive();
+  };
+});
+
+$("find").onclick = async () => {
+  $("find").disabled = true;
+  $("find").textContent = "Looking...";
+  const out = await api("/api/tv", {});
+  $("find").disabled = false;
+  $("find").textContent = "Find the TV";
+  if (!out.found || !out.found.length) {
+    say("No DLNA renderer answered. Switch the TV on and try again, or name "
+        + "it with cast-ui -t <address>.", true);
+    return;
+  }
+  const pick = out.found[0];
+  await api("/api/settings", { tv: pick.ip });
+  await refreshState();
+  say("Found " + pick.name + " at " + pick.ip + ", and remembered it.");
+};
+
+setInterval(() => {
+  if (!busy && state && state.cast && state.cast.running) refreshState();
+}, 2000);
+
+refreshState().then(() => loadGopro(false));
+</script>
+</body>
+</html>
+"""
+
+
+# ---------------------------------------------------------------------- http
+class UI(http.server.BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
+
+    def log_message(self, *a):
+        pass
+
+    def _send(self, code, body, ctype):
+        raw = body.encode("utf-8")
+        self.answered = True
+        self.send_response(code)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(raw)))
+        self.end_headers()
+        try:
+            self.wfile.write(raw)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+
+    def _json(self, data, code=200):
+        self._send(code, json.dumps(data), "application/json; charset=utf-8")
+
+    def _body(self):
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+            return json.loads(self.rfile.read(length) or b"{}")
+        except (ValueError, OSError):
+            return {}
+
+    def _guard(self, work):
+        """A helper that fails must not take the answer down with it.
+
+        Everything here leans on other commands - a discovery that times out,
+        a token that has gone stale - and a page left waiting on a dropped
+        connection says nothing at all. A sentence in the JSON does.
+        """
+        self.answered = False
+        try:
+            work()
+        except subprocess.TimeoutExpired as e:
+            name = os.path.basename((e.cmd or ["a command"])[0])
+            if not self.answered:
+                self._json({"error": "%s took too long to answer." % name})
+        except Exception as e:
+            if not self.answered:
+                self._json({"error": "%s: %s" % (type(e).__name__, e)})
+            else:
+                self.close_connection = True
+
+    def do_GET(self):
+        self._guard(self._get)
+
+    def do_POST(self):
+        self._guard(self._post)
+
+    def _get(self):
+        path, _, query = self.path.partition("?")
+        if path in ("/", "/index.html"):
+            self._send(200, PAGE, "text/html; charset=utf-8")
+        elif path == "/api/state":
+            self._json({"tv": tv_address(), "token": token_state(),
+                        "cast": Cast.state()})
+        elif path == "/api/gopro":
+            self._json(gopro_items(refresh="refresh=1" in query))
+        elif path == "/api/onedrive":
+            self._json(onedrive_items(onedrive_root()))
+        elif path == "/api/photos":
+            self._json({"history": photos_history()})
+        else:
+            self._json({"error": "no such thing here"}, 404)
+
+    def _post(self):
+        req = self._body()
+        if self.path == "/api/cast":
+            cmd, title, problem = cast_command(req)
+            self._json({"error": problem} if problem else Cast.start(cmd, title))
+        elif self.path == "/api/stop":
+            self._json(Cast.stop())
+        elif self.path == "/api/gopro/token":
+            value = (req.get("token") or "").strip()
+            if not value:
+                self._json({"error": "Nothing pasted."})
+                return
+            # cast-gopro owns the token file, including the paste-twice repair
+            done = subprocess.run(cc.sibling("cast-gopro") + ["--token", value],
+                                  capture_output=True, text=True, timeout=30)
+            self._json({"error": (done.stderr or "").strip()} if done.returncode
+                       else {"stored": True, "token": token_state()})
+        elif self.path == "/api/settings":
+            saved = config_set(tv=req.get("tv"), onedrive=req.get("onedrive"))
+            self._json({"tv": saved.get("tv"), "onedrive": onedrive_root()})
+        elif self.path == "/api/tv":
+            self._json({"found": renderers()})
+        else:
+            self._json({"error": "no such thing here"}, 404)
+
+
+class Server(socketserver.ThreadingTCPServer):
+    daemon_threads = True
+    allow_reuse_address = True
+
+
+def main():
+    ap = argparse.ArgumentParser(
+        description="A local page for choosing what to cast.")
+    ap.add_argument("-p", "--port", type=int, default=8896,
+                    help="port to serve the page on (cast-tv itself uses 8895)")
+    ap.add_argument("-b", "--bind", default="127.0.0.1",
+                    help="address to listen on; anything else exposes the page "
+                         "to the network, and the page can start a cast")
+    ap.add_argument("--onedrive", help="folder holding the mirrored account")
+    ap.add_argument("-t", "--tv", help="TV address, remembered for next time")
+    ap.add_argument("--no-open", dest="open_it", action="store_false",
+                    help="do not open a browser")
+    args = ap.parse_args()
+
+    if args.onedrive or args.tv:
+        config_set(onedrive=args.onedrive, tv=args.tv)
+
+    try:
+        srv = Server((args.bind, args.port), UI)
+    except OSError as e:
+        print("Cannot bind %s:%d: %s" % (args.bind, args.port, e))
+        return 1
+
+    where = "http://%s:%d/" % ("localhost" if args.bind == "127.0.0.1"
+                               else args.bind, args.port)
+    print("cast-ui on %s" % where)
+    if args.bind != "127.0.0.1":
+        print("  ! reachable from the network, and anyone opening it can cast")
+    print("  TV: %s" % (tv_address() or "not chosen yet - use \"Find the TV\""))
+    print("  OneDrive: %s" % onedrive_root())
+    print("  Ctrl+C ends it")
+    if args.open_it:
+        threading.Thread(target=webbrowser.open, args=(where,), daemon=True).start()
+    try:
+        srv.serve_forever()
+    except KeyboardInterrupt:
+        print("\nStopping.")
+        Cast.stop()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
