@@ -1239,3 +1239,51 @@ removes the user's consent, not the Entra registration. A fresh device-code flow
 (`POST /api/sources/onedrive/connect {"fresh": true}` → code at `https://www.microsoft.com/link`)
 showed Microsoft's consent screen again; Piotr accepted it and the source went `connecting` →
 `connected` at 19:20:51, and a root listing answered (7 folders).
+
+### Row 7.3 — first attempt, a managed Windows laptop (2026-09-17, 18:50–19:10, Piotr at the laptop and the TV, Claude on the laptop) — row stays open
+
+Windows 11 Enterprise 10.0.26200, joined to an employer's Intune (MDM), not an administrator;
+Python 3.14.6 only (pillow and pillow-heif ship cp314 win_amd64 wheels, so 3.12 was not needed).
+Wi-Fi `192.168.50.242` on a Private profile, plus Hyper-V `vEthernet (Default Switch)`
+`172.25.160.1` and five link-local adapters.
+
+**What this machine settles:**
+
+- **pipx, as the README says.** `py -m pip install --user pipx`, `py -m pipx ensurepath`, then
+  `pipx install git+https://github.com/Piotr-Miller/cast-tv@shape-the-cloud-source-ui` (`7a47065`)
+  → `cast-tv.exe`, `cast-gopro.exe`, `cast-photos.exe` in `~\.local\bin`.
+- **The UI.** Piotr ran `cast-tv` in a new PowerShell window from `~`; the browser opened the UI.
+  `cast-tv.exe` (the pipx launcher) runs `python.exe`, which listens on `0.0.0.0:8895`.
+- **Discovery across interfaces.** `/api/status` 50 s after start: `tv` `83" OLED`
+  `192.168.50.142` `ready`; `interfaces` = Intel Wi-Fi 6E AX211 `192.168.50.242` **1 response**,
+  Hyper-V Virtual Ethernet Adapter `172.25.160.1` **0 responses**; the link-local adapters are not
+  listed. `addresses` = localhost, the Wi-Fi address, the Hyper-V address.
+- **Paths.** `%APPDATA%\cast-tv\settings.json` at start, `onedrive.json` after sign-in; no doubled
+  `cast-tv\cast-tv`.
+- **OneDrive device code on Windows.** Code `VBRKDR6C` at `https://www.microsoft.com/link`, entered
+  by Piotr → `connected` at 18:58:13, `stored: true`; listings answered (a 250-folder walk).
+- **The zero-bytes diagnosis on Windows** (row 3.6's path). `POST /api/cast` for
+  `/Dokumenty/Videos/Przejazd - SuperCars.mp4` at about 19:07:25 → `202 preparing`; at 19:07:29
+  the cast failed with `tv_fetched_nothing`, "The TV never started playing and never asked for the
+  file.", hint `netsh advfirewall firewall add rule name="cast-tv" dir=in action=allow protocol=TCP
+  localport=8895`. Four seconds is inside no polling budget (`BUDGET_OTHER` is 24 s), so this is the
+  716-on-`SetAVTransportURI` path with zero requests (`supervisor.py`, the `except` after `Play`):
+  the Samsung probed the address and could not connect. `--debug` was not on, so the 716 itself
+  was not seen.
+
+**Why nothing can be cast from this machine.** The active firewall store holds an MDM rule,
+`Block InBound connection Public Private`: inbound, Block, profiles Private and Public, protocol,
+ports, addresses, program and interface type all `Any`, edge traversal blocked. A block rule
+outranks every allow rule, so the Private profile's `DefaultInboundAction: Allow` (also from
+policy, with `NotifyOnListen: False`, hence no prompt) changes nothing, and the hint's `netsh`
+rule would not help even with administrator rights. The earlier local-store queries missed the
+rule; `Get-NetFirewallRule -PolicyStore ActiveStore -Direction Inbound -Action Block` shows it.
+No third-party firewall runs (Defender only).
+
+**The rest of the row needs a machine without such policy:** the firewall prompt, a cast that
+plays, the 30-minute slideshow, and Ctrl+C while casting. Stay-awake could not have been judged
+here either: policy sets sleep to never (AC and DC), hibernate after 3 h on AC and 70 min on
+battery, and only the display turns off, after 3 min. Before any cast the system execution state
+(`CallNtPowerInformation(SystemExecutionState)`, no administrator needed) was `0x00000000`: a
+usable baseline for the next attempt. Ctrl+C was not tried here (Piotr's decision to stop testing
+on this laptop).
