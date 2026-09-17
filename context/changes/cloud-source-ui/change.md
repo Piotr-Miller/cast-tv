@@ -53,8 +53,9 @@ list.
 
 - `cast-ui`, with the three tabs the notes called for, and a per-row quality choice on
   GoPro so the dead end the CLI had to learn is not reachable from the page.
-- Token expiry read from the JWT payload and shown as time remaining, which is the
-  answer to "make that visible rather than failing with a bare 401".
+- The token's standing shown up front rather than discovered as a bare 401: when it was
+  stored, and how GoPro answered the last time it was used. This started out reading an
+  expiry from the token, which turned out to be impossible - see the GoPro section below.
 - Google Photos history in `~/.config/cast-tv/photos-history.json`, since with nothing
   to browse the links already pasted are the closest thing to a library.
 - OneDrive browse rooted at `~/.onedrive-sync`, configurable, and refusing to cast
@@ -67,17 +68,18 @@ instead of dropping the connection; the child-process plumbing was tested agains
 stand-in that redraws its status line with `\r`, as `cast-tv` does; both the
 choice-to-command layer and the token reader were tested including their refusals.
 
-Not verified: a cast started from the page onto the real TV. That needs the Linux
-laptop and the TV on the same network.
+Not verified at the time of writing: a cast started from the page onto the real TV, which
+needed the TV on the same network. Both sections below close that, from Windows.
 
 ## Left out
 
 - **Thumbnails.** `/media/search` returns no thumbnail address with the fields asked
   for, and guessing an undocumented endpoint - one call per row - was not worth it
   against a listing that already shows name, date, resolution and size.
-- **Duration.** The API is already asked for it and the answer is discarded before the
-  cache is written; carrying it through is a one-line change to `cast-gopro`, worth
-  making next time that file is touched with a live token to test against.
+- **Duration.** `cast-gopro` asks `/media/search` for it and the answer never contains
+  it: against a live library the field comes back absent on every item, so the listing
+  cannot show a length no matter what is done at this end. This was written down twice as
+  a one-line change worth making, which a live token then disproved.
 
 ## Windows 11 as well as Linux
 
@@ -134,9 +136,29 @@ Windows, and the refresh that follows drew a real 401 from api.gopro.com, which 
 showed with the how-to rather than as a bare failure. The paste-twice repair and the
 "no listing cached" hint were checked on the command line there too.
 
-Left for a real token: a listing that succeeds, and a cast from it. That also remains
-the moment to carry the duration field through, which the API already returns and the
-cache still discards.
+Then a real token arrived, and the first thing it showed is that the headline feature was
+built on a false premise. **GoPro's token is not a JWT but a JWE**: five parts, a header
+naming `alg` and `enc`, and a payload that is encrypted rather than merely encoded. Its
+expiry cannot be read - not here, not anywhere without GoPro's key - so `token: 2h 14m
+left` was a thing only a token of my own making would ever have produced. A fake stood in
+for the real thing and agreed with the assumption that made it.
+
+What the page says now is what can be known without spending a call: when the token was
+stored, since they last a few hours, and how GoPro answered the last time it was used -
+`token: working, stored 5m ago`, or `token: rejected` once a call comes back 401. The
+expiry path is kept for a token that does carry a readable one, and the amber past three
+hours is marked in the code as a hint rather than knowledge.
+
+With that token the rest went through on Windows: a listing of 60 items, and item 1 cast
+from the page as a proxy, which resolved to `high_res_proxy_mp4` at 9 MB in place of a
+136 MB 3360p original and played 0:00 to 0:09 on the TV. Stopping a live two-deep cast
+was checked too, which until now had only been tested against stand-ins: three Python
+processes while it played, Stop from the page, one left, and the TV reporting STOPPED.
+
+One flaw the real library exposed: every row defaulted to `auto`, and `auto` means "best
+variation", which for a camera original is exactly the variant this TV refuses - and all
+60 items are 3360p. A page whose purpose was to keep that dead end out of reach opened on
+it. The rows now open on the proxy.
 
 Found while doing this, and the reason it was worth doing: five hints named the commands
 as `cast-gopro ...` and `cast-photos ...`. That is correct on Linux, where a shebang and
