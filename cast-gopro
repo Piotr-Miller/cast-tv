@@ -52,7 +52,9 @@ def save_token(value):
     with open(TOKEN_FILE, "w") as fh:
         fh.write(value)
     os.chmod(TOKEN_FILE, 0o600)
-    print("Token stored in %s (yours only, mode 0600)." % TOKEN_FILE)
+    # chmod on Windows only moves the read-only flag, so do not claim a mode there
+    print("Token stored in %s%s." % (
+        TOKEN_FILE, "" if os.name == "nt" else " (yours only, mode 0600)"))
 
 
 def api(path, tok, params=None):
