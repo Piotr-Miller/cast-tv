@@ -436,7 +436,10 @@ def explain_failure(source):
     for reason in reasons:
         print("   ! %s" % reason)
     if reasons:
-        print("   Try a lighter variant:  cast-gopro <n> -q proxy")
+        # cast-tv stays a single standalone file, so this one conditional is
+        # spelled out rather than borrowed from castcloud
+        print("   Try a lighter variant:  %scast-gopro <n> -q proxy"
+              % ("python " if os.name == "nt" else ""))
 
 
 def check_codecs(path):

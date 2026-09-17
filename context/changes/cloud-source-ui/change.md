@@ -122,10 +122,34 @@ doing the same, the TV asking for a range from the middle of it on the way; the 
 starting a cast, showing the command's own output, and stopping it; and a two-deep cast
 leaving nothing behind.
 
-Not exercised from Windows: the GoPro and Google Photos tabs against the live services,
-for want of a browser token and a share link on that machine. Both of them reach their
-service over plain HTTP and then hand off through the launcher every other path here
-proved, so what is untested is those services' own answers rather than anything the
-platform does differently. Worth ten minutes the next time a token is at hand - and the
-duration field, which the API already returns and the cache still discards, is the one
-thing to add while that token is live.
+## The GoPro tab on Windows, without an account
+
+Most of what this tab does happens before GoPro is ever asked, so most of it can be
+checked with a token of one's own making. Against fake JWTs - a structure, no valid
+signature - the page walks the whole scale: no token at all puts the entire how-to on
+the page instead of failing quietly; an expiry in the past reads `token: expired`
+without a single call to GoPro; two hours out reads `1h 58m left` in green; seven
+minutes out reads `7m left` in amber. Storing one through the page's own bar works on
+Windows, and the refresh that follows drew a real 401 from api.gopro.com, which the page
+showed with the how-to rather than as a bare failure. The paste-twice repair and the
+"no listing cached" hint were checked on the command line there too.
+
+Left for a real token: a listing that succeeds, and a cast from it. That also remains
+the moment to carry the duration field through, which the API already returns and the
+cache still discards.
+
+Found while doing this, and the reason it was worth doing: five hints named the commands
+as `cast-gopro ...` and `cast-photos ...`. That is correct on Linux, where a shebang and
+a symlink make them commands, and on Windows it sends the reader straight into the
+WinError 193 this change had just finished fixing - and the page shows these strings
+verbatim, so they are UI. `castcloud.how_to_run()` renders them per platform now, and
+the Linux wording was checked byte-for-byte against what it said before. The config and
+cache paths were being printed with mixed separators as well, since expanduser leaves
+`C:\\Users\\pmill/.config/cast-tv`; both are normalised now, because both are shown to
+people.
+
+Not exercised from Windows: the Google Photos tab against a live share link, for want of
+one on that machine. It reaches Google over plain HTTP and hands off through the launcher
+every other path here proved, so what is untested is Google's own answer rather than
+anything the platform does differently - and its failure path was seen, since a
+deliberately bad link produced the cookie advice as intended.
