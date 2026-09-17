@@ -51,3 +51,15 @@ same H.264 file.
   plus a scripted-fake test where the FakeTV answers 701 to a `SetAVTransportURI` during
   `TRANSITIONING`. Also worth debouncing the UI's Cast button while a cast request is in flight.
   Source: `research.md`, "Row 4.6 — second attempt".
+
+## From manual row 7.3, first attempt (2026-09-17)
+
+- **The firewall hint misleads on a managed Windows machine.** `tv_fetched_nothing` hints
+  `netsh advfirewall firewall add rule … action=allow …`, but on a laptop whose MDM pushes an
+  inbound block-all rule (`Block InBound connection Public Private`, every filter `Any`) no allow
+  rule can win, and `netsh` needs administrator rights the user may not have. The diagnosis itself
+  was right. Possible fix: on Windows, when an enabled inbound Block rule with no port or program
+  filter is active for the current profile (`Get-NetFirewallRule -PolicyStore ActiveStore`), say
+  that the organisation's policy blocks incoming connections and that casting from this machine is
+  not possible; otherwise keep the `netsh` line, noting it needs an administrator prompt.
+  Source: `research.md`, "Row 7.3 — first attempt, a managed Windows laptop".
