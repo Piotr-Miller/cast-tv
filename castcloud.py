@@ -15,8 +15,10 @@ import urllib.request
 
 UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
       "Chrome/128.0 Safari/537.36")
-CACHE = os.path.expanduser("~/.cache/cast-tv")
-CONFIG = os.path.expanduser("~/.config/cast-tv")
+# normpath because expanduser mixes separators on Windows, and both of
+# these are printed at people
+CACHE = os.path.normpath(os.path.expanduser("~/.cache/cast-tv"))
+CONFIG = os.path.normpath(os.path.expanduser("~/.config/cast-tv"))
 
 
 def die(msg, code=1):
@@ -89,6 +91,16 @@ def human(size):
         if size < 1024 or unit == "GB":
             return "%.0f %s" % (size, unit) if unit != "GB" else "%.1f GB" % size
         size /= 1024.0
+
+
+def how_to_run(name):
+    """How a person types one of these commands on this platform.
+
+    A message that says "cast-gopro --token ..." is good advice on Linux and
+    sends a Windows reader straight into WinError 193. These strings are also
+    what the page shows when a resolver complains, so they have to be right.
+    """
+    return ("python %s" % name) if os.name == "nt" else name
 
 
 def sibling(name):

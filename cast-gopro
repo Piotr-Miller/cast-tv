@@ -26,8 +26,8 @@ The token comes from a logged-in browser and lasts a few hours:
   3. copy the value of gp_access_token (it starts with eyJ)
      or: F12 -> Network -> any api.gopro.com request -> Request Headers ->
          the part of "authorization" after "Bearer "
-  4. cast-gopro --token eyJhbGc...
-"""
+  4. %s --token eyJhbGc...
+""" % cc.how_to_run("cast-gopro")
 
 
 def token(explicit=None):
@@ -103,7 +103,7 @@ def show(items):
         print("%3d. %-*s  %s  %-6s %8s  %s" % (
             n, width, i["name"], i["date"] or "----------",
             i["res"] or "", cc.human(i["size"]), i["kind"]))
-    print("\nCast one:  cast-gopro <number>")
+    print("\nCast one:  %s <number>" % cc.how_to_run("cast-gopro"))
 
 
 def _rank(label):
@@ -183,7 +183,7 @@ def main():
         if args.what.isdigit() and items and 1 <= int(args.what) <= len(items):
             item = items[int(args.what) - 1]
         elif args.what.isdigit():
-            cc.die("No listing cached - run `cast-gopro` first.")
+            cc.die("No listing cached - run `%s` first." % cc.how_to_run("cast-gopro"))
         else:
             item = {"id": args.what, "name": args.what}
         print("Resolving: %s" % item["name"])
