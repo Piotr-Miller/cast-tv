@@ -21,10 +21,31 @@ MIME = {".mkv": "video/x-matroska", ".mp4": "video/mp4", ".m4v": "video/mp4",
         ".m2ts": "video/mp2t", ".mpg": "video/mpeg", ".mpeg": "video/mpeg",
         ".webm": "video/webm", ".wmv": "video/x-ms-wmv", ".mp3": "audio/mpeg",
         ".flac": "audio/flac", ".m4a": "audio/mp4", ".srt": "application/x-subrip",
-        ".smi": "application/smil", ".ass": "text/plain", ".vtt": "text/vtt"}
+        ".smi": "application/smil", ".ass": "text/plain", ".vtt": "text/vtt",
+        ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
+        ".gif": "image/gif", ".webp": "image/webp", ".heic": "image/heic"}
 
 DLNA_FEATURES = ("DLNA.ORG_OP=01;DLNA.ORG_CI=0;DLNA.ORG_FLAGS="
                  "01700000000000000000000000000000")
+# A still is fetched whole rather than streamed, and Samsung wants a profile
+# name for one; these flags say interactive transfer, no conversion.
+IMAGE_FEATURES = ("DLNA.ORG_PN=JPEG_LRG;DLNA.ORG_OP=01;DLNA.ORG_CI=0;"
+                  "DLNA.ORG_FLAGS=00d00000000000000000000000000000")
+
+
+def features_for(mime):
+    return IMAGE_FEATURES if (mime or "").startswith("image/") else DLNA_FEATURES
+
+
+def upnp_class(mime):
+    """What the renderer is being handed. A still announced as a videoItem is
+    what makes a TV answer "this file is not supported"."""
+    mime = mime or ""
+    if mime.startswith("image/"):
+        return "object.item.imageItem.photo"
+    if mime.startswith("audio/"):
+        return "object.item.audioItem.musicTrack"
+    return "object.item.videoItem"
 
 
 # ----------------------------------------------------------------- discovery
@@ -195,9 +216,13 @@ class RangeHandler(http.server.BaseHTTPRequestHandler):
         self.send_header("Accept-Ranges", "bytes")
         if partial:
             self.send_header("Content-Range", "bytes %d-%d/%d" % (start, end, size))
-        # headers DLNA renderers expect
-        self.send_header("transferMode.dlna.org", "Streaming")
-        self.send_header("contentFeatures.dlna.org", DLNA_FEATURES)
+        # headers DLNA renderers expect. A still is an interactive transfer,
+        # not a stream, and carries its own profile.
+        mime = MIME.get(ext, "application/octet-stream")
+        image = mime.startswith("image/")
+        self.send_header("transferMode.dlna.org",
+                         "Interactive" if image else "Streaming")
+        self.send_header("contentFeatures.dlna.org", features_for(mime))
         if self.caption_url and ext not in (".srt", ".smi", ".ass", ".vtt"):
             self.send_header("CaptionInfo.sec", self.caption_url)
         self.end_headers()
@@ -288,8 +313,10 @@ class RangeHandler(http.server.BaseHTTPRequestHandler):
                 if trim:      # unknown length: all we can do is skip and run on
                     self.close_connection = True
 
-            self.send_header("transferMode.dlna.org", "Streaming")
-            self.send_header("contentFeatures.dlna.org", DLNA_FEATURES)
+            image = (ctype or "").startswith("image/")
+            self.send_header("transferMode.dlna.org",
+                             "Interactive" if image else "Streaming")
+            self.send_header("contentFeatures.dlna.org", features_for(ctype))
             self.end_headers()
             if not body:
                 return
@@ -385,11 +412,12 @@ def didl(url, title, disk, caption=None):
             'xmlns:sec="http://www.sec.co.kr/"&gt;'
             '&lt;item id="1" parentID="0" restricted="1"&gt;'
             "&lt;dc:title&gt;%s&lt;/dc:title&gt;"
-            "&lt;upnp:class&gt;object.item.videoItem&lt;/upnp:class&gt;%s"
+            "&lt;upnp:class&gt;%s&lt;/upnp:class&gt;%s"
             '&lt;res protocolInfo="http-get:*:%s:%s"&gt;%s&lt;/res&gt;'
             "&lt;/item&gt;&lt;/DIDL-Lite&gt;"
-            % (escape(title), cap.replace("<", "&lt;").replace(">", "&gt;"),
-               mime, DLNA_FEATURES, escape(url)))
+            % (escape(title), upnp_class(mime),
+               cap.replace("<", "&lt;").replace(">", "&gt;"),
+               mime, features_for(mime), escape(url)))
 
 
 def blocked_hint(port):
