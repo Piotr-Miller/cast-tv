@@ -91,7 +91,9 @@ def token_state():
     try:
         with open(GOPRO_TOKEN) as fh:
             raw = fh.read().strip()
-        age = int(time.time() - os.path.getmtime(GOPRO_TOKEN))
+        # never negative: the clock can move behind the file's timestamp, and
+        # "stored -115m ago" is worse than saying nothing useful
+        age = max(0, int(time.time() - os.path.getmtime(GOPRO_TOKEN)))
     except OSError:
         return {"state": "missing"}
     if not raw:
@@ -461,8 +463,9 @@ function left(seconds) {
 }
 
 function ago(seconds) {
+  if (seconds < 60) return "just now";
   const h = Math.floor(seconds / 3600), m = Math.floor((seconds % 3600) / 60);
-  return (h ? h + "h " + m + "m" : Math.max(m, 1) + "m") + " ago";
+  return (h ? h + "h " + m + "m" : m + "m") + " ago";
 }
 
 /* Said on the page rather than in an alert(): a modal dialog blocks everything
