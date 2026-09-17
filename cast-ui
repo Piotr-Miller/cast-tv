@@ -70,34 +70,45 @@ def onedrive_root():
 
 
 # ------------------------------------------------------------------- sources
-def token_state():
-    """What the stored GoPro token is worth, without asking GoPro.
+class Gopro:
+    """How GoPro answered last time, because the token itself will not say."""
+    verdict = None          # None, "ok", "rejected" or "failed"
 
-    The token is a JWT, so its expiry is readable straight from the payload.
-    Saying "2h left" up front is the whole point: on the command line expiry
-    could only be discovered as a 401, half way through resolving something.
+
+def token_state():
+    """What can honestly be said about the stored GoPro token.
+
+    This began by reading the expiry out of the payload, on the assumption that
+    the token is a JWT. A real one is not: it arrives as a JWE - five parts, a
+    header naming alg and enc, and a payload that is encrypted - so no expiry
+    can be read from it at all, and a token of my own making was the only thing
+    that assumption ever worked on.
+
+    What is knowable without spending a call: whether one is stored, how long
+    ago (they last a few hours), and how GoPro answered the last time it was
+    used. The JWT path stays for a token that does carry a readable expiry.
     """
     try:
         with open(GOPRO_TOKEN) as fh:
             raw = fh.read().strip()
-    except FileNotFoundError:
+        age = int(time.time() - os.path.getmtime(GOPRO_TOKEN))
+    except OSError:
         return {"state": "missing"}
     if not raw:
         return {"state": "missing"}
     parts = raw.split(".")
-    if len(parts) != 3:
-        # not a JWT - it may still work, we just cannot say for how long
-        return {"state": "unknown"}
-    try:
-        pad = "=" * (-len(parts[1]) % 4)
-        claims = json.loads(base64.urlsafe_b64decode(parts[1] + pad))
-    except (ValueError, binascii.Error, UnicodeDecodeError):
-        return {"state": "unknown"}
-    exp = claims.get("exp")
-    if not isinstance(exp, (int, float)):
-        return {"state": "unknown"}
-    left = int(exp - time.time())
-    return {"state": "valid" if left > 0 else "expired", "left": left}
+    if len(parts) == 3:
+        try:
+            pad = "=" * (-len(parts[1]) % 4)
+            claims = json.loads(base64.urlsafe_b64decode(parts[1] + pad))
+            exp = claims.get("exp")
+            if isinstance(exp, (int, float)):
+                left = int(exp - time.time())
+                return {"state": "valid" if left > 0 else "expired",
+                        "left": left, "age": age}
+        except (ValueError, binascii.Error, UnicodeDecodeError):
+            pass
+    return {"state": "opaque", "age": age, "verdict": Gopro.verdict}
 
 
 def gopro_items(refresh=False):
@@ -107,8 +118,10 @@ def gopro_items(refresh=False):
                               capture_output=True, text=True, timeout=180)
         if done.returncode != 0:
             # the token expiring is the common case, and it explains itself
-            return {"error": (done.stderr or done.stdout).strip()
-                    or "cast-gopro failed without saying why"}
+            said = (done.stderr or done.stdout).strip()
+            Gopro.verdict = "rejected" if "401" in said else "failed"
+            return {"error": said or "cast-gopro failed without saying why"}
+        Gopro.verdict = "ok"
     items = cc.cache_read("gopro-list.json")
     if items is None:
         return {"items": [], "never_listed": True}
@@ -447,6 +460,11 @@ function left(seconds) {
   return h ? h + "h " + m + "m left" : m + "m left";
 }
 
+function ago(seconds) {
+  const h = Math.floor(seconds / 3600), m = Math.floor((seconds % 3600) / 60);
+  return (h ? h + "h " + m + "m" : Math.max(m, 1) + "m") + " ago";
+}
+
 /* Said on the page rather than in an alert(): a modal dialog blocks everything
    the page does, and a resolver's complaint is usually worth reading twice. */
 let saying = null;
@@ -521,14 +539,28 @@ async function cast(payload, button) {
 function drawGopro() {
   const t = state ? state.token : null;
   const d = data.gopro;
+  /* GoPro's token is encrypted, so nothing here can know when it expires.
+     What it can say: when it was stored, and how GoPro answered last. Past
+     three hours the amber is a hint - they last a few hours - not knowledge.
+     The expiry line is kept for a token that does carry a readable one. */
   let pill = '<span class="pill">unknown</span>';
-  if (t && t.state === "valid") {
-    pill = '<span class="pill ' + (t.left < 900 ? "warn" : "ok") + '">token: ' +
-           left(t.left) + "</span>";
-  } else if (t && t.state === "expired") {
-    pill = '<span class="pill bad">token: expired</span>';
-  } else if (t && t.state === "missing") {
+  if (t && t.state === "missing") {
     pill = '<span class="pill bad">no token</span>';
+  } else if (t && t.left != null) {
+    pill = t.left > 0
+      ? '<span class="pill ' + (t.left < 900 ? "warn" : "ok") + '">token: ' +
+        left(t.left) + "</span>"
+      : '<span class="pill bad">token: expired</span>';
+  } else if (t && t.state === "opaque") {
+    if (t.verdict === "rejected") {
+      pill = '<span class="pill bad">token: rejected</span>';
+    } else if (t.verdict === "ok") {
+      pill = '<span class="pill ok">token: working, stored ' + ago(t.age) +
+             "</span>";
+    } else {
+      pill = '<span class="pill' + (t.age > 10800 ? " warn" : "") +
+             '">token: stored ' + ago(t.age) + "</span>";
+    }
   }
 
   let body;
@@ -552,10 +584,14 @@ function drawGopro() {
         '</td><td class="dim small">' + esc(i.date || "") + "</td>" +
         '<td class="dim small">' + esc(i.res || "") + "</td>" +
         '<td class="right dim small">' + size(i.size) + "</td>" +
+        /* proxy first, and so selected: auto means "best variant", which for a
+           camera original is the one this TV refuses outright - every row in
+           this library is 3360p. The CLI's default is right for a CLI; a page
+           that offers the choice should not open on the dead end. */
         '<td class="right"><select data-q="' + (n + 1) + '">' +
+          '<option value="proxy">proxy</option>' +
           '<option value="auto">auto</option>' +
           '<option value="source">original</option>' +
-          '<option value="proxy">proxy</option>' +
         "</select></td>" +
         '<td class="right"><button class="go" data-cast="' + (n + 1) + '" data-title="' +
           esc(i.name) + '">Cast</button></td></tr>').join("") +

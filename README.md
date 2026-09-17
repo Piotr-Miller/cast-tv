@@ -123,10 +123,11 @@ cast-ui --onedrive ~/OneDrive  # a mirror kept somewhere else
 
 The three tabs are shaped by what each source will allow, and the asymmetry is the point:
 
-- **GoPro** is the only one that browses. The token is a JWT, so the page reads its expiry
-  and says `token: 2h 14m left` instead of letting a bearer token die mid-resolve; a new one
-  is pasted into the same bar. Every row carries the quality choice `cast-gopro -q` already
-  had, because camera originals are what the TV refuses.
+- **GoPro** is the only one that browses. Its token is encrypted — a JWE, not the JWT it
+  looks like — so nothing can read when it expires; the page says when it was stored and
+  what GoPro answered last, and a new one is pasted into the same bar. Every row carries
+  the quality choice `cast-gopro -q` already had and opens on the proxy, because camera
+  originals are what the TV refuses.
 - **Google Photos** cannot be browsed, so that tab is a paste field and a record of what has
   been pasted before - which is as close to a library as the API restriction permits.
 - **OneDrive** needs no API at all: the mirror is a directory, so the tab is a directory
