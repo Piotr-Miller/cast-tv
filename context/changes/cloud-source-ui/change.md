@@ -121,3 +121,11 @@ relayed remote clip playing 0:00 to 0:10 and reporting Finished; a local file of
 doing the same, the TV asking for a range from the middle of it on the way; the page
 starting a cast, showing the command's own output, and stopping it; and a two-deep cast
 leaving nothing behind.
+
+Not exercised from Windows: the GoPro and Google Photos tabs against the live services,
+for want of a browser token and a share link on that machine. Both of them reach their
+service over plain HTTP and then hand off through the launcher every other path here
+proved, so what is untested is those services' own answers rather than anything the
+platform does differently. Worth ten minutes the next time a token is at hand - and the
+duration field, which the API already returns and the cache still discards, is the one
+thing to add while that token is live.
