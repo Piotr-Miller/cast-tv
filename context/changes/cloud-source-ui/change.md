@@ -446,3 +446,13 @@ Also, everywhere: the page kept clear of the bar by a fixed 76 px, and a bar tha
 not play" and why is taller than that; it keeps clear of the bar's real height now, and of
 nothing while the slideshow hides it. At full width nothing changed - long names, hints,
 filters, six columns - which was checked after.
+
+## Lengths and bit rates, with a live token
+
+A fresh token listed the library at once ("token working"), and 48 of the 60 items came back
+with `source_duration` - every video, none of the photos. It arrives as a string of
+milliseconds ("9280"), which the page's arithmetic would have coerced without a word; it is
+made a number where it enters, in `cast-gopro`. The tiles now carry the length (0:09, 0:20,
+2:03) and, where the size used to be, the bit rate: every camera original in the library
+runs at 118-121 Mbit/s - the figure this TV refuses - which is the case for opening every
+tile on the proxy, now shown on each one.

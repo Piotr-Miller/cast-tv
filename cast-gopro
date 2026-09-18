@@ -73,6 +73,14 @@ def api(path, tok, params=None):
         cc.die("GoPro's answer is not JSON:\n%s" % body[:400])
 
 
+def number(value):
+    """An integer out of whatever the API sent, or None."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def list_media(tok, count):
     data = api("/media/search", tok, params=(
         "fields=id,filename,captured_at,content_title,file_size,type,resolution,"
@@ -91,8 +99,9 @@ def list_media(tok, count):
             "size": m.get("file_size"),
             "res": m.get("resolution", ""),
             # source_duration is milliseconds; the API has no "duration"
-            # field at all, which is why asking for one returned nothing
-            "ms": m.get("source_duration"),
+            # field at all, which is why asking for one returned nothing -
+            # and it arrives as a string ("9280"), so it is made a number here
+            "ms": number(m.get("source_duration")),
         })
     cc.cache_write("gopro-list.json", items)
     return items
