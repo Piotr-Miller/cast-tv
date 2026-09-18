@@ -302,3 +302,59 @@ seconds, not the nine the bursts had suggested.
 The first cast of the day went TRANSITIONING for forty seconds and gave up, and the same
 clip played at once when tried again: the TV coming out of standby. The bar reported it as
 it should - "Did not play", with the line - which is the state that exists for such a day.
+
+## Selecting photos, and the slideshow
+
+As the canvas has it: a photo tile carries a check, clicking it selects the photo instead
+of casting it, the selection holds across tabs, and a video click casts at once and lets
+the selection go. While anything is selected the bar is the picker - how many, "Clear
+selection", "Change every 3 / 5 / 8 / 12 s" and "Start slideshow". The interval is
+remembered in the browser.
+
+**How the TV takes a series of stills was measured before anything was built.** Two of the
+library's photos, handed over one after the other through `cast-tv`'s own server and SOAP:
+the first went TRANSITIONING to PLAYING in about two seconds; over it, `SetAVTransportURI`
+alone started the second - TRANSITIONING at once, PLAYING a second later - and the `Play`
+sent after it was refused with UPnP 701, "Transition not available". Left alone, the second
+stayed up for all thirty seconds it was watched. So a slide is one SOAP call, `Play` goes
+only to a TV that reports STOPPED, and nothing has to be kept alive. (A still had seemed to
+drop after about twelve seconds the day before; that was not the TV.)
+
+**One server for the whole show.** The first idea, a `cast-tv` process per picture, would
+have meant a new server and a new wait for every slide. Instead `cast-ui` loads `cast-tv` as
+a module - as it already loads `cast-gopro` for thumbnails - keeps its server up on port 8895
+for the length of the show, and points the TV at `/still/<show>-<n>.jpg` in turn, relayed
+from GoPro's CDN. The next picture's address is fetched while the current one shows. The
+queue and the countdown live in `cast-ui`, which is what the canvas's own note says: the
+laptop drives the slideshow, because DLNA has no playlist.
+
+The view is artboard Slideshow: what is on screen, name and meta, "3 / 8", the queue with the
+current row marked, and at the bottom previous / pause / next, "Next in 5 s" with the next
+name and a line counting down, the interval, and "End slideshow". When the queue runs out the
+TV is stopped and returns to its own input, and the page says so with "Start over" - plus a
+way back to the library, which the canvas does not draw but the page needs. The view is
+rebuilt only when something in it changes; each second's tick moves the countdown and the
+line and nothing else, so the pictures are not reloaded under the viewer's eyes.
+
+A slideshow and a cast never run together - the TV plays one thing, and both want the port.
+Starting a slideshow stops a running cast; starting a cast ends a running slideshow quietly,
+without the "finished" screen.
+
+Verified against the TV, through the page: three photos selected and started at 3 s and at
+8 s; the pictures advancing on their own and the queue marking them; pause holding the
+picture; a queue click and "previous" while paused; resume; "End slideshow"; "Start over";
+the queue running out into "Slideshow finished"; "Back to the library". Through the API: ids
+that are not photos of our own listing dropped rather than passed on; a cast started during
+a show ending it quietly; a show started during a cast stopping it. Not verified: the layout
+at phone width, which has rules but was not looked at.
+
+Two faults found on the way. A picture jumped to while paused inherited what was left of
+the one before it, so on resume it would have gone after a second; it gets its whole time
+now. And selecting a tile redrew the grid, which reloads every picture - for a photo its
+whole 3.6 MB source; a selection now changes the tile it is about and nothing else.
+
+Not done, from the canvas: converting HEIC to JPEG on the fly, which the States board shows.
+The standard library cannot decode HEIC and the tool has no dependencies; there are 3 HEIC
+files in the OneDrive mirror today and the GoPro photos are JPEG, so it waits for a decision
+about an outside decoder. OneDrive photos join the slideshow when OneDrive is browsed by
+folder.

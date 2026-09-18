@@ -146,6 +146,17 @@ tabs are shaped by what each source will allow, and the asymmetry is the point:
   makes Windows download it; those tiles are marked, and nothing reads a file just to show
   it - casting one downloads it, because casting it was asked for.
 
+A photo is not cast on its own: clicking one selects it, the selection holds across tabs,
+and the bar turns into a picker with the interval and a button that starts a slideshow.
+DLNA has no playlist, so the laptop drives it - one server for the whole show, and the TV
+simply pointed at the next picture when its time comes. On this TV that takes nothing but
+`SetAVTransportURI`: over a picture that is showing it starts the next one by itself, and
+answers a `Play` sent after it with UPnP error 701, "Transition not available", so `Play`
+goes only to a TV that has stopped. A still left alone stayed up for as long as it was
+watched, so nothing has to be kept alive between slides. The slideshow has its own view -
+what is on screen, the queue, previous, pause, next, the countdown - and when the queue runs
+out the TV is stopped and goes back to its own input.
+
 One cast runs at a time, because the TV plays one thing. A bar pinned to the bottom says
 what is playing and how far along - the position is the TV's own, read from the status line
 `cast-tv` redraws every two seconds - or that nothing is, or that the last cast did not play
