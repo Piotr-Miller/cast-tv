@@ -1059,7 +1059,7 @@ PAGE = r"""<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>cast-tv</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
@@ -1302,6 +1302,11 @@ PAGE = r"""<!doctype html>
 
 
   /* hidden means hidden, whatever display a class gives the element */
+
+  /* Two wordings where a phone needs the short one: the long is shown by
+     default, and the phone rules below swap them. */
+  .short { display: none; }
+
   [hidden] { display: none !important; }
   .spill { margin-left: 6px; font-size: 12px; padding: 3px 9px; border-radius: 999px;
            background: oklch(0.26 0.05 190); color: oklch(0.86 0.09 190); }
@@ -1436,6 +1441,58 @@ PAGE = r"""<!doctype html>
     .svqueue { width: auto; border-left: 0; border-top: 1px solid var(--line); max-height: 32vh; }
     .svctl { height: auto; flex-wrap: wrap; gap: 12px 16px; padding: 12px 16px; }
     .panel { margin: 16px; }
+  }
+
+  /* Phone width, as artboard Phone has it: the header without the address,
+     the tabs as one segmented control with short names and no hint line, two
+     columns, and a bar with room for a thumb. The artboard has no filter row,
+     and "Photos" there names the Google Photos tab, so the filters step aside. */
+  @media (max-width: 640px) {
+    .full { display: none !important; }
+    .short { display: inline !important; }
+    header { height: auto; padding: 14px 16px 12px; border-bottom: 0; background: var(--bg); }
+    .brand span { font-size: 16px; }
+    .tvchip { height: 30px; padding: 0 11px; }
+    .tabsbar { padding: 0 16px 12px; border-bottom: 0; background: var(--bg); min-height: 0; }
+    #tabs {
+      flex: 1; gap: 3px; padding: 3px; border-radius: 11px;
+      background: oklch(0.20 0.007 65); border: 1px solid oklch(0.27 0.008 65);
+    }
+    .tab { flex: 1; align-items: center; justify-content: center; height: 38px; padding: 0;
+           border-radius: 8px; border-bottom: 0; }
+    .tab.on { background: oklch(0.28 0.008 65); }
+    .tab .th { display: none; }
+    .tab .tl { font-size: 13px; }
+    #filters { display: none; }
+    .strip { border-top: 1px solid var(--line-soft); }
+    .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .name { font-size: 11px; }
+    .meta, .dur { font-size: 10px; }
+    .check { width: 22px; height: 22px; right: 6px; top: 6px; }
+    .flags { left: 6px; top: 6px; }
+    #bar { gap: 11px 12px; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); }
+    /* the dot and the words centred together, as the artboard has them */
+    #bar .bdot { margin-left: auto; }
+    .bidle { flex: none; margin-right: auto; }
+    .bthumb { width: 54px; height: 32px; }
+    .bsub { display: none; }
+    #bar .bbtn#stop { width: 46px; height: 46px; padding: 0; justify-content: center; }
+    #bar .bstart { flex: 1; height: 46px; justify-content: center; font-size: 14.5px; }
+    .panel .row { flex-direction: column; align-items: stretch; }
+    .panel .row input, .panel .row .btn { height: 46px; width: 100%; flex: none; }
+    /* The artboard has no phone slideshow. Stacked, the controls would sit
+       under the queue, a scroll away from pausing it, so they stay pinned. */
+    .svctl { position: sticky; bottom: 0; z-index: 5;
+             padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
+    /* two rows that fit: the buttons with the countdown, then the interval
+       and the end - the label and the next name have no room on a phone */
+    .svctl .plbl, .svprogtop .mono { display: none; }
+    .svprog { flex: 1 1 140px; }
+    .svprogtop span:first-child { white-space: nowrap; }
+    .svctl .ivs { flex: 1; justify-content: space-between; }
+  }
+  @media (max-width: 380px) {
+    .grid { gap: 10px; }
   }
 </style>
 </head>
@@ -1581,12 +1638,14 @@ function drawTabs() {
   const [th, tcls] = tokenHint(state && state.token);
   const crumbs = data.onedrive && data.onedrive.crumbs;
   const odHint = crumbs && crumbs.length ? crumbs[crumbs.length - 1].name : "a folder on disk";
-  const defs = [["gopro", "GoPro", th, tcls], ["onedrive", "OneDrive", odHint, ""],
-                ["photos", "Google Photos", "paste a link", ""]];
-  $("tabs").innerHTML = defs.map(([id, label, hint, cls]) =>
+  const defs = [["gopro", "GoPro", "GoPro", th, tcls],
+                ["onedrive", "OneDrive", "OneDrive", odHint, ""],
+                ["photos", "Google Photos", "Photos", "paste a link", ""]];
+  $("tabs").innerHTML = defs.map(([id, label, short, hint, cls]) =>
     '<div class="tab' + (id === tab ? " on" : "") + '" data-tab="' + id + '">' +
-    '<span class="tl">' + label + '</span><span class="th mono ' + cls + '">' +
-    esc(hint) + "</span></div>").join("");
+    '<span class="tl">' + (short === label ? label : '<span class="full">' + label +
+    '</span><span class="short">' + short + "</span>") + '</span><span class="th mono ' + cls +
+    '">' + esc(hint) + "</span></div>").join("");
   $("tabs").querySelectorAll(".tab").forEach((el) => { el.onclick = () => showTab(el.dataset.tab); });
 
   const grids = tab === "gopro" || tab === "onedrive";
@@ -1611,6 +1670,13 @@ async function refreshState() {
 /* The bar says three things, as the design does: nothing is playing, or what
    is playing and how far along, or - which the design leaves to the States
    board - that it did not play, and the line that says why. */
+function fitBar() {
+  const h = $("bar").hidden ? 0 : $("bar").offsetHeight;
+  document.body.style.paddingBottom = h + "px";
+  $("drawer").style.bottom = h + "px";
+}
+window.addEventListener("resize", () => { if (!$("bar").hidden) fitBar(); });
+
 function drawBar() {
   /* While photos are being picked, the bar is the picking panel from the
      design: how many, a way to let them go, the interval, and the start. */
@@ -1618,9 +1684,10 @@ function drawBar() {
     const n = sel.size;
     $("bar").innerHTML =
       '<div class="pcount">' + n + "</div>" +
-      '<div><div class="plabel">' + n + (n === 1 ? " photo selected" : " photos selected") +
+      '<div class="full"><div class="plabel">' + n + (n === 1 ? " photo selected" : " photos selected") +
       '</div><span class="link pclear" id="clearsel">Clear selection</span></div>' +
-      '<span class="grow"></span>' + intervals(iv, "data-iv") +
+      '<span class="grow full"></span><span class="full" style="display:contents">' +
+      intervals(iv, "data-iv") + "</span>" +
       '<button class="bstart" id="startshow">' + TV_ICON + "Start slideshow</button>";
     $("drawer").hidden = true;
     $("clearsel").onclick = clearSel;
@@ -1628,6 +1695,7 @@ function drawBar() {
       el.onclick = () => { setIv(+el.dataset.iv); drawBar(); };
     });
     $("startshow").onclick = startShow;
+    fitBar();
     return;
   }
   const c = state && state.cast;
@@ -1656,7 +1724,8 @@ function drawBar() {
           (known ? hms(c.position) + " / " + hms(c.duration) : esc(phase)) +
         "</span><span>" + esc(c.meta || "") + "</span></div>" +
       "</div>" + logBtn +
-      '<button class="bbtn" id="stop">' + STOP_ICON + "Stop</button>";
+      '<button class="bbtn" id="stop" aria-label="Stop">' + STOP_ICON +
+      '<span class="full">Stop</span></button>';
   } else if (c && c.outcome === "failed") {
     html =
       '<span class="bdot bad"></span>' +
@@ -1668,12 +1737,15 @@ function drawBar() {
   } else {
     const idle = state && state.tv ? "Nothing playing \u2014 TV ready"
                                    : "Nothing playing \u2014 no TV chosen";
+    const tap = state && state.tv ? "Tap to cast to the TV" : "No TV chosen";
     const last = c && c.title ? (c.outcome === "stopped" ? "stopped: " : "last: ") + c.title : "";
-    html = '<span class="bdot"></span><span class="bidle">' + idle + "</span>" +
-           (last ? '<span class="blast mono">\u00b7 ' + esc(last) + "</span>" : "") +
-           '<span class="grow"></span>' + logBtn;
+    html = '<span class="bdot"></span><span class="bidle"><span class="full">' + idle +
+           '</span><span class="short">' + tap + "</span></span>" +
+           (last ? '<span class="blast mono full">\u00b7 ' + esc(last) + "</span>" : "") +
+           '<span class="grow full"></span>' + logBtn;
   }
   $("bar").innerHTML = html;
+  fitBar();
 
   const d = $("drawer");
   if (logOpen && hasLog) {
@@ -1786,6 +1858,7 @@ function drawView() {
   $("spill").hidden = !on;
   $("tabsbar").hidden = on;
   $("bar").hidden = on;
+  fitBar();
   ["gopro", "onedrive", "photos"].forEach((n) => { $("tab-" + n).hidden = on || n !== tab; });
   if (on) {
     $("drawer").hidden = true;
@@ -1971,7 +2044,8 @@ function drawGopro() {
     (ask ? '<input id="tok" class="mono" placeholder="paste gp_access_token (eyJ...)">' +
            '<button class="btn" id="savetok">Store it</button>'
          : '<span class="link" id="newtok">paste a new token</span>') +
-    '<span class="grow"></span><button class="btn" id="reload">Reload the library</button></div>';
+    '<span class="grow"></span><button class="btn" id="reload"><span class="full">Reload the ' +
+    'library</span><span class="short">Reload</span></button></div>';
 
   let body;
   if (!d) body = '<div class="empty">Loading...</div>';

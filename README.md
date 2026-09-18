@@ -175,7 +175,10 @@ and the line that says why. The command's full output sits behind it, a click aw
 sends the same interrupt that Ctrl+C does, so the TV stops too.
 
 It listens on `127.0.0.1` only. `--bind 0.0.0.0` reaches it from a phone on the same
-network, and hands everyone there a button that starts a cast; there is no password.
+network, and hands everyone there a button that starts a cast; there is no password. At a
+phone's width the page takes the design's phone layout: the tabs as one segmented control,
+two columns, a bar with room for a thumb, and a slideshow whose controls stay pinned to the
+bottom of the screen.
 
 ## Limitations
 
