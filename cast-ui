@@ -358,6 +358,7 @@ class Cast:
 
     @classmethod
     def start(cls, cmd, title, thumb=None, meta=None):
+        Show.end(quiet=True)    # the TV plays one thing, and both want the port
         with cls.lock:
             if cls.proc is not None and cls.proc.poll() is None:
                 return {"error": "Something is already playing - stop that first."}
@@ -451,6 +452,255 @@ class Cast:
                 except (OSError, subprocess.TimeoutExpired) as e:
                     cls.log.append("-- could not reach the TV to stop it: %s" % e)
         return cls.state()
+
+
+# ----------------------------------------------------------------- slideshow
+def casttv_module():
+    """cast-tv as a module. A slideshow keeps one server up for its whole length
+    and only changes what the TV is pointed at - a process per picture would
+    mean a new server, and a new wait, for every slide."""
+    if not hasattr(casttv_module, "mod"):
+        path = os.path.join(HERE, "cast-tv")
+        loader = importlib.machinery.SourceFileLoader("cast_tv", path)
+        spec = importlib.util.spec_from_loader("cast_tv", loader)
+        mod = importlib.util.module_from_spec(spec)
+        loader.exec_module(mod)
+        casttv_module.mod = mod
+    return casttv_module.mod
+
+
+class Show:
+    """A slideshow the laptop drives, as the design has it: DLNA has no
+    playlist, so the queue and the countdown live here, and the TV is simply
+    pointed at the next picture when its time comes.
+
+    Measured on the QE83S85F: over a still that is showing, SetAVTransportURI
+    alone starts the next one - TRANSITIONING, then PLAYING about a second
+    later - and Play is then refused with UPnP 701, "Transition not
+    available". So Play goes only to a TV that has stopped. A still left alone
+    stayed up for the thirty seconds it was watched, so nothing is kept alive.
+    """
+    lock = threading.RLock()
+    wake = threading.Event()
+    generation = 0          # bumped by every start and end; an old loop sees it and quits
+    items = []              # [{source, id, title, thumb, meta}]
+    urls = {}               # index -> resolved upstream address
+    idx = 0
+    want = None             # an index asked for by prev / next / a queue click
+    interval = 5
+    paused = False
+    paused_left = 0.0
+    shown_at = 0.0
+    loading = False
+    active = False
+    ended = False
+    error = None
+    server = None
+    avt = None
+    base = None
+    PORT = 8895             # cast-tv's own; a slideshow and a cast never run together
+
+    @classmethod
+    def state(cls):
+        with cls.lock:
+            if cls.paused:
+                left = cls.paused_left
+            elif cls.loading or not cls.active:
+                left = float(cls.interval)
+            else:
+                left = max(0.0, cls.shown_at + cls.interval - time.time())
+            return {"active": cls.active, "ended": cls.ended, "idx": cls.idx,
+                    "count": len(cls.items), "interval": cls.interval,
+                    "paused": cls.paused, "loading": cls.loading,
+                    "left": round(left, 1), "error": cls.error,
+                    "items": [{k: it.get(k) for k in ("title", "thumb", "meta")}
+                              for it in cls.items]}
+
+    @classmethod
+    def resolve(cls, i):
+        """The address of picture i, fetched once and kept for the show."""
+        if i in cls.urls or not 0 <= i < len(cls.items):
+            return cls.urls.get(i)
+        item = cls.items[i]
+        g = gopro_module()
+        said = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(said):
+                url = g.library_url(item["id"], g.token(), "auto")
+        except SystemExit:
+            raise RuntimeError(said.getvalue().strip().split("\n")[0] or
+                               "GoPro would not hand over %s" % item["title"])
+        cls.urls[i] = url
+        return url
+
+    @classmethod
+    def put(cls, gen, i):
+        """Point the TV at picture i."""
+        ct = casttv_module()
+        with cls.lock:
+            if gen != cls.generation:
+                return
+            cls.loading, cls.idx = True, i
+        try:
+            upstream = cls.resolve(i)
+            path = "/still/%d-%d.jpg" % (gen, i)    # fresh per picture, per show
+            ct.RangeHandler.remote[path] = upstream
+            url = cls.base + path
+            ct.soap(cls.avt, ct.AVT, "SetAVTransportURI",
+                    "<CurrentURI>%s</CurrentURI><CurrentURIMetaData>%s"
+                    "</CurrentURIMetaData>"
+                    % (ct.escape(url), ct.didl(url, cls.items[i]["title"], path)))
+            state = ct.tag(ct.soap(cls.avt, ct.AVT, "GetTransportInfo"),
+                           "CurrentTransportState")
+            if state in ("STOPPED", "NO_MEDIA_PRESENT"):
+                ct.soap(cls.avt, ct.AVT, "Play", "<Speed>1</Speed>")
+            with cls.lock:
+                if gen == cls.generation:
+                    cls.error = None
+        except Exception as e:
+            with cls.lock:
+                if gen == cls.generation:
+                    cls.error = "%s: %s" % (cls.items[i]["title"], e)
+        finally:
+            with cls.lock:
+                if gen == cls.generation:
+                    cls.loading = False
+                    cls.shown_at = time.time()
+                    # a picture jumped to while paused gets its whole time on
+                    # resume, not what was left of the one before it
+                    if cls.paused:
+                        cls.paused_left = float(cls.interval)
+
+    @classmethod
+    def run(cls, gen):
+        cls.put(gen, 0)
+        while True:
+            with cls.lock:
+                if gen != cls.generation:
+                    return
+                target = cls.want
+                cls.want = None
+                if target is None and not cls.paused and \
+                        time.time() >= cls.shown_at + cls.interval:
+                    target = cls.idx + 1
+                    if target >= len(cls.items):
+                        cls.finish(gen)
+                        return
+            if target is not None:
+                cls.put(gen, target)
+            try:
+                cls.resolve(cls.idx + 1)    # the next one, while this one shows
+            except Exception:
+                pass                        # it will say so when its turn comes
+            cls.wake.wait(0.4)
+            cls.wake.clear()
+
+    @classmethod
+    def start(cls, items, interval):
+        Cast.stop()                 # the TV plays one thing, and a cast holds the port
+        cls.end(quiet=True)
+        tv = tv_address()
+        if not tv:
+            return {"error": "No TV chosen - find it first."}
+        ct = casttv_module()
+        avt, _ = ct.control_urls(tv)
+        if not avt:
+            return {"error": "%s does not expose AVTransport (switched off?)" % tv}
+        server = None
+        for _ in range(10):         # a cast that just stopped may still hold the port
+            try:
+                server = ct.Server(("0.0.0.0", cls.PORT), ct.RangeHandler)
+                break
+            except OSError:
+                time.sleep(0.3)
+        if server is None:
+            return {"error": "Port %d is taken - is a cast still running?" % cls.PORT}
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        with cls.lock:
+            cls.generation += 1
+            gen = cls.generation
+            cls.items, cls.urls, cls.idx, cls.want = list(items), {}, 0, None
+            cls.interval, cls.paused, cls.error = interval, False, None
+            cls.active, cls.ended, cls.loading = True, False, True
+            cls.server, cls.avt = server, avt
+            cls.base = "http://%s:%d" % (ct.local_ip(tv), cls.PORT)
+        threading.Thread(target=cls.run, args=(gen,), daemon=True).start()
+        return cls.state()
+
+    @classmethod
+    def control(cls, action, index=None, interval=None):
+        with cls.lock:
+            if not cls.active:
+                return cls.state()
+            if action == "pause" and not cls.paused:
+                cls.paused = True
+                cls.paused_left = max(0.0, cls.shown_at + cls.interval - time.time())
+            elif action == "resume" and cls.paused:
+                cls.paused = False
+                cls.shown_at = time.time() - (cls.interval - cls.paused_left)
+            elif action == "next":
+                cls.want = (cls.idx + 1) % len(cls.items)
+            elif action == "prev":
+                cls.want = (cls.idx - 1) % len(cls.items)
+            elif action == "goto" and isinstance(index, int) and 0 <= index < len(cls.items):
+                cls.want = index
+            elif action == "interval" and interval in (3, 5, 8, 12):
+                cls.interval = interval
+        cls.wake.set()
+        return cls.state()
+
+    @classmethod
+    def finish(cls, gen):
+        """The queue ran out: stop the TV, which goes back to its own input."""
+        with cls.lock:
+            if gen != cls.generation:
+                return
+        cls.end()
+
+    @classmethod
+    def end(cls, quiet=False):
+        with cls.lock:
+            if not cls.active:
+                if quiet:
+                    cls.ended = False
+                return cls.state()
+            cls.generation += 1
+            cls.active, cls.paused, cls.loading = False, False, False
+            cls.ended = not quiet
+            server, avt = cls.server, cls.avt
+            cls.server = None
+        ct = casttv_module()
+        try:
+            ct.soap(avt, ct.AVT, "Stop")
+        except Exception:
+            pass
+        if server:
+            server.shutdown()
+            server.server_close()
+        ct.RangeHandler.remote = {}
+        cls.wake.set()
+        return cls.state()
+
+    @classmethod
+    def dismiss(cls):
+        with cls.lock:
+            cls.ended = False
+        return cls.state()
+
+
+def show_items(raw):
+    """Only photos of our own listing make a queue - an id the page sends is
+    checked against it, never passed on as it came."""
+    listed = {i.get("id"): i for i in (cc.cache_read("gopro-list.json") or [])}
+    out = []
+    for r in raw if isinstance(raw, list) else []:
+        item = listed.get(r.get("id")) if isinstance(r, dict) else None
+        if item is None or item.get("kind") != "Photo" or r.get("source") != "gopro":
+            continue
+        out.append({"source": "gopro", "id": item["id"], "title": item.get("name"),
+                    "thumb": "/api/gopro/thumb?id=" + urllib.parse.quote(item["id"]),
+                    "meta": r.get("meta") if isinstance(r.get("meta"), str) else ""})
+    return out
 
 
 def cast_command(req):
@@ -738,6 +988,105 @@ PAGE = r"""<!doctype html>
   .hitem .w { font-size: 11px; color: var(--faint); white-space: nowrap; }
   .hdot { width: 8px; height: 8px; border-radius: 999px; background: var(--live); flex-shrink: 0; }
 
+
+  /* hidden means hidden, whatever display a class gives the element */
+  [hidden] { display: none !important; }
+  .spill { margin-left: 6px; font-size: 12px; padding: 3px 9px; border-radius: 999px;
+           background: oklch(0.26 0.05 190); color: oklch(0.86 0.09 190); }
+
+  /* a photo selected for the slideshow */
+  .tile-wrap.on { background: var(--accent); }
+  .check {
+    position: absolute; right: 7px; top: 7px; width: 19px; height: 19px; border-radius: 999px;
+    display: flex; align-items: center; justify-content: center;
+    border: 1.5px solid oklch(0.98 0 0 / 0.55); background: oklch(0.12 0.005 65 / 0.35);
+  }
+  .check svg { stroke: transparent; }
+  .tile-wrap.on .check { border-color: var(--accent); background: var(--accent); }
+  .tile-wrap.on .check svg { stroke: var(--accent-ink); }
+
+  /* the bar, while photos are being picked */
+  .pcount {
+    display: flex; align-items: center; justify-content: center; width: 30px; height: 30px;
+    border-radius: 8px; background: var(--accent); color: var(--accent-ink);
+    font-size: 13px; font-weight: 700; flex-shrink: 0;
+  }
+  .plabel { font-size: 13.5px; font-weight: 500; }
+  .pclear { font-size: 11.5px; }
+  .plbl { font-size: 12.5px; color: oklch(0.62 0.008 65); white-space: nowrap; }
+  .ivs { display: flex; gap: 3px; padding: 3px; border-radius: 8px;
+         background: oklch(0.22 0.008 65); border: 1px solid oklch(0.29 0.008 65); }
+  .iv { display: flex; align-items: center; height: 26px; padding: 0 10px; border-radius: 6px;
+        font-size: 12px; cursor: pointer; color: var(--dim); }
+  .iv.on { background: oklch(0.32 0.008 65); color: oklch(0.94 0.005 65); }
+  .bstart {
+    display: flex; align-items: center; gap: 8px; height: 38px; padding: 0 18px;
+    border-radius: 8px; border: 0; background: var(--accent); color: var(--accent-ink);
+    font-size: 13.5px; font-weight: 600; cursor: pointer; flex-shrink: 0;
+  }
+  .bstart:disabled { opacity: .6; cursor: progress; }
+
+  /* the slideshow, artboard Slideshow */
+  #showview { display: flex; flex-direction: column; height: calc(100vh - 56px); }
+  .svbody { flex: 1; display: flex; min-height: 0; }
+  .svprev { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 26px 26px 20px; }
+  .svlabel { font-size: 11px; text-transform: uppercase; letter-spacing: 0.09em;
+             color: oklch(0.54 0.008 65); }
+  .svstage {
+    flex: 1; min-height: 0; margin-top: 12px; border-radius: 12px; overflow: hidden;
+    background: oklch(0.10 0.004 65); border: 1px solid oklch(0.25 0.008 65);
+    display: flex; align-items: center; justify-content: center; padding: 22px;
+  }
+  .svhero { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 6px; }
+  .svend { text-align: center; }
+  .svend .t { font-size: 17px; font-weight: 600; color: oklch(0.86 0.005 65); }
+  .svend .s { margin-top: 8px; font-size: 13px; color: var(--dim); }
+  .svend .bstart { margin: 20px auto 14px; }
+  .svfoot { margin-top: 16px; display: flex; align-items: flex-end; justify-content: space-between;
+            gap: 20px; min-height: 38px; }
+  .svname { min-width: 0; font-size: 14px; color: oklch(0.93 0.005 65); }
+  .svmeta { margin-top: 5px; font-size: 11.5px; color: oklch(0.56 0.008 65); }
+  .sverr { margin-top: 5px; font-size: 12px; color: var(--bad); }
+  .svpos { font-size: 12px; color: var(--dim); flex-shrink: 0; }
+  .svqueue { width: 330px; flex-shrink: 0; border-left: 1px solid oklch(0.24 0.007 65);
+             background: var(--bar); display: flex; flex-direction: column; min-height: 0; }
+  .svqhead { padding: 20px 20px 12px; display: flex; align-items: baseline;
+             justify-content: space-between; font-size: 11px; color: oklch(0.50 0.008 65); }
+  .svlist { flex: 1; overflow: auto; padding: 0 14px 14px; display: flex;
+            flex-direction: column; gap: 5px; }
+  .svrow { display: flex; align-items: center; gap: 11px; padding: 8px 9px;
+           border-radius: 9px; cursor: pointer; }
+  .svrow:hover { background: oklch(0.21 0.007 65); }
+  .svrow.on { background: oklch(0.24 0.008 65); }
+  .svthumb { position: relative; width: 46px; height: 30px; border-radius: 5px;
+             flex-shrink: 0; overflow: hidden; }
+  .svthumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .svrow.on .svthumb { outline: 1.5px solid var(--accent); outline-offset: 1px; overflow: visible; }
+  .svrtext { flex: 1; min-width: 0; }
+  .svrtext .n { font-size: 11.5px; color: oklch(0.72 0.008 65); overflow: hidden;
+                text-overflow: ellipsis; white-space: nowrap; }
+  .svrow.on .svrtext .n { color: oklch(0.95 0.005 65); }
+  .svrtext .m { margin-top: 2px; font-size: 10px; color: oklch(0.50 0.008 65); }
+  .svctl {
+    height: 84px; flex-shrink: 0; display: flex; align-items: center; gap: 24px; padding: 0 28px;
+    border-top: 1px solid var(--line); background: oklch(0.18 0.006 65);
+  }
+  .svbtns { display: flex; align-items: center; gap: 8px; }
+  .svb {
+    width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;
+    border-radius: 8px; border: 1px solid oklch(0.32 0.008 65); background: oklch(0.22 0.008 65);
+    cursor: pointer; padding: 0;
+  }
+  .svplay { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;
+            border-radius: 999px; border: 0; background: var(--accent); cursor: pointer; padding: 0; }
+  .svb:disabled, .svplay:disabled { opacity: .45; cursor: default; }
+  .svprog { flex: 1; min-width: 0; }
+  .svprogtop { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+               font-size: 12px; color: oklch(0.62 0.008 65); }
+  .svprogtop .mono { font-size: 11px; color: oklch(0.54 0.008 65); overflow: hidden;
+                     text-overflow: ellipsis; white-space: nowrap; }
+  .svctl .bfill { background: var(--accent); transition: width 1s linear; }
+
   @media (max-width: 640px) {
     header, .tabsbar, .strip { padding-left: 16px; padding-right: 16px; }
     .grid { padding: 16px; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
@@ -745,6 +1094,12 @@ PAGE = r"""<!doctype html>
     #say:not(:empty) { margin-left: 16px; margin-right: 16px; }
     #bar, #drawer { padding-left: 16px; padding-right: 16px; }
     #bar { flex-wrap: wrap; }
+    #showview { height: auto; min-height: calc(100vh - 56px); }
+    .svbody { flex-direction: column; }
+    .svprev { padding: 16px; }
+    .svstage { min-height: 45vh; }
+    .svqueue { width: auto; border-left: 0; border-top: 1px solid var(--line); max-height: 32vh; }
+    .svctl { height: auto; flex-wrap: wrap; gap: 12px 16px; padding: 12px 16px; }
     .panel { margin: 16px; }
   }
 </style>
@@ -754,10 +1109,11 @@ PAGE = r"""<!doctype html>
   <div class="brand">
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#e8a33d" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="13" rx="2"></rect><path d="M8 21h8"></path><path d="M12 17v4"></path></svg>
     <span class="mono">cast-tv</span>
+    <span class="spill" id="spill" hidden>Slideshow</span>
   </div>
   <div class="tvchip" id="tvchip" title="Look for the TV again"></div>
 </header>
-<div class="tabsbar">
+<div class="tabsbar" id="tabsbar">
   <div id="tabs"></div>
   <div id="filters"></div>
 </div>
@@ -765,6 +1121,7 @@ PAGE = r"""<!doctype html>
 <section id="tab-gopro"></section>
 <section id="tab-onedrive" hidden></section>
 <section id="tab-photos" hidden></section>
+<main id="showview" hidden></main>
 <div id="drawer" hidden></div>
 <footer id="bar"></footer>
 <script>
@@ -913,13 +1270,31 @@ async function refreshState() {
   state = await api("/api/state");
   drawHeader();
   drawTabs();
-  drawBar();
+  drawView();
 }
 
 /* The bar says three things, as the design does: nothing is playing, or what
    is playing and how far along, or - which the design leaves to the States
    board - that it did not play, and the line that says why. */
 function drawBar() {
+  /* While photos are being picked, the bar is the picking panel from the
+     design: how many, a way to let them go, the interval, and the start. */
+  if (sel.size && !(state && state.show && state.show.active)) {
+    const n = sel.size;
+    $("bar").innerHTML =
+      '<div class="pcount">' + n + "</div>" +
+      '<div><div class="plabel">' + n + (n === 1 ? " photo selected" : " photos selected") +
+      '</div><span class="link pclear" id="clearsel">Clear selection</span></div>' +
+      '<span class="grow"></span>' + intervals(iv, "data-iv") +
+      '<button class="bstart" id="startshow">' + TV_ICON + "Start slideshow</button>";
+    $("drawer").hidden = true;
+    $("clearsel").onclick = clearSel;
+    $("bar").querySelectorAll("[data-iv]").forEach((el) => {
+      el.onclick = () => { setIv(+el.dataset.iv); drawBar(); };
+    });
+    $("startshow").onclick = startShow;
+    return;
+  }
   const c = state && state.cast;
   const hasLog = !!(c && c.log && c.log.length);
   const logBtn = hasLog ? '<button class="bbtn quiet" id="logbtn">' +
@@ -998,16 +1373,184 @@ async function cast(payload, el) {
   drawBar();
 }
 
+
+/* ------------------------------------------------------------ selection */
+/* A photo is not cast on its own: clicking one selects it for a slideshow,
+   and the selection holds across tabs, as the design has it. A video click
+   casts at once and lets the selection go. */
+const sel = new Map();
+function storedIv() {
+  try { const v = +localStorage.getItem("cast-ui.interval"); return [3, 5, 8, 12].includes(v) ? v : 5; }
+  catch (e) { return 5; }
+}
+let iv = storedIv();
+function setIv(v) { iv = v; try { localStorage.setItem("cast-ui.interval", String(v)); } catch (e) {} }
+/* In place, not by redrawing the grid: a redraw rebuilds every picture, and a
+   photo's picture is its whole 3.6 MB source. */
+function toggleSel(item) {
+  if (sel.has(item.id)) sel.delete(item.id); else sel.set(item.id, item);
+  document.querySelectorAll('.tile-wrap[data-k="' + CSS.escape(item.id) + '"]')
+    .forEach((el) => el.classList.toggle("on", sel.has(item.id)));
+  drawBar();
+}
+function clearSel() {
+  sel.clear();
+  document.querySelectorAll(".tile-wrap.on").forEach((el) => el.classList.remove("on"));
+  drawBar();
+}
+const CHECK_ICON = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke-width="3" ' +
+  'stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>';
+const TV_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+  'stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" ' +
+  'width="20" height="13" rx="2"></rect><path d="M8 21h8"></path></svg>';
+const PREV_ICON = '<svg width="15" height="15" viewBox="0 0 24 24" fill="oklch(0.88 0.005 65)" ' +
+  'stroke="none"><path d="M18 5v14L7 12z"></path><rect x="4" y="5" width="2.2" height="14" ' +
+  'rx="1"></rect></svg>';
+const NEXT_ICON = '<svg width="15" height="15" viewBox="0 0 24 24" fill="oklch(0.88 0.005 65)" ' +
+  'stroke="none"><path d="M6 5v14l11-7z"></path><rect x="17.8" y="5" width="2.2" height="14" ' +
+  'rx="1"></rect></svg>';
+const QUEUE_NOW = '<svg width="13" height="13" viewBox="0 0 24 24" fill="#e8a33d" stroke="none" ' +
+  'style="flex-shrink:0"><path d="M8 5v14l11-7z"></path></svg>';
+function playPauseIcon(paused) {
+  return '<svg width="16" height="16" viewBox="0 0 24 24" fill="oklch(0.16 0.02 65)" stroke="none">' +
+         '<path d="' + (paused ? "M8 5v14l11-7z" : "M8 5h3v14H8zM13 5h3v14h-3z") + '"></path></svg>';
+}
+function intervals(current, attr) {
+  return '<span class="plbl">Change every</span><div class="ivs">' + [3, 5, 8, 12].map((v) =>
+    '<div class="iv' + (v === current ? " on" : "") + '" ' + attr + '="' + v + '">' + v +
+    " s</div>").join("") + "</div>";
+}
+
+/* -------------------------------------------------------------- the show */
+function inShow() { return !!(state && state.show && (state.show.active || state.show.ended)); }
+
+async function startShow() {
+  const b = $("startshow");
+  if (b) b.disabled = true;
+  const items = [...sel.values()].map((x) => ({ source: x.source, id: x.id, meta: x.meta }));
+  const out = await api("/api/show", { action: "start", items, interval: iv });
+  if (out.error) { if (b) b.disabled = false; say(out.error, true); return; }
+  sel.clear();
+  state.show = out;
+  drawView();
+}
+
+async function showAction(body) {
+  state.show = await api("/api/show", body);
+  drawView();
+}
+
+/* The library and the slideshow take turns on the page: the slideshow has its
+   own controls at the bottom, so the tabs, the grid and the cast bar step aside. */
+let shown = "";
+function drawView() {
+  const on = inShow();
+  $("showview").hidden = !on;
+  $("spill").hidden = !on;
+  $("tabsbar").hidden = on;
+  $("bar").hidden = on;
+  ["gopro", "onedrive", "photos"].forEach((n) => { $("tab-" + n).hidden = on || n !== tab; });
+  if (on) {
+    $("drawer").hidden = true;
+    drawShow();
+  } else {
+    if (shown) { shown = ""; drawTab(); }
+    drawBar();
+  }
+}
+
+function drawShow() {
+  const s = state.show;
+  const cur = s.items[s.idx] || {};
+  const nxt = s.items[s.idx + 1];
+  const pct = s.loading || s.ended ? 0 : Math.max(0, Math.min(100, 100 * (1 - s.left / s.interval)));
+  const label = s.ended ? "Finished" : s.loading ? "Putting it on the TV..." :
+                s.paused ? "Paused" : "Next in " + Math.max(1, Math.ceil(s.left)) + " s";
+  /* Redraw the whole view only when something shown in it changed; each
+     second's tick moves the countdown and the line, and nothing else, so the
+     pictures are not rebuilt under the viewer's eyes. */
+  const key = [s.idx, s.ended, s.count, s.error, s.paused, s.interval, s.loading].join("|");
+  if (key === shown && $("svlabel")) {
+    $("svlabel").textContent = label;
+    $("svfill").style.width = pct.toFixed(1) + "%";
+    return;
+  }
+  shown = key;
+  const hero = s.ended
+    ? '<div class="svend"><div class="t">Slideshow finished</div>' +
+      '<div class="s">The TV went back to its own input</div>' +
+      '<button class="bstart" id="restart">Start over</button>' +
+      '<div><span class="link" id="back">Back to the library</span></div></div>'
+    : (cur.thumb ? '<img class="svhero" alt="" src="' + esc(cur.thumb) + '">' : "");
+  $("showview").innerHTML =
+    '<div class="svbody">' +
+      '<div class="svprev">' +
+        '<div class="svlabel">On screen</div>' +
+        '<div class="svstage">' + hero + "</div>" +
+        '<div class="svfoot"><div class="svname">' +
+          (s.ended ? "" : '<div class="mono">' + esc(cur.title || "") + "</div>" +
+                          '<div class="mono svmeta">' + esc(cur.meta || "") + "</div>") +
+          (s.error ? '<div class="sverr">' + esc(s.error) + "</div>" : "") + "</div>" +
+          '<div class="mono svpos">' + (s.ended ? "" : (s.idx + 1) + " / " + s.count) + "</div>" +
+        "</div>" +
+      "</div>" +
+      '<div class="svqueue"><div class="svqhead"><span class="svlabel">Queue</span>' +
+        '<span class="mono">' + s.count + (s.count === 1 ? " photo" : " photos") + "</span></div>" +
+        '<div class="svlist">' + s.items.map((q, i) => {
+          const now = i === s.idx && !s.ended;
+          return '<div class="svrow' + (now ? " on" : "") + '" data-i="' + i + '">' +
+            '<div class="svthumb" style="background:' + gradient(hue(q.title || "")) + '">' +
+            (q.thumb ? '<img alt="" loading="lazy" src="' + esc(q.thumb) + '">' : "") + "</div>" +
+            '<div class="svrtext"><div class="mono n">' + esc(q.title) + "</div>" +
+            '<div class="mono m">' + esc(q.meta || "") + "</div></div>" +
+            (now ? QUEUE_NOW : "") + "</div>";
+        }).join("") + "</div>" +
+      "</div>" +
+    "</div>" +
+    '<div class="svctl">' +
+      '<div class="svbtns">' +
+        '<button class="svb" id="svprev" title="Previous"' + (s.ended ? " disabled" : "") + ">" +
+          PREV_ICON + "</button>" +
+        '<button class="svplay" id="svtoggle" title="' + (s.paused ? "Resume" : "Pause") + '"' +
+          (s.ended ? " disabled" : "") + ">" + playPauseIcon(s.paused || s.ended) + "</button>" +
+        '<button class="svb" id="svnext" title="Next"' + (s.ended ? " disabled" : "") + ">" +
+          NEXT_ICON + "</button>" +
+      "</div>" +
+      '<div class="svprog"><div class="svprogtop"><span id="svlabel">' + label + "</span>" +
+        '<span class="mono">' + esc(s.ended ? "" : nxt ? nxt.title : "then the end") + "</span></div>" +
+        '<div class="btrack"><div class="bfill" id="svfill" style="width:' + pct.toFixed(1) +
+        '%"></div></div></div>' +
+      intervals(s.interval, "data-siv") +
+      (s.ended ? "" : '<button class="bbtn" id="endshow">' + STOP_ICON + "End slideshow</button>") +
+    "</div>";
+
+  $("showview").querySelectorAll(".svrow").forEach((el) => {
+    el.onclick = () => showAction({ action: "goto", index: +el.dataset.i });
+  });
+  $("showview").querySelectorAll("[data-siv]").forEach((el) => {
+    el.onclick = () => { setIv(+el.dataset.siv); showAction({ action: "interval", interval: +el.dataset.siv }); };
+  });
+  const on = (id, fn) => { const el = $(id); if (el) el.onclick = fn; };
+  on("svprev", () => showAction({ action: "prev" }));
+  on("svnext", () => showAction({ action: "next" }));
+  on("svtoggle", () => showAction({ action: s.paused ? "resume" : "pause" }));
+  on("endshow", () => showAction({ action: "end" }));
+  on("restart", () => showAction({ action: "restart" }));
+  on("back", () => showAction({ action: "dismiss" }));
+}
+
 /* --------------------------------------------------------------- the tiles */
 function tile(o) {
-  clicks.set(o.key, o.click);
-  return '<div class="tile-wrap" data-k="' + esc(o.key) + '"><div class="tile">' +
+  clicks.set(o.key, o.toggle ? { toggle: o.toggle } : { cast: o.click });
+  return '<div class="tile-wrap' + (o.on ? " on" : "") + '" data-k="' + esc(o.key) +
+    '"><div class="tile">' +
     '<div class="thumb" style="background:' + gradient(o.hue) + '">' +
       (o.thumb ? '<img loading="lazy" alt="" src="' + esc(o.thumb) +
                  '" onload="this.classList.add(\'in\')" onerror="this.remove()">' : "") +
       (o.dur ? '<span class="dur mono">' + esc(o.dur) + "</span>" : "") +
       (o.warn ? '<div class="flag">' + WARN_ICON + '<span class="mono">' + esc(o.warn) +
                 "</span></div>" : "") +
+      (o.selectable ? '<div class="check">' + CHECK_ICON + "</div>" : "") +
       (o.cloud ? '<div class="flag cloud mono" title="Only in the cloud: casting it ' +
                  'downloads it first">in the cloud</div>' : "") +
     "</div>" +
@@ -1031,7 +1574,10 @@ function wireGrid(root, redraw) {
   root.querySelectorAll(".tile-wrap").forEach((el) => {
     el.onclick = () => {
       const what = clicks.get(el.dataset.k);
-      if (what) cast(what(), el);
+      if (!what) return;
+      if (what.toggle) { what.toggle(); return; }
+      if (sel.size) clearSel();
+      cast(what.cast(), el);
     };
   });
 }
@@ -1052,6 +1598,9 @@ function goproTile(it, index) {
     meta: video ? [it.res, rate ? rate + " Mbit/s" : size(it.size)].filter(Boolean).join(" · ")
                 : ["photo", size(it.size)].join(" · "),
     quality: video ? q : null,
+    selectable: !video, on: !video && sel.has(it.id),
+    toggle: video ? null : () => toggleSel({ source: "gopro", id: it.id, title: it.name,
+                                             meta: ["photo", size(it.size)].join(" \u00b7 ") }),
     click: () => ({ source: "gopro", index: index, title: it.name,
                     quality: quality[it.id] || "proxy",
                     thumb: "/api/gopro/thumb?id=" + encodeURIComponent(it.id),
@@ -1245,8 +1794,9 @@ $("tvchip").onclick = async () => {
 };
 
 setInterval(() => {
-  if (!busy && state && state.cast && state.cast.running) refreshState();
-}, 2000);
+  if (!busy && state && ((state.cast && state.cast.running) ||
+                         (state.show && state.show.active))) refreshState();
+}, 1000);
 
 refreshState().then(() => { loadGopro(false); api("/api/onedrive").then((d) => { data.onedrive = d; drawTabs(); }); });
 </script>
@@ -1316,7 +1866,8 @@ class UI(http.server.BaseHTTPRequestHandler):
             self._send(200, PAGE, "text/html; charset=utf-8")
         elif path == "/api/state":
             self._json({"tv": tv_address(), "tv_name": config().get("tv_name"),
-                        "token": token_state(), "cast": Cast.state()})
+                        "token": token_state(), "cast": Cast.state(),
+                        "show": Show.state()})
         elif path == "/api/gopro/thumb":
             media_id = urllib.parse.parse_qs(query).get("id", [""])[0]
             url = (gopro_thumb(media_id)
@@ -1353,6 +1904,22 @@ class UI(http.server.BaseHTTPRequestHandler):
             meta = req.get("meta") if isinstance(req.get("meta"), str) else None
             self._json({"error": problem} if problem
                        else Cast.start(cmd, title, thumb=thumb, meta=(meta or "")[:120]))
+        elif self.path == "/api/show":
+            action = req.get("action")
+            if action == "start":
+                items = show_items(req.get("items"))
+                interval = req.get("interval") if req.get("interval") in (3, 5, 8, 12) else 5
+                self._json(Show.start(items, interval) if items
+                           else {"error": "No photos from the library to show."})
+            elif action == "restart":
+                self._json(Show.start(list(Show.items), Show.interval) if Show.items
+                           else {"error": "Nothing to start over."})
+            elif action == "end":
+                self._json(Show.end())
+            elif action == "dismiss":
+                self._json(Show.dismiss())
+            else:
+                self._json(Show.control(action, req.get("index"), req.get("interval")))
         elif self.path == "/api/stop":
             self._json(Cast.stop())
         elif self.path == "/api/gopro/token":
