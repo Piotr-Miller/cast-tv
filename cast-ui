@@ -18,7 +18,12 @@ disk.
 import argparse
 import base64
 import binascii
+import contextlib
+import html
 import http.server
+import importlib.machinery
+import importlib.util
+import io
 import json
 import os
 import re
@@ -28,6 +33,8 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.parse
+import urllib.request
 import webbrowser
 from collections import deque
 
@@ -71,8 +78,70 @@ def onedrive_root():
 
 # ------------------------------------------------------------------- sources
 class Gopro:
-    """How GoPro answered last time, because the token itself will not say."""
-    verdict = None          # None, "ok", "rejected" or "failed"
+    """How GoPro answered last time, because the token itself will not say.
+
+    Two answers, not one: a token GoPro has stopped accepting for the library
+    listing (/media/search, 401) went on being accepted for /download - the
+    pictures and the streams of items already listed - a day after it was
+    stored. So "rejected" for one says nothing about the other.
+    """
+    listing = None          # /media/search: None, "ok", "rejected" or "failed"
+    download = None         # /media/{id}/download: None, "ok" or "rejected"
+    module = None           # cast-gopro, loaded once for the thumbnail calls
+    thumbs = {}             # media id -> (signed url, when it was fetched)
+    THUMB_TTL = 20 * 60     # the addresses are signed; how long for is not said
+
+
+def gopro_module():
+    """cast-gopro as a module. A thumbnail is one API call, and spawning a
+    process per row would cost more than the call itself - sixty of them for
+    one screen of the library."""
+    if Gopro.module is None:
+        path = os.path.join(HERE, "cast-gopro")
+        loader = importlib.machinery.SourceFileLoader("cast_gopro", path)
+        spec = importlib.util.spec_from_loader("cast_gopro", loader)
+        mod = importlib.util.module_from_spec(spec)
+        loader.exec_module(mod)
+        Gopro.module = mod
+    return Gopro.module
+
+
+def gopro_thumb(media_id):
+    """A signed address for a row's picture, or None.
+
+    /media/{id}/thumbnail answers 406 to every Accept header tried and the
+    sprites list is empty, but a video carries a "large" label that /download
+    only returns when asked for by name: a 1280 px jpg. A photo has no such
+    label, and its only still is the source itself.
+    """
+    hit = Gopro.thumbs.get(media_id)
+    if hit and time.time() - hit[1] < Gopro.THUMB_TTL:
+        return hit[0]
+    if Gopro.download == "rejected":
+        return None         # sixty rows would mean sixty 401s
+    items = cc.cache_read("gopro-list.json") or []
+    item = next((i for i in items if i.get("id") == media_id), None)
+    if item is None:
+        return None         # only rows of our own listing, never an arbitrary id
+    g = gopro_module()
+    photo = item.get("kind") == "Photo"
+    said = io.StringIO()
+    try:
+        # cast-gopro reports trouble by printing and exiting; keep it quiet
+        with contextlib.redirect_stderr(said):
+            data = g.api("/media/%s/download" % media_id, g.token(),
+                         params=None if photo else "labels=large")
+    except SystemExit:
+        if "401" in said.getvalue():
+            Gopro.download = "rejected"
+        return None
+    Gopro.download = "ok"
+    wanted = ("source",) if photo else ("large",)
+    for var in data.get("_embedded", {}).get("variations", []) or []:
+        if var.get("label") in wanted and var.get("url"):
+            Gopro.thumbs[media_id] = (var["url"], time.time())
+            return var["url"]
+    return None
 
 
 def token_state():
@@ -110,7 +179,8 @@ def token_state():
                         "left": left, "age": age}
         except (ValueError, binascii.Error, UnicodeDecodeError):
             pass
-    return {"state": "opaque", "age": age, "verdict": Gopro.verdict}
+    return {"state": "opaque", "age": age, "listing": Gopro.listing,
+            "download": Gopro.download}
 
 
 def gopro_items(refresh=False):
@@ -121,13 +191,26 @@ def gopro_items(refresh=False):
         if done.returncode != 0:
             # the token expiring is the common case, and it explains itself
             said = (done.stderr or done.stdout).strip()
-            Gopro.verdict = "rejected" if "401" in said else "failed"
+            Gopro.listing = "rejected" if "401" in said else "failed"
             return {"error": said or "cast-gopro failed without saying why"}
-        Gopro.verdict = "ok"
+        Gopro.listing = "ok"
     items = cc.cache_read("gopro-list.json")
     if items is None:
         return {"items": [], "never_listed": True}
     return {"items": items}
+
+
+# OneDrive on Windows keeps files it has not downloaded as placeholders with
+# these attributes; reading one makes Windows fetch it from the cloud first
+CLOUD_ONLY = 0x00400000 | 0x00040000 | 0x00001000  # recall on access/open, offline
+
+
+def in_cloud_only(st):
+    """True for a placeholder whose bytes are still in the cloud. Casting one is
+    fine - it is chosen, and has to arrive anyway - but anything read casually,
+    a thumbnail for instance, would pull the whole file down. The Linux mirror
+    is a plain download, so there is no such attribute there."""
+    return bool(getattr(st, "st_file_attributes", 0) & CLOUD_ONLY)
 
 
 def onedrive_items(root):
@@ -148,6 +231,7 @@ def onedrive_items(root):
                     continue      # a placeholder the mirror has not filled in
                 found.append({"path": full, "name": os.path.relpath(full, root),
                               "size": st.st_size,
+                              "cloud": in_cloud_only(st),
                               "date": time.strftime("%Y-%m-%d",
                                                     time.localtime(st.st_mtime))})
     found.sort(key=lambda i: i["date"], reverse=True)
@@ -171,6 +255,23 @@ def photos_remember(link):
     with open(PHOTOS_HISTORY, "w") as fh:
         json.dump(hist, fh, indent=1)
     return hist
+
+
+def remember_tv_name():
+    """The header shows the TV by name, as the design does; an address given
+    with -t comes without one, so ask the device description once."""
+    ip = tv_address()
+    for port, path in ((9197, "/dmr"), (7676, "/dmr"), (52235, "/dmr")):
+        try:
+            with urllib.request.urlopen("http://%s:%d%s" % (ip, port, path),
+                                        timeout=3) as r:
+                xml = r.read().decode("utf-8", "replace")
+        except Exception:
+            continue
+        m = re.search(r"<friendlyName>(.*?)</friendlyName>", xml, re.S)
+        if m:
+            config_set(tv_name=html.unescape(m.group(1)).strip())
+            return
 
 
 def renderers():
@@ -344,129 +445,280 @@ PAGE = r"""<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>cast-tv</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
+  /* The palette, type and measures are the cast-tv UI design canvas's own
+     (artboard Main): warm neutrals at hue 65, amber accent, teal for "live". */
   :root {
-    --bg: #14161a; --panel: #1c1f25; --line: #2c313a; --text: #e6e8ec;
-    --dim: #949aa6; --accent: #5aa9ff; --warn: #ffb454; --bad: #ff6b6b;
-    --ok: #64d18a;
+    --bg: oklch(0.15 0.006 65);
+    --bar: oklch(0.17 0.006 65);
+    --line: oklch(0.26 0.007 65);
+    --line-soft: oklch(0.22 0.007 65);
+    --tile: oklch(0.21 0.007 65);
+    --tile-line: oklch(0.27 0.008 65);
+    --chip: oklch(0.20 0.007 65);
+    --chip-line: oklch(0.30 0.008 65);
+    --field: oklch(0.12 0.005 65);
+    --text: oklch(0.94 0.005 65);
+    --text-2: oklch(0.86 0.005 65);
+    --dim: oklch(0.60 0.008 65);
+    --dim-2: oklch(0.52 0.008 65);
+    --faint: oklch(0.46 0.008 65);
+    --accent: #e8a33d;
+    --accent-ink: oklch(0.16 0.02 65);
+    --live: oklch(0.74 0.14 190);
+    --warn: oklch(0.74 0.16 68);
+    --warn-text: oklch(0.80 0.10 68);
+    --warn-line: oklch(0.46 0.10 68);
+    --bad: oklch(0.70 0.13 40);
+    --bad-dot: oklch(0.66 0.16 34);
+    --badge: oklch(0.12 0.005 65 / 0.84);
   }
   * { box-sizing: border-box; }
+  html, body { margin: 0; }
   body {
-    margin: 0; background: var(--bg); color: var(--text);
-    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: var(--bg); color: var(--text);
+    font: 14px/1.45 Archivo, "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
   }
-  header {
-    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
-    padding: 14px 16px; border-bottom: 1px solid var(--line);
-  }
-  h1 { font-size: 17px; margin: 0; font-weight: 600; letter-spacing: .2px; }
-  h1 span { color: var(--dim); font-weight: 400; }
+  .mono { font-family: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace; }
+  button, input { font: inherit; color: inherit; }
   .grow { flex: 1; }
-  main { padding: 16px; max-width: 1000px; margin: 0 auto; }
-  button {
-    font: inherit; color: var(--text); background: #262b33;
-    border: 1px solid var(--line); border-radius: 6px; padding: 5px 11px;
-    cursor: pointer;
+
+  /* header */
+  header {
+    height: 56px; display: flex; align-items: center; justify-content: space-between;
+    gap: 16px; padding: 0 28px; background: var(--bar); border-bottom: 1px solid var(--line);
   }
-  button:hover:not(:disabled) { border-color: var(--accent); }
-  button:disabled { opacity: .45; cursor: default; }
-  button.go { background: var(--accent); border-color: var(--accent); color: #0b1320;
-              font-weight: 600; }
-  input, select {
-    font: inherit; color: var(--text); background: #12141a;
-    border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px;
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand span { font-size: 15px; font-weight: 500; letter-spacing: -0.01em; }
+  .tvchip {
+    display: flex; align-items: center; gap: 8px; padding: 5px 12px 5px 10px;
+    border: 1px solid var(--chip-line); border-radius: 999px; background: var(--chip);
+    cursor: pointer; min-width: 0;
   }
-  input { min-width: 0; }
-  input:focus, select:focus { outline: 1px solid var(--accent); }
-  nav { display: flex; gap: 6px; margin-bottom: 16px; }
-  nav button.on { background: var(--panel); border-color: var(--accent);
-                  color: var(--accent); }
-  .panel {
-    background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
-    padding: 14px; margin-bottom: 14px;
+  .tvchip:hover { border-color: var(--dim-2); }
+  .tvchip .dot { width: 7px; height: 7px; border-radius: 999px; flex-shrink: 0;
+                 background: var(--live); box-shadow: 0 0 8px var(--live); }
+  .tvchip .dot.off { background: var(--faint); box-shadow: none; }
+  .tvchip .tvn { font-size: 12.5px; color: var(--text-2); white-space: nowrap; }
+  .tvchip .tvip { font-size: 11px; color: var(--dim); }
+
+  /* tabs and filters */
+  .tabsbar {
+    min-height: 52px; display: flex; align-items: stretch; justify-content: space-between;
+    flex-wrap: wrap; gap: 0 16px; padding: 0 28px;
+    background: var(--bar); border-bottom: 1px solid var(--line);
   }
-  .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-  .dim { color: var(--dim); }
-  .small { font-size: 13px; }
-  table { width: 100%; border-collapse: collapse; }
-  th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line);
-           vertical-align: middle; }
-  th { color: var(--dim); font-weight: 500; font-size: 13px; }
-  tr:last-child td { border-bottom: 0; }
-  td.name { word-break: break-all; }
-  td.right, th.right { text-align: right; white-space: nowrap; }
-  .pill { font-size: 12px; padding: 2px 8px; border-radius: 99px;
-          border: 1px solid var(--line); white-space: nowrap; }
-  .pill.ok { color: var(--ok); border-color: #2d5c40; }
-  .pill.warn { color: var(--warn); border-color: #5c4526; }
-  .pill.bad { color: var(--bad); border-color: #5c2d2d; }
-  pre {
-    margin: 0; padding: 10px; background: #0f1116; border: 1px solid var(--line);
-    border-radius: 6px; font-size: 12.5px; line-height: 1.45;
-    max-height: 240px; overflow: auto; white-space: pre-wrap; color: #c7ccd6;
+  #tabs { display: flex; align-items: stretch; gap: 4px; }
+  .tab {
+    display: flex; flex-direction: column; justify-content: center; gap: 2px;
+    padding: 8px 16px 6px; cursor: pointer; color: var(--dim);
+    border-bottom: 2px solid transparent;
   }
-  .note { color: var(--dim); font-size: 13px; margin: 0 0 12px; }
-  .err { color: var(--bad); font-size: 13.5px; white-space: pre-wrap; }
-  .empty { color: var(--dim); padding: 8px 0; }
-  .playing { border-color: var(--accent); }
-  label.inline { color: var(--dim); font-size: 13px; }
+  .tab.on { color: var(--text); border-bottom-color: var(--accent); }
+  .tab .tl { font-size: 13.5px; font-weight: 500; }
+  .tab .th { font-size: 10px; color: var(--faint); white-space: nowrap; }
+  .tab.on .th { color: var(--dim); }
+  .th.ok { color: var(--live) !important; }
+  .th.warn { color: var(--warn-text) !important; }
+  .th.bad { color: var(--bad) !important; }
+  #filters { display: flex; align-items: center; gap: 6px; }
+  .filter {
+    display: flex; align-items: center; height: 28px; padding: 0 11px;
+    border-radius: 7px; font-size: 12px; cursor: pointer; color: var(--dim);
+  }
+  .filter.on { background: oklch(0.26 0.008 65); color: var(--text); }
+
+  /* the strip under the tabs: breadcrumb for OneDrive, token for GoPro */
+  .strip {
+    min-height: 40px; display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px;
+    padding: 6px 28px; border-bottom: 1px solid var(--line-soft);
+    font-size: 12px; color: var(--dim);
+  }
+  .strip .here { color: var(--text-2); }
+  .strip .ok { color: var(--live); }
+  .strip .warn { color: var(--warn-text); }
+  .strip .bad { color: var(--bad); }
+  .strip input {
+    height: 28px; min-width: 220px; flex: 1 1 260px; padding: 0 10px;
+    background: var(--field); border: 1px solid var(--chip-line); border-radius: 7px;
+  }
+  .strip input:focus { outline: none; border-color: var(--accent); }
+  .btn {
+    height: 28px; padding: 0 12px; border-radius: 7px; cursor: pointer; font-size: 12.5px;
+    border: 1px solid var(--chip-line); background: oklch(0.22 0.008 65); color: var(--text-2);
+  }
+  .btn:hover:not(:disabled) { border-color: var(--dim-2); }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .btn.go { background: var(--accent); border-color: var(--accent); color: var(--accent-ink);
+            font-weight: 600; }
+  .link { color: var(--dim); cursor: pointer; text-decoration: underline;
+          text-decoration-color: var(--faint); text-underline-offset: 3px; }
+  .link:hover { color: var(--text-2); }
+
+  /* the grid */
+  .grid {
+    display: grid; gap: 18px; padding: 24px 28px 32px;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  }
+  .tile-wrap { border-radius: 13px; padding: 3px; cursor: pointer; }
+  .tile-wrap.busy { opacity: .55; cursor: progress; }
+  .tile {
+    border-radius: 10px; overflow: hidden; background: var(--tile);
+    border: 1px solid var(--tile-line); transition: border-color .12s;
+  }
+  .tile-wrap:hover .tile { border-color: var(--chip-line); }
+  .thumb { position: relative; aspect-ratio: 16 / 9; overflow: hidden; }
+  .thumb img {
+    position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
+    opacity: 0; transition: opacity .25s;
+  }
+  .thumb img.in { opacity: 1; }
+  .dur {
+    position: absolute; right: 7px; bottom: 7px; font-size: 10.5px; padding: 2px 5px;
+    border-radius: 4px; background: var(--badge); color: var(--text);
+  }
+  .flag {
+    position: absolute; left: 7px; top: 7px; display: flex; align-items: center; gap: 4px;
+    padding: 3px 6px; border-radius: 4px; background: var(--badge);
+    font-size: 10px; color: var(--warn-text);
+  }
+  .flag.cloud { color: var(--text-2); }
+  .info { padding: 9px 10px 11px; }
+  .name { font-size: 11.5px; color: var(--text); overflow: hidden;
+          text-overflow: ellipsis; white-space: nowrap; }
+  .metarow { display: flex; align-items: center; justify-content: space-between;
+             gap: 8px; margin-top: 5px; }
+  .meta { font-size: 10.5px; color: var(--dim-2); overflow: hidden;
+          text-overflow: ellipsis; white-space: nowrap; }
+  .q {
+    flex-shrink: 0; font-size: 10px; padding: 1px 5px; border-radius: 4px;
+    border: 1px solid oklch(0.32 0.008 65); color: var(--dim); cursor: pointer;
+  }
+  .q.proxy { border-color: var(--warn-line); color: oklch(0.80 0.11 68); }
+  .q:hover { color: var(--text); }
+  .empty { padding: 28px; color: var(--dim); font-size: 13px; }
+  .err { padding: 22px 28px; color: var(--bad); font-size: 12.5px; white-space: pre-wrap; }
+
+  /* what is playing, and messages */
   #say:not(:empty) {
-    padding: 10px 12px; border-radius: 8px; margin-bottom: 14px; font-size: 13.5px;
-    border: 1px solid var(--line); background: var(--panel); white-space: pre-wrap;
+    margin: 16px 28px 0; padding: 10px 12px; border-radius: 8px; font-size: 13px;
+    border: 1px solid var(--chip-line); background: var(--chip); white-space: pre-wrap;
   }
-  #say.bad { color: var(--bad); border-color: #5c2d2d; }
+  #say.bad { color: var(--bad); border-color: oklch(0.40 0.08 40); }
+  #now:not(:empty) { margin: 16px 28px 0; }
+  .nowcard {
+    border: 1px solid var(--chip-line); border-radius: 10px; background: var(--chip); padding: 12px 14px;
+  }
+  .nowcard.live { border-color: var(--accent); }
+  .nowhead { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .nowhead .t { font-weight: 600; }
+  .nowcmd { font-size: 11px; color: var(--faint); margin: 6px 0 8px; word-break: break-all; }
+  pre {
+    margin: 0; padding: 10px; background: var(--field); border: 1px solid var(--line);
+    border-radius: 7px; font-size: 12px; line-height: 1.45; max-height: 220px;
+    overflow: auto; white-space: pre-wrap; color: var(--text-2);
+  }
+
+  /* Google Photos: a paste field and what was pasted before */
+  .panel { margin: 24px 28px; max-width: 880px; }
+  .panel .note { color: var(--dim); font-size: 12.5px; margin: 0 0 14px; }
+  .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .row input {
+    height: 36px; flex: 1 1 300px; padding: 0 12px; background: var(--field);
+    border: 1px solid var(--chip-line); border-radius: 8px;
+  }
+  .row input:focus { outline: none; border-color: var(--accent); }
+  .row .btn { height: 36px; }
+  .hist { margin-top: 22px; border-top: 1px solid var(--line-soft); }
+  .hitem { display: flex; align-items: center; gap: 12px; padding: 11px 0;
+           border-bottom: 1px solid var(--line-soft); }
+  .hitem .u { font-size: 12px; word-break: break-all; }
+  .hitem .w { font-size: 11px; color: var(--faint); white-space: nowrap; }
+  .hdot { width: 8px; height: 8px; border-radius: 999px; background: var(--live); flex-shrink: 0; }
+
+  @media (max-width: 640px) {
+    header, .tabsbar, .strip { padding-left: 16px; padding-right: 16px; }
+    .grid { padding: 16px; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+    .tvchip .tvip { display: none; }
+    #say:not(:empty), #now:not(:empty) { margin-left: 16px; margin-right: 16px; }
+    .panel { margin: 16px; }
+  }
 </style>
 </head>
 <body>
 <header>
-  <h1>cast-tv <span id="tvname">&mdash;</span></h1>
-  <button id="find">Find the TV</button>
-  <span class="grow"></span>
+  <div class="brand">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#e8a33d" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="13" rx="2"></rect><path d="M8 21h8"></path><path d="M12 17v4"></path></svg>
+    <span class="mono">cast-tv</span>
+  </div>
+  <div class="tvchip" id="tvchip" title="Look for the TV again"></div>
 </header>
-<main>
-  <div id="say"></div>
-  <div id="now"></div>
-  <nav>
-    <button data-tab="gopro" class="on">GoPro</button>
-    <button data-tab="photos">Google Photos</button>
-    <button data-tab="onedrive">OneDrive</button>
-  </nav>
-  <section id="tab-gopro"></section>
-  <section id="tab-photos" hidden></section>
-  <section id="tab-onedrive" hidden></section>
-</main>
+<div class="tabsbar">
+  <div id="tabs"></div>
+  <div id="filters"></div>
+</div>
+<div id="say"></div>
+<div id="now"></div>
+<section id="tab-gopro"></section>
+<section id="tab-onedrive" hidden></section>
+<section id="tab-photos" hidden></section>
 <script>
-let tab = "gopro", state = null, busy = false;
+let tab = "gopro", filter = "all", state = null, busy = false, tokenOpen = false;
 const data = { gopro: null, onedrive: null, photos: null };
+const quality = {};          // media id -> the variant chosen on its tile
+const clicks = new Map();    // tile key -> what casting it means
 const $ = (id) => document.getElementById(id);
-
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g,
   (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+const WARN_ICON = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" ' +
+  'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+  '<path d="M12 9v4"></path><path d="M12 17h.01"></path><path d="M10.3 3.9 1.8 18a2 2 0 0 0 ' +
+  '1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path></svg>';
+const FOLDER_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" ' +
+  'stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' +
+  '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z">' +
+  '</path></svg>';
 
 function size(n) {
   if (!n) return "?";
   const u = ["B", "KB", "MB", "GB"];
   let i = 0;
   while (n >= 1024 && i < 3) { n /= 1024; i++; }
-  return (i > 1 ? n.toFixed(1) : Math.round(n)) + " " + u[i];
+  return (i > 2 ? n.toFixed(1) : Math.round(n)) + " " + u[i];
 }
-
-function clock(s) {
-  const m = Math.floor(s / 60), r = s % 60;
-  return m + ":" + String(r).padStart(2, "0");
-}
-
+function clock(s) { return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); }
 function left(seconds) {
-  if (seconds <= 0) return "expired";
   const h = Math.floor(seconds / 3600), m = Math.floor((seconds % 3600) / 60);
-  return h ? h + "h " + m + "m left" : m + "m left";
+  return h ? h + " h " + m + " min" : m + " min";
 }
-
 function ago(seconds) {
   if (seconds < 60) return "just now";
   const h = Math.floor(seconds / 3600), m = Math.floor((seconds % 3600) / 60);
-  return (h ? h + "h " + m + "m" : m + "m") + " ago";
+  return (h ? h + " h " + m + " min" : m + " min") + " ago";
 }
+function duration(ms) {
+  if (!ms) return "";
+  let s = Math.round(ms / 1000);
+  const h = Math.floor(s / 3600); s %= 3600;
+  const m = Math.floor(s / 60); s %= 60;
+  return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(s).padStart(2, "0");
+}
+/* The number that decides whether the TV copes is the bit rate, not the size,
+   so it is what the tile says once the length is known. */
+function mbit(bytes, ms) { return bytes && ms ? Math.round(bytes * 8 / (ms / 1000) / 1e6) : 0; }
+function height(res) { const m = /(\d+)p/.exec(res || ""); return m ? +m[1] : 0; }
+/* The placeholder behind every picture, and all of it for rows that have none:
+   the design's own two-stop gradient, its hue taken from the name. */
+function hue(name) { let h = 0; for (const c of name) h = (h * 31 + c.charCodeAt(0)) % 360; return h; }
+function gradient(h) {
+  return "linear-gradient(148deg, oklch(0.44 0.075 " + h + "), oklch(0.24 0.035 " +
+         ((h + 55) % 360) + "))";
+}
+const QUALITY = ["proxy", "auto", "source"];
+const QLABEL = { proxy: "proxy", auto: "auto", source: "original" };
 
 /* Said on the page rather than in an alert(): a modal dialog blocks everything
    the page does, and a resolver's complaint is usually worth reading twice. */
@@ -476,8 +728,7 @@ function say(text, bad) {
   box.textContent = text || "";
   box.className = bad ? "bad" : "";
   clearTimeout(saying);
-  if (text) saying = setTimeout(() => { if ($("say").textContent === text) say(""); },
-                                12000);
+  if (text) saying = setTimeout(() => { if ($("say").textContent === text) say(""); }, 12000);
 }
 
 async function api(path, body) {
@@ -488,12 +739,64 @@ async function api(path, body) {
   return r.json();
 }
 
-/* Deliberately redraws only the header and the cast: the poll runs every two
-   seconds, and redrawing a tab would wipe a token being pasted or a link half
-   typed. Whoever changes the data redraws its own tab afterwards. */
+/* ------------------------------------------------------------- the token */
+/* GoPro's token is encrypted, so nothing here can know when it expires.
+   What it can say: when it was stored, and how GoPro answered last. Past
+   three hours the amber is a hint - they last a few hours - not knowledge.
+   The expiry line is kept for a token that does carry a readable one. */
+function tokenHint(t) {
+  if (!t || t.state === "missing") return ["no token", "bad"];
+  if (t.left != null) {
+    return t.left > 0 ? ["token · " + left(t.left) + " left", t.left < 900 ? "warn" : "ok"]
+                      : ["token expired", "bad"];
+  }
+  if (t.download === "rejected") return ["token rejected", "bad"];
+  if (t.listing === "rejected") return ["token refused for the list", "warn"];
+  if (t.listing === "ok") return ["token working · stored " + ago(t.age), "ok"];
+  return ["token stored " + ago(t.age), t.age > 10800 ? "warn" : ""];
+}
+function tokenNeeded(t) {
+  return !t || t.state === "missing" || t.download === "rejected" ||
+         t.listing === "rejected" || (t.left != null && t.left <= 0);
+}
+
+/* ------------------------------------------------------------ the chrome */
+function drawHeader() {
+  const tv = state && state.tv;
+  $("tvchip").innerHTML = tv
+    ? '<span class="dot"></span><span class="tvn">' + esc(state.tv_name || "TV") +
+      '</span><span class="tvip mono">' + esc(tv) + "</span>"
+    : '<span class="dot off"></span><span class="tvn">No TV chosen · find it</span>';
+}
+
+function drawTabs() {
+  const [th, tcls] = tokenHint(state && state.token);
+  const root = data.onedrive && data.onedrive.root;
+  const odHint = root ? root.split(/[\\/]/).filter(Boolean).pop() : "a folder on disk";
+  const defs = [["gopro", "GoPro", th, tcls], ["onedrive", "OneDrive", odHint, ""],
+                ["photos", "Google Photos", "paste a link", ""]];
+  $("tabs").innerHTML = defs.map(([id, label, hint, cls]) =>
+    '<div class="tab' + (id === tab ? " on" : "") + '" data-tab="' + id + '">' +
+    '<span class="tl">' + label + '</span><span class="th mono ' + cls + '">' +
+    esc(hint) + "</span></div>").join("");
+  $("tabs").querySelectorAll(".tab").forEach((el) => { el.onclick = () => showTab(el.dataset.tab); });
+
+  const grids = tab === "gopro" || tab === "onedrive";
+  $("filters").innerHTML = grids ? [["all", "All"], ["vid", "Videos"], ["pho", "Photos"]].map(
+    ([id, label]) => '<div class="filter' + (id === filter ? " on" : "") + '" data-f="' + id +
+                     '">' + label + "</div>").join("") : "";
+  $("filters").querySelectorAll(".filter").forEach((el) => {
+    el.onclick = () => { filter = el.dataset.f; drawTabs(); drawTab(); };
+  });
+}
+
+/* Deliberately redraws only the header, the tab hints and the cast: the poll
+   runs every two seconds, and redrawing a grid would reload its pictures and
+   wipe a token being pasted. Whoever changes the data redraws its own tab. */
 async function refreshState() {
   state = await api("/api/state");
-  $("tvname").textContent = state.tv ? "→ " + state.tv : "— no TV chosen";
+  drawHeader();
+  drawTabs();
   drawNow();
 }
 
@@ -503,16 +806,14 @@ function drawNow() {
   const log = $("now").querySelector("pre");
   const pinned = !log || log.scrollTop + log.clientHeight >= log.scrollHeight - 24;
   $("now").innerHTML =
-    '<div class="panel' + (c.running ? " playing" : "") + '">' +
-      '<div class="row">' +
-        '<strong>' + (c.running ? "Playing" : "Last cast") + ":</strong> " +
-        esc(c.title || "?") +
-        (c.running ? ' <span class="dim small">' + clock(c.seconds) + "</span>" : "") +
-        '<span class="grow"></span>' +
-        (c.running ? '<button id="stop">Stop</button>' : "") +
-      "</div>" +
-      '<div class="small dim" style="margin:6px 0 8px">' +
-        esc(c.command || "") + "</div>" +
+    '<div class="nowcard' + (c.running ? " live" : "") + '">' +
+      '<div class="nowhead"><span class="t">' + (c.running ? "Playing" : "Last cast") +
+      "</span><span>" + esc(c.title || "?") + "</span>" +
+      (c.running ? '<span class="mono" style="color:var(--dim);font-size:12px">' +
+                   clock(c.seconds) + "</span>" : "") +
+      '<span class="grow"></span>' +
+      (c.running ? '<button class="btn" id="stop">Stop</button>' : "") + "</div>" +
+      '<div class="nowcmd mono">' + esc(c.command || "") + "</div>" +
       "<pre>" + esc(c.log.join("\n")) + "</pre>" +
     "</div>";
   const fresh = $("now").querySelector("pre");
@@ -525,113 +826,141 @@ function drawNow() {
   };
 }
 
-async function cast(payload, button) {
+async function cast(payload, el) {
   if (busy) return;
   busy = true;
-  if (button) button.disabled = true;
+  if (el) el.classList.add("busy");
   const out = await api("/api/cast", payload);
   busy = false;
-  if (button) button.disabled = false;
+  if (el) el.classList.remove("busy");
   if (out.error) { say(out.error, true); return; }
   say("");
   state.cast = out;
   drawNow();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+/* --------------------------------------------------------------- the tiles */
+function tile(o) {
+  clicks.set(o.key, o.click);
+  return '<div class="tile-wrap" data-k="' + esc(o.key) + '"><div class="tile">' +
+    '<div class="thumb" style="background:' + gradient(o.hue) + '">' +
+      (o.thumb ? '<img loading="lazy" alt="" src="' + esc(o.thumb) +
+                 '" onload="this.classList.add(\'in\')" onerror="this.remove()">' : "") +
+      (o.dur ? '<span class="dur mono">' + esc(o.dur) + "</span>" : "") +
+      (o.warn ? '<div class="flag">' + WARN_ICON + '<span class="mono">' + esc(o.warn) +
+                "</span></div>" : "") +
+      (o.cloud ? '<div class="flag cloud mono" title="Only in the cloud: casting it ' +
+                 'downloads it first">in the cloud</div>' : "") +
+    "</div>" +
+    '<div class="info"><div class="name mono" title="' + esc(o.title || o.name) + '">' + esc(o.name) +
+      '</div><div class="metarow"><span class="meta mono">' + esc(o.meta) + "</span>" +
+      (o.quality ? '<span class="q mono' + (o.quality === "proxy" ? " proxy" : "") +
+                   '" data-q="' + esc(o.key) + '" title="Which variant to cast - click to change">' +
+                   QLABEL[o.quality] + "</span>" : "") +
+    "</div></div></div></div>";
+}
+
+function wireGrid(root, redraw) {
+  root.querySelectorAll(".q").forEach((el) => {
+    el.onclick = (e) => {
+      e.stopPropagation();
+      const k = el.dataset.q;
+      quality[k] = QUALITY[(QUALITY.indexOf(quality[k] || "proxy") + 1) % QUALITY.length];
+      redraw();
+    };
+  });
+  root.querySelectorAll(".tile-wrap").forEach((el) => {
+    el.onclick = () => {
+      const what = clicks.get(el.dataset.k);
+      if (what) cast(what(), el);
+    };
+  });
+}
+
+function goproTile(it, index) {
+  const video = it.kind !== "Photo";
+  const q = quality[it.id] || "proxy";
+  const rate = mbit(it.size, it.ms);
+  /* Every row opens on the proxy: the camera original is what this TV
+     refuses, and a page that offers the choice should not open on it. The
+     warning is for when someone picks it anyway. */
+  const refused = video && q !== "proxy" && height(it.res) > 2160;
+  return tile({
+    key: it.id, name: it.name, hue: hue(it.name),
+    thumb: "/api/gopro/thumb?id=" + encodeURIComponent(it.id),
+    dur: video ? duration(it.ms) : "",
+    warn: refused ? "TV will refuse" : "",
+    meta: video ? [it.res, rate ? rate + " Mbit/s" : size(it.size)].filter(Boolean).join(" · ")
+                : ["photo", size(it.size)].join(" · "),
+    quality: video ? q : null,
+    click: () => ({ source: "gopro", index: index, title: it.name,
+                    quality: quality[it.id] || "proxy" }),
+  });
+}
+
+function odTile(it) {
+  /* The file's own name on the tile, as the design has it; the folder it sits
+     in belongs to a breadcrumb, and until browsing by folder exists it lives in
+     the tooltip rather than eating the name. */
+  return tile({
+    key: it.path, name: it.name.split(/[\\/]/).pop(), title: it.name,
+    hue: hue(it.name), thumb: null, cloud: it.cloud,
+    meta: [size(it.size), it.date].join(" · "),
+    click: () => ({ source: "onedrive", path: it.path }),
+  });
+}
+
+function filtered(items, isPhoto) {
+  if (filter === "vid") return items.filter((x) => !isPhoto(x));
+  if (filter === "pho") return items.filter((x) => isPhoto(x));
+  return items;
 }
 
 /* ------------------------------------------------------------------ GoPro */
 function drawGopro() {
   const t = state ? state.token : null;
   const d = data.gopro;
-  /* GoPro's token is encrypted, so nothing here can know when it expires.
-     What it can say: when it was stored, and how GoPro answered last. Past
-     three hours the amber is a hint - they last a few hours - not knowledge.
-     The expiry line is kept for a token that does carry a readable one. */
-  let pill = '<span class="pill">unknown</span>';
-  if (t && t.state === "missing") {
-    pill = '<span class="pill bad">no token</span>';
-  } else if (t && t.left != null) {
-    pill = t.left > 0
-      ? '<span class="pill ' + (t.left < 900 ? "warn" : "ok") + '">token: ' +
-        left(t.left) + "</span>"
-      : '<span class="pill bad">token: expired</span>';
-  } else if (t && t.state === "opaque") {
-    if (t.verdict === "rejected") {
-      pill = '<span class="pill bad">token: rejected</span>';
-    } else if (t.verdict === "ok") {
-      pill = '<span class="pill ok">token: working, stored ' + ago(t.age) +
-             "</span>";
-    } else {
-      pill = '<span class="pill' + (t.age > 10800 ? " warn" : "") +
-             '">token: stored ' + ago(t.age) + "</span>";
-    }
-  }
+  const [hint, cls] = tokenHint(t);
+  const ask = tokenNeeded(t) || tokenOpen;
+  const strip =
+    '<div class="strip"><span class="mono ' + cls + '">' + esc(hint) + "</span>" +
+    (t && t.listing === "rejected" && t.download !== "rejected"
+      ? "<span>&mdash; the list cannot be refreshed, but what is already on it still " +
+        "plays</span>" : "") +
+    (ask ? '<input id="tok" class="mono" placeholder="paste gp_access_token (eyJ...)">' +
+           '<button class="btn" id="savetok">Store it</button>'
+         : '<span class="link" id="newtok">paste a new token</span>') +
+    '<span class="grow"></span><button class="btn" id="reload">Reload the library</button></div>';
 
   let body;
-  if (!d) {
-    body = '<div class="empty">Loading...</div>';
-  } else if (d.asking) {
-    body = '<div class="empty">Asking GoPro for the library...</div>';
-  } else if (d.error) {
-    body = '<div class="err">' + esc(d.error) + "</div>";
-  } else if (d.never_listed) {
-    body = '<div class="empty">The library has never been listed on this machine ' +
-           "&mdash; reload it.</div>";
-  } else if (!d.items.length) {
-    body = '<div class="empty">The library came back empty.</div>';
-  } else {
-    body = '<table><thead><tr><th>#</th><th>Name</th><th>Date</th>' +
-      '<th>Resolution</th><th class="right">Size</th><th class="right">Quality</th>' +
-      "<th></th></tr></thead><tbody>" +
-      d.items.map((i, n) =>
-        "<tr><td class=\"dim\">" + (n + 1) + '</td><td class="name">' + esc(i.name) +
-        '</td><td class="dim small">' + esc(i.date || "") + "</td>" +
-        '<td class="dim small">' + esc(i.res || "") + "</td>" +
-        '<td class="right dim small">' + size(i.size) + "</td>" +
-        /* proxy first, and so selected: auto means "best variant", which for a
-           camera original is the one this TV refuses outright - every row in
-           this library is 3360p. The CLI's default is right for a CLI; a page
-           that offers the choice should not open on the dead end. */
-        '<td class="right"><select data-q="' + (n + 1) + '">' +
-          '<option value="proxy">proxy</option>' +
-          '<option value="auto">auto</option>' +
-          '<option value="source">original</option>' +
-        "</select></td>" +
-        '<td class="right"><button class="go" data-cast="' + (n + 1) + '" data-title="' +
-          esc(i.name) + '">Cast</button></td></tr>').join("") +
-      "</tbody></table>";
+  if (!d) body = '<div class="empty">Loading...</div>';
+  else if (d.asking) body = '<div class="empty">Asking GoPro for the library...</div>';
+  else if (d.error) body = '<div class="err">' + esc(d.error) + "</div>";
+  else if (d.never_listed) body = '<div class="empty">The library has never been listed on ' +
+                                   "this machine &mdash; reload it.</div>";
+  else {
+    const rows = filtered(d.items.map((it, n) => [it, n + 1]), ([it]) => it.kind === "Photo");
+    body = rows.length
+      ? '<div class="grid">' + rows.map(([it, n]) => goproTile(it, n)).join("") + "</div>"
+      : '<div class="empty">Nothing of that kind in the library.</div>';
   }
+  $("tab-gopro").innerHTML = strip + body;
 
-  $("tab-gopro").innerHTML =
-    '<p class="note">The only source that can be browsed. The token is copied out ' +
-    "of a logged-in browser and lasts a few hours; when it runs out, paste a new " +
-    "one.</p>" +
-    '<div class="panel"><div class="row">' + pill +
-      '<input id="tok" placeholder="paste gp_access_token (eyJ...)" style="flex:1">' +
-      '<button id="savetok">Store it</button>' +
-      '<button id="reload">Reload the library</button>' +
-    "</div></div>" +
-    '<div class="panel">' + body + "</div>";
-
-  $("savetok").onclick = async () => {
+  wireGrid($("tab-gopro"), drawGopro);
+  if ($("newtok")) $("newtok").onclick = () => { tokenOpen = true; drawGopro(); $("tok").focus(); };
+  if ($("savetok")) $("savetok").onclick = async () => {
     const value = $("tok").value.trim();
     if (!value) return;
     $("savetok").disabled = true;
     const out = await api("/api/gopro/token", { token: value });
-    $("savetok").disabled = false;
-    if (out.error) { say(out.error, true); return; }
+    if (out.error) { $("savetok").disabled = false; say(out.error, true); return; }
+    tokenOpen = false;
     say("Token stored.");
-    $("tok").value = "";
-    await refreshState();
     loadGopro(true);
   };
+  if ($("tok")) $("tok").onkeydown = (e) => { if (e.key === "Enter") $("savetok").click(); };
   $("reload").onclick = () => loadGopro(true);
-  $("tab-gopro").querySelectorAll("button[data-cast]").forEach((b) => {
-    b.onclick = () => {
-      const n = Number(b.dataset.cast);
-      const q = $("tab-gopro").querySelector('select[data-q="' + n + '"]').value;
-      cast({ source: "gopro", index: n, quality: q, title: b.dataset.title }, b);
-    };
-  });
 }
 
 async function loadGopro(refresh) {
@@ -642,35 +971,68 @@ async function loadGopro(refresh) {
   drawGopro();
 }
 
+/* --------------------------------------------------------------- OneDrive */
+function drawOnedrive() {
+  const d = data.onedrive;
+  const root = (d && d.root) || "";
+  const items = (d && d.items) || [];
+  const cloud = items.filter((x) => x.cloud).length;
+  const count = items.length + (items.length === 1 ? " video" : " videos") +
+                (cloud ? ", " + cloud + " only in the cloud" : "");
+  const strip =
+    '<div class="strip">' + FOLDER_ICON + '<span class="mono here">' + esc(root) + "</span>" +
+    (d && !d.error ? "<span>&mdash; " + count + "</span>" : "") +
+    '<span class="grow"></span>' +
+    '<input id="root" class="mono" value="' + esc(root) + '" hidden>' +
+    '<span class="link" id="setroot">change folder</span></div>';
+
+  let body;
+  if (!d) body = '<div class="empty">Loading...</div>';
+  else if (d.error) body = '<div class="err">' + esc(d.error) + "</div>";
+  else if (filter === "pho") body = '<div class="empty">Photos from OneDrive come with ' +
+    "browsing by folder, which is still to be built: the mirror holds too many to show " +
+    "in one flat grid, and most exist only in the cloud.</div>";
+  else if (!items.length) body = '<div class="empty">No video files there.</div>';
+  else body = '<div class="grid">' + items.map(odTile).join("") + "</div>";
+  $("tab-onedrive").innerHTML = strip + body;
+
+  wireGrid($("tab-onedrive"), drawOnedrive);
+  $("setroot").onclick = async () => {
+    const input = $("root");
+    if (input.hidden) { input.hidden = false; $("setroot").textContent = "use it"; input.focus(); return; }
+    await api("/api/settings", { onedrive: input.value.trim() });
+    loadOnedrive();
+  };
+}
+
+async function loadOnedrive() {
+  data.onedrive = null;
+  drawOnedrive();
+  data.onedrive = await api("/api/onedrive");
+  drawTabs();
+  drawOnedrive();
+}
+
 /* ---------------------------------------------------------- Google Photos */
 function drawPhotos() {
   const hist = (data.photos && data.photos.history) || [];
   $("tab-photos").innerHTML =
-    '<p class="note">This cannot be browsed at all: since 31 March 2025 the Library ' +
-    "API only exposes items you pick by hand, so the entry point is a link to one " +
-    "video. A share link needs nothing; a private one needs your cookie jar.</p>" +
     '<div class="panel">' +
-      '<div class="row"><input id="link" style="flex:1" ' +
-        'placeholder="https://photos.app.goo.gl/..."> ' +
-        '<button class="go" id="castlink">Cast</button></div>' +
-      '<div class="row" style="margin-top:10px">' +
-        '<label class="inline" for="ck">cookies.txt, for a private link</label>' +
-        '<input id="ck" style="flex:1" placeholder="(none)"></div>' +
-    "</div>" +
-    '<div class="panel"><div class="small dim" style="margin-bottom:8px">' +
-      "Pasted before</div>" +
-      (hist.length
-        ? "<table><tbody>" + hist.map((h) =>
-            '<tr><td class="name small">' + esc(h.link) + "</td>" +
-            '<td class="right dim small">' + esc(h.at) + "</td>" +
-            '<td class="right"><button data-again="' + esc(h.link) +
-            '">Cast</button></td></tr>').join("") + "</tbody></table>"
-        : '<div class="empty">Nothing yet.</div>') +
+      '<p class="note">This cannot be browsed at all: since 31 March 2025 the Library API ' +
+      "only exposes items picked by hand, so the entry point is a link to one video. A " +
+      "share link needs nothing; a private one needs your cookie jar.</p>" +
+      '<div class="row"><input id="link" class="mono" placeholder="https://photos.app.goo.gl/...">' +
+      '<button class="btn go" id="castlink">Cast</button></div>' +
+      '<div class="row" style="margin-top:10px"><input id="ck" class="mono" ' +
+      'placeholder="cookies.txt, for a private link (optional)"></div>' +
+      '<div class="hist">' + (hist.length ? hist.map((h) =>
+        '<div class="hitem"><span class="hdot"></span><span class="u mono grow">' + esc(h.link) +
+        '</span><span class="w">' + esc(h.at) + '</span><button class="btn" data-again="' +
+        esc(h.link) + '">Cast</button></div>').join("")
+        : '<div class="empty" style="padding:14px 0">Nothing pasted yet.</div>') + "</div>" +
     "</div>";
 
-  const go = (link, button) => cast({
-    source: "photos", link, cookies: $("ck").value.trim(),
-  }, button);
+  const go = (link, button) => cast({ source: "photos", link, cookies: $("ck").value.trim() }, button);
   $("castlink").onclick = () => go($("link").value.trim(), $("castlink"));
   $("link").onkeydown = (e) => { if (e.key === "Enter") $("castlink").click(); };
   $("tab-photos").querySelectorAll("button[data-again]").forEach((b) => {
@@ -683,75 +1045,36 @@ async function loadPhotos() {
   drawPhotos();
 }
 
-/* --------------------------------------------------------------- OneDrive */
-function drawOnedrive() {
-  const d = data.onedrive;
-  let body = '<div class="empty">Loading...</div>';
-  if (d && d.error) body = '<div class="err">' + esc(d.error) + "</div>";
-  else if (d && !d.items.length) body = '<div class="empty">No video files there.</div>';
-  else if (d) {
-    body = '<table><thead><tr><th>File</th><th>Date</th><th class="right">Size</th>' +
-      "<th></th></tr></thead><tbody>" +
-      d.items.map((i) =>
-        '<tr><td class="name">' + esc(i.name) + "</td>" +
-        '<td class="dim small">' + esc(i.date) + "</td>" +
-        '<td class="right dim small">' + size(i.size) + "</td>" +
-        '<td class="right"><button class="go" data-path="' + esc(i.path) +
-        '">Cast</button></td></tr>').join("") + "</tbody></table>";
-  }
-  $("tab-onedrive").innerHTML =
-    '<p class="note">No API needed: the account is mirrored to disk, so this is a ' +
-    "directory browse, and cast-tv serves the file straight off it.</p>" +
-    '<div class="panel"><div class="row">' +
-      '<label class="inline" for="root">folder</label>' +
-      '<input id="root" style="flex:1" value="' + esc((d && d.root) || "") + '">' +
-      '<button id="setroot">Use it</button>' +
-    "</div></div>" +
-    '<div class="panel">' + body + "</div>";
-
-  $("setroot").onclick = async () => {
-    await api("/api/settings", { onedrive: $("root").value.trim() });
-    loadOnedrive();
-  };
-  $("tab-onedrive").querySelectorAll("button[data-path]").forEach((b) => {
-    b.onclick = () => cast({ source: "onedrive", path: b.dataset.path }, b);
-  });
+/* ------------------------------------------------------------------ wiring */
+function drawTab() {
+  if (tab === "gopro") drawGopro();
+  if (tab === "onedrive") drawOnedrive();
+  if (tab === "photos") drawPhotos();
 }
 
-async function loadOnedrive() {
-  data.onedrive = null;
-  drawOnedrive();
-  data.onedrive = await api("/api/onedrive");
-  drawOnedrive();
+/* Switching tabs leaves a running cast alone. The design canvas drops it,
+   which suits a mock-up; a real cast should not die because someone browses. */
+function showTab(name) {
+  tab = name;
+  ["gopro", "onedrive", "photos"].forEach((n) => { $("tab-" + n).hidden = n !== tab; });
+  drawTabs();
+  if (tab === "gopro" && !data.gopro) loadGopro(false);
+  else if (tab === "onedrive" && !data.onedrive) loadOnedrive();
+  else if (tab === "photos" && !data.photos) loadPhotos();
+  else drawTab();
 }
 
-/* ------------------------------------------------------------------- wiring */
-document.querySelectorAll("nav button").forEach((b) => {
-  b.onclick = () => {
-    tab = b.dataset.tab;
-    document.querySelectorAll("nav button").forEach(
-      (o) => o.classList.toggle("on", o === b));
-    ["gopro", "photos", "onedrive"].forEach(
-      (name) => { $("tab-" + name).hidden = name !== tab; });
-    if (tab === "gopro" && !data.gopro) loadGopro(false);
-    if (tab === "photos" && !data.photos) loadPhotos();
-    if (tab === "onedrive" && !data.onedrive) loadOnedrive();
-  };
-});
-
-$("find").onclick = async () => {
-  $("find").disabled = true;
-  $("find").textContent = "Looking...";
+$("tvchip").onclick = async () => {
+  $("tvchip").innerHTML = '<span class="dot off"></span><span class="tvn">Looking...</span>';
   const out = await api("/api/tv", {});
-  $("find").disabled = false;
-  $("find").textContent = "Find the TV";
   if (!out.found || !out.found.length) {
-    say("No DLNA renderer answered. Switch the TV on and try again, or name "
-        + "it with cast-ui -t <address>.", true);
+    await refreshState();
+    say("No DLNA renderer answered. Switch the TV on and try again, or name " +
+        "it with cast-ui -t <address>.", true);
     return;
   }
   const pick = out.found[0];
-  await api("/api/settings", { tv: pick.ip });
+  await api("/api/settings", { tv: pick.ip, tv_name: pick.name });
   await refreshState();
   say("Found " + pick.name + " at " + pick.ip + ", and remembered it.");
 };
@@ -760,7 +1083,7 @@ setInterval(() => {
   if (!busy && state && state.cast && state.cast.running) refreshState();
 }, 2000);
 
-refreshState().then(() => loadGopro(false));
+refreshState().then(() => { loadGopro(false); api("/api/onedrive").then((d) => { data.onedrive = d; drawTabs(); }); });
 </script>
 </body>
 </html>
@@ -827,8 +1150,23 @@ class UI(http.server.BaseHTTPRequestHandler):
         if path in ("/", "/index.html"):
             self._send(200, PAGE, "text/html; charset=utf-8")
         elif path == "/api/state":
-            self._json({"tv": tv_address(), "token": token_state(),
-                        "cast": Cast.state()})
+            self._json({"tv": tv_address(), "tv_name": config().get("tv_name"),
+                        "token": token_state(), "cast": Cast.state()})
+        elif path == "/api/gopro/thumb":
+            media_id = urllib.parse.parse_qs(query).get("id", [""])[0]
+            url = (gopro_thumb(media_id)
+                   if re.match(r"^[0-9a-f]{16,40}$", media_id) else None)
+            if url:
+                # the browser fetches the picture from GoPro's CDN itself;
+                # nothing of it passes through here
+                self.answered = True
+                self.send_response(302)
+                self.send_header("Location", url)
+                self.send_header("Cache-Control", "private, max-age=900")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+            else:
+                self._send(404, "", "text/plain")
         elif path == "/api/gopro":
             self._json(gopro_items(refresh="refresh=1" in query))
         elif path == "/api/onedrive":
@@ -856,7 +1194,8 @@ class UI(http.server.BaseHTTPRequestHandler):
             self._json({"error": (done.stderr or "").strip()} if done.returncode
                        else {"stored": True, "token": token_state()})
         elif self.path == "/api/settings":
-            saved = config_set(tv=req.get("tv"), onedrive=req.get("onedrive"))
+            saved = config_set(tv=req.get("tv"), tv_name=req.get("tv_name"),
+                               onedrive=req.get("onedrive"))
             self._json({"tv": saved.get("tv"), "onedrive": onedrive_root()})
         elif self.path == "/api/tv":
             self._json({"found": renderers()})
@@ -885,6 +1224,8 @@ def main():
 
     if args.onedrive or args.tv:
         config_set(onedrive=args.onedrive, tv=args.tv)
+    if tv_address() and not config().get("tv_name"):
+        threading.Thread(target=remember_tv_name, daemon=True).start()
 
     try:
         srv = Server((args.bind, args.port), UI)

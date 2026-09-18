@@ -121,18 +121,30 @@ cast-ui -t 192.168.1.50        # skip discovery, and remember the address
 cast-ui --onedrive ~/OneDrive  # a mirror kept somewhere else
 ```
 
-The three tabs are shaped by what each source will allow, and the asymmetry is the point:
+The look follows the cast-tv UI design canvas: a grid of tiles with a picture, the length
+and the bit rate, filters for videos and photos, and the TV named in the header. The three
+tabs are shaped by what each source will allow, and the asymmetry is the point:
 
-- **GoPro** is the only one that browses. Its token is encrypted — a JWE, not the JWT it
-  looks like — so nothing can read when it expires; the page says when it was stored and
-  what GoPro answered last, and a new one is pasted into the same bar. Every row carries
-  the quality choice `cast-gopro -q` already had and opens on the proxy, because camera
-  originals are what the TV refuses.
+- **GoPro** is the only one that browses. Its pictures come from a `large` label that
+  `/media/{id}/download` returns only when asked for by name, a 1280 px jpg; the
+  `/thumbnail` endpoint answers 406 to everything. The page redirects the browser to
+  GoPro's CDN for each one, as the rows scroll into view, so none of it passes through
+  here. Every tile carries the quality choice `cast-gopro -q` already had and opens on the
+  proxy, because camera originals are what the TV refuses; pick the original anyway and
+  the tile says so.
+- The GoPro token is encrypted — a JWE, not the JWT it looks like — so nothing can read
+  when it expires. The page says when it was stored and how GoPro answered, and tells two
+  answers apart: a day-old token was refused for the library listing yet still accepted
+  for the pictures and streams of items already listed, so the list stops refreshing well
+  before casting from it stops working.
 - **Google Photos** cannot be browsed, so that tab is a paste field and a record of what has
   been pasted before - which is as close to a library as the API restriction permits.
 - **OneDrive** needs no API at all: the mirror is a directory, so the tab is a directory
   browse and `cast-tv` serves the file off disk. Only paths inside that folder can be cast,
-  since a page in a browser should not be able to name any file on the machine.
+  since a page in a browser should not be able to name any file on the machine. On Windows
+  most of a OneDrive folder may exist only in the cloud, and reading such a placeholder
+  makes Windows download it; those tiles are marked, and nothing reads a file just to show
+  it - casting one downloads it, because casting it was asked for.
 
 One cast runs at a time, because the TV plays one thing, and the page shows that command's
 own output - the variant that answered, what the TV asks for, why it refused to start. Stop
