@@ -27,6 +27,104 @@ def firewall_hint(port: int) -> str:
     return "sudo firewall-cmd --add-port=%d/tcp" % port
 
 
+# An inbound Block rule on every port, program and address - what an organisation's MDM pushes to
+# a managed laptop - outranks any allow rule, so the command above cannot help. Reading the active
+# store needs no administrator rights.
+FIREWALL_QUERY = r"""
+[Console]::OutputEncoding = [Text.Encoding]::UTF8
+$profiles = @(Get-NetConnectionProfile -ErrorAction SilentlyContinue | ForEach-Object { [string]$_.NetworkCategory })
+$rules = @(Get-NetFirewallRule -PolicyStore ActiveStore -Direction Inbound -Action Block -Enabled True -ErrorAction SilentlyContinue |
+  Where-Object {
+    $port = $_ | Get-NetFirewallPortFilter
+    $app = $_ | Get-NetFirewallApplicationFilter
+    $addr = $_ | Get-NetFirewallAddressFilter
+    ($port.Protocol -in 'Any', 'TCP') -and ($port.LocalPort -contains 'Any') -and
+      ($app.Program -eq 'Any') -and ($addr.RemoteAddress -contains 'Any')
+  } | ForEach-Object { @{ name = [string]$_.DisplayName; profile = [string]$_.Profile } })
+@{ profiles = $profiles; rules = $rules } | ConvertTo-Json -Compress -Depth 3
+"""
+_CATEGORY = {"Public": "Public", "Private": "Private", "DomainAuthenticated": "Domain"}
+
+
+def blocking_rule(report: dict) -> str | None:
+    """The name of a block-all rule that applies to a network this machine is on, from ``FIREWALL_QUERY``."""
+    profiles = {_CATEGORY.get(p, p) for p in report.get("profiles") or []}
+    for rule in report.get("rules") or []:
+        applies = {part.strip() for part in str(rule.get("profile") or "").split(",")}
+        if "Any" in applies or applies & profiles:
+            return str(rule.get("name") or "an inbound block rule")
+    return None
+
+
+class FirewallPolicy:
+    """Whether Windows' firewall policy blocks every inbound connection; asked once, in the background.
+
+    ``blocked()`` is the rule's name or None; None as well when the question
+    could not be answered (no PowerShell, a timeout, anything unexpected), so
+    the advice falls back to the ``netsh`` command.
+    """
+
+    TIMEOUT = 15
+
+    def __init__(self, run=subprocess.run, platform=None):
+        self._run = run
+        self._platform = platform or sys.platform
+        self._done = threading.Event()
+        self._started = False
+        self._lock = threading.Lock()
+        self._rule: str | None = None
+
+    def start(self) -> None:
+        with self._lock:
+            if self._started:
+                return
+            self._started = True
+        if self._platform != "win32":
+            self._done.set()
+            return
+        threading.Thread(target=self._ask, name="firewall-policy", daemon=True).start()
+
+    def _ask(self) -> None:
+        try:
+            import json
+            proc = self._run(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", FIREWALL_QUERY],
+                             capture_output=True, timeout=self.TIMEOUT,
+                             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+            text = proc.stdout.decode("utf-8", "replace").strip() if proc.stdout else ""
+            self._rule = blocking_rule(json.loads(text)) if text else None
+        except Exception:
+            self._rule = None
+        finally:
+            self._done.set()
+
+    def blocked(self, wait: float = 0) -> str | None:
+        """The blocking rule's name, or None; waits up to ``wait`` seconds for the answer."""
+        self.start()
+        self._done.wait(wait)
+        return self._rule
+
+
+firewall_policy = FirewallPolicy()
+
+
+def firewall_blocked(wait: float = 0) -> str | None:
+    """``firewall_policy.blocked()``, looked up at call time so the test suite can swap the policy."""
+    return firewall_policy.blocked(wait)
+
+
+def firewall_advice(port: int, wait: float = 0) -> str:
+    """What to do when the TV fetches nothing: open the port, or why that cannot work here."""
+    rule = firewall_blocked(wait)
+    if rule:
+        return ("This computer's firewall policy blocks every incoming connection (the rule \"%s\", "
+                "usually set by your organisation), and no allow rule can override it, so the TV "
+                "cannot fetch from this computer. Cast from another computer, or ask your IT "
+                "department to allow incoming TCP port %d." % (rule, port))
+    if sys.platform == "win32":
+        return "Open the port, in PowerShell as administrator:  " + firewall_hint(port)
+    return "Open the port:  " + firewall_hint(port)
+
+
 class NullBackend:
     """Nothing to hold: platforms without a known mechanism, and the test suite."""
 

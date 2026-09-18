@@ -25,7 +25,7 @@ from castlib import __version__, config, dlna, downloads, photos
 from castlib.discovery import control_urls, discover, lan_interfaces, local_ip, renderer_name
 from castlib.dlna import AVT
 from castlib.errors import CastError, ConfigError, NotMedia, TVError
-from castlib.platform import StayAwake, firewall_hint
+from castlib.platform import FirewallPolicy, StayAwake, firewall_advice, firewall_blocked, firewall_hint
 from castlib.server import Server
 from castlib.sources.gphotos import GPhotosSource
 from castlib.sources.gopro import GoProSource
@@ -187,8 +187,15 @@ class App:
         app.addresses += ["http://%s:%d/ui/" % (ip, port) for ip in dict.fromkeys(others)]
         for address in app.addresses:
             print("  %s" % address, file=out, flush=True)
-        print("  If the TV never fetches a byte, open the port:  %s" % firewall_hint(port),
-              file=out, flush=True)
+        print("  If the TV never fetches a byte: %s" % firewall_advice(port), file=out, flush=True)
+        firewall_blocked()                   # starts the background question
+
+        def warn_if_blocked():
+            # a managed laptop's policy can block every inbound connection; say so before a cast fails
+            if firewall_blocked(wait=FirewallPolicy.TIMEOUT + 5):
+                print("\n  ! %s" % firewall_advice(port), file=out, flush=True)
+
+        threading.Thread(target=warn_if_blocked, name="firewall-warning", daemon=True).start()
         print("  Ctrl+C ends it (playback stops on the TV too)", file=out, flush=True)
         if tv:
             try:
@@ -516,6 +523,8 @@ class App:
                 "errors": len(self.errors), "errors_seq": self.errors.seq,
                 "settings": self.settings.as_dict(),
                 "firewall_hint": firewall_hint(self.server.port),
+                "firewall_blocked": firewall_blocked(),
+                "firewall_advice": firewall_advice(self.server.port),
                 "uptime": round(time.time() - self.started_at)}
 
     def api(self, handler, path: str, query: str) -> None:

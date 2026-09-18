@@ -437,8 +437,16 @@
         <template x-if="e.code === 'tv_fetched_nothing'">
           <div>
             <div class="hint">Not one byte was fetched: the Samsung probes the address and refuses it outright when the port is closed; other renderers accept it and stay silent. That is almost always the firewall, not the codec.</div>
-            <div class="cmd" x-text="status.firewall_hint"></div>
-            <div class="actions"><button @click="copy(status.firewall_hint)">Copy command</button></div>
+            <template x-if="status.firewall_blocked">
+              <div class="hint" x-text="status.firewall_advice"></div>
+            </template>
+            <template x-if="!status.firewall_blocked">
+              <div>
+                <div class="hint" x-show="status.firewall_hint.startsWith('netsh')">In PowerShell run as administrator:</div>
+                <div class="cmd" x-text="status.firewall_hint"></div>
+                <div class="actions"><button @click="copy(status.firewall_hint)">Copy command</button></div>
+              </div>
+            </template>
           </div>
         </template>
         <template x-if="e.code === 'dts_audio'">

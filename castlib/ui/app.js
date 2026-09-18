@@ -72,7 +72,7 @@ async function api(method, path, body, opts) {
 
 function castTv() {
   return {
-    status: { tv: null, tvs: [], interfaces: [], cast: null, show: null, sources: {}, session: [], errors: 0, settings: { interval: 8 }, firewall_hint: '' },
+    status: { tv: null, tvs: [], interfaces: [], cast: null, show: null, sources: {}, session: [], errors: 0, settings: { interval: 8 }, firewall_hint: '', firewall_blocked: null, firewall_advice: '' },
     errors: [],
     lists: {},               // per source: { items, next, loaded, loading, error }
     tokenInput: '',
