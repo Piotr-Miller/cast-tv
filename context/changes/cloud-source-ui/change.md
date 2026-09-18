@@ -14,6 +14,8 @@ tabs are fine - and cast a selection to the Samsung TV.
 
 Originally stated as: "UI do tej apki, ładowane pliki z GoPro, Google Photos
 i OneDrive (mogą być osobne taby) i później ich castowanie na TV Samsunga."
+(In English: "a UI for this app, files loaded from GoPro, Google Photos and OneDrive
+(separate tabs are fine), and then casting them to the Samsung TV.")
 
 The three sources are not alike, and that asymmetry is the whole shape of this change:
 
