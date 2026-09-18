@@ -1288,7 +1288,7 @@ battery, and only the display turns off, after 3 min. Before any cast the system
 usable baseline for the next attempt. Ctrl+C was not tried here (Piotr's decision to stop testing
 on this laptop).
 
-### Row 7.3 — second attempt, an unmanaged Windows laptop (2026-09-18, 21:56–22:52, Claude on the laptop, the Samsung showing) — row stays open for Ctrl+C
+### Row 7.3 — second attempt, an unmanaged Windows laptop (2026-09-18, 21:56–22:58, Claude on the laptop, Piotr for Ctrl+C, the Samsung showing) — passed
 
 Windows 11 Pro 10.0.26200, not joined to any MDM, not an administrator; Python 3.14.5 only.
 Wi-Fi `192.168.50.213` (Intel Wireless-AC 9560) on a **Public** profile, plus Hyper-V
@@ -1327,6 +1327,22 @@ Wi-Fi `192.168.50.213` (Intel Wireless-AC 9560) on a **Public** profile, plus Hy
   cast-tv installs no console-control handler, so closing the window ends the process without
   `Stop`, `atexit` or `close()`, and a video the TV is streaming stops by itself when the
   connection drops. A photo would have stayed on screen. Follow-up in `follow-ups/review-fixes.md`.
+
+- **Ctrl+C while casting, with a photo** - chosen because a photo tells the two endings apart:
+  a process that just dies leaves it on the screen, while `Stop` clears it.
+  - *The control, killed:* at 22:55 a one-photo show (`cast-tv --show -i 600 P7192216_01.JPG`)
+    in a window Claude had opened; Piotr pressed Ctrl+C in the browser tab with the UI, which does
+    not reach the process, and nothing happened. Claude then ended the process tree
+    (`Stop-Process`, the pipx `cast-tv.exe` launcher and its two `python.exe`): at 22:57:27 the
+    execution state was `0x00000000` and the TV still answered **`PLAYING`**, the photo on screen.
+    `cast-tv --stop` cleared it.
+  - *Ctrl+C:* Piotr ran the same command in a PowerShell opened from the Start menu, at about
+    22:58:07. The console showed `Found: 83" OLED (192.168.50.142)`, `Slideshow: 1 items (1
+    photos), a photo holds 600 s`, `[1/1] P7192216_01 playing`; Ctrl+C in that window printed
+    `Stopped.` and returned to the prompt. The process was gone by 22:58:20, when the execution
+    state was `0x00000000` and the TV answered **`STOPPED`**. So Ctrl+C reaches the Python process
+    through the pipx launcher on Windows, the show's `except KeyboardInterrupt` runs, and `Stop`
+    reaches the TV.
 
 Not run here, unlike row 7.4: a control showing this laptop does sleep by itself after 30 min with
 nothing casting. The evidence for the lock is the execution state, which Windows' idle timer reads
