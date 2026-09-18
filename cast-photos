@@ -26,9 +26,9 @@ MEDIA_HOST = re.compile(
 HOW_TO_GET_COOKIES = """
 A private link needs your Google cookies:
   a "Get cookies.txt" style extension -> export for photos.google.com -> cookies.txt
-  %s <link> -c cookies.txt
+  cast-photos <link> -c cookies.txt
 A share link (Share -> Create link) needs none of this.
-""" % cc.how_to_run("cast-photos")
+"""
 
 
 def unescape_google(text):
