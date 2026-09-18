@@ -434,11 +434,11 @@ def test_graph_redirect_is_not_followed(fake):
     src = OneDriveSource()
     _sign_in(src, fake)
     fake.redirect_children = "https://evil.test/collect"
-    before = len(fake.calls)
+    before = len(fake.graph("children"))      # not all calls: the account fetch after sign-in races
     with pytest.raises(UpstreamError) as err:
         src.list()
     assert err.value.code == "graph_http" and "302" in err.value.message
-    assert len(fake.calls) == before + 1
+    assert len(fake.graph("children")) == before + 1
 
 
 def test_listing_cache_is_bounded(fake, monkeypatch):

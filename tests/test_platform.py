@@ -1,4 +1,5 @@
 import socket
+import sys
 import threading
 import types
 
@@ -229,6 +230,7 @@ def test_console_close_interrupts_main_and_waits_out_the_grace():
         assert calls == []
 
 
+@pytest.mark.skipif(sys.platform != "win32", reason="ctypes.WINFUNCTYPE is Windows-only")
 def test_console_close_registers_a_callback_that_outlives_install():
     registered = []
     k32 = types.SimpleNamespace(SetConsoleCtrlHandler=lambda cb, add: registered.append((cb, add)) or 1)
