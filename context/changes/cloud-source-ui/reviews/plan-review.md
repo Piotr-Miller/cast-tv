@@ -7,7 +7,7 @@
 - **Verdict**: RETHINK → SOUND after triage (all 8 findings fixed in plan, 2026-09-09)
 - **Findings**: 3 critical, 5 warnings, 0 observations
 
-Przed implementacją trzeba rozstrzygnąć tożsamość ponownie wybieranych zdjęć oraz sterowanie pokazem przy zastępowaniu odtwarzania. Triage 2026-09-09: wszystkie osiem ustaleń naniesione do planu (F2 i F5 w wersji doprecyzowanej przez autora). Odwołania do numerów linii dotyczą wersji przejrzanej 2026-09-09.
+Before implementation, the identity of photos picked again and the control of a show when playback is replaced have to be settled. Triage 2026-09-09: all eight findings carried into the plan (F2 and F5 in a version refined by the author). Line numbers refer to the version reviewed on 2026-09-09.
 
 ## Verdicts
 
@@ -22,110 +22,110 @@ Przed implementacją trzeba rozstrzygnąć tożsamość ponownie wybieranych zdj
 
 ## Grounding
 
-5/5 istniejących ścieżek ✓ (`cast-tv`, `cast-gopro`, `cast-photos`, `castcloud.py`, `README.md`), 5/5 symboli ✓, brief↔plan ✓. Nowe pliki `castlib/` są świadomie planowane. `Progress`: zgodne nazwy wszystkich 7 faz, 38 odpowiadających kryteriów, brak checkboxów poza sekcją. Definitions: 15 wierszy; nierozstrzygnięte przypadki opisują F1–F2. Sprawdzono cztery skrypty, wywołania zmienianych funkcji i niezależny przegląd przypadków brzegowych przez jednego subagenta. Nie uruchamiano testów implementacji ani prób sprzętowych.
+5/5 existing paths ✓ (`cast-tv`, `cast-gopro`, `cast-photos`, `castcloud.py`, `README.md`), 5/5 symbols ✓, brief↔plan ✓. The new `castlib/` files are planned deliberately. `Progress`: the names of all 7 phases match, 38 matching criteria, no checkboxes outside the section. Definitions: 15 rows; the unresolved cases are described by F1–F2. Checked: the four scripts, the call sites of the functions being changed, and an independent review of edge cases by one subagent. No implementation tests or hardware trials were run.
 
 ## Findings
 
-### F1 — Ponowny wybór zdjęcia nie ma reguły scalania
+### F1 — Picking a photo again has no merge rule
 
 - **Severity**: ❌ CRITICAL
-- **Impact**: 🔎 MEDIUM — istotna decyzja; wymaga namysłu
+- **Impact**: 🔎 MEDIUM — a significant decision; needs thought
 - **Dimension**: Requirement Definition
 - **Location**: Definitions (`plan.md:74`, `:82`), MediaItem (`:263`), Phase 6 (`:852–863`)
-- **Detail**: Plan deklaruje unikalność `(source, source_id)`, ale kolejne sesje Pickera dopisują wpisy. Google zachowuje ID tego samego materiału między sesjami. Po wyborze zdjęcia w S1 i S2, a następnie wygaśnięciu S1, plan nie rozstrzyga, czy zdjęcie pozostaje dostępne przez S2, czy dostaje „re-pick”. Trwałość ID potwierdza [dokumentacja PickedMediaItem](https://developers.google.com/photos/picker/reference/rest/v1/mediaItems).
-- **Fix**: Ustalić jeden wpis na ID, zachowanie kolejności zaznaczenia i odświeżanie przez aktualną, ważną sesję.
-  - Strength: Usuwa duplikaty i niepotrzebne ponowne wybieranie zdjęć.
-  - Tradeoff: Wymaga jawnego zarządzania powiązaniami z sesjami.
-  - Confidence: HIGH — dokumentacja potwierdza trwałość ID.
-  - Blind spot: Preferencja użytkownika dotycząca powtórzeń w kolejce.
-- **Decision**: FIXED — jeden wpis na ID, odświeżanie przez ważną sesję, re-pick gdy żadna nie jest ważna (Definitions `pick`, Phase 6 §2, `test_repick_merges_by_media_id`)
+- **Detail**: The plan declares `(source, source_id)` unique, but successive Picker sessions append entries. Google keeps the ID of the same item across sessions. After a photo is picked in S1 and in S2 and S1 then expires, the plan does not say whether the photo stays available through S2 or gets a "re-pick". ID stability is confirmed by the [PickedMediaItem documentation](https://developers.google.com/photos/picker/reference/rest/v1/mediaItems).
+- **Fix**: Settle on one entry per ID, keeping the selection order, refreshed through the current valid session.
+  - Strength: Removes duplicates and needless re-picking of photos.
+  - Tradeoff: Requires explicit management of the links to sessions.
+  - Confidence: HIGH — the documentation confirms ID stability.
+  - Blind spot: The user's preference about repeats in the queue.
+- **Decision**: FIXED — one entry per ID, refreshed through a valid session, re-pick when none is valid (Definitions `pick`, Phase 6 §2, `test_repick_merges_by_media_id`)
 
-### F2 — Stary pokaz może zawisnąć lub przejąć nowe odtwarzanie
+### F2 — An old show can hang or take over new playback
 
 - **Severity**: ❌ CRITICAL
-- **Impact**: 🔬 HIGH — decyzja architektoniczna; wymaga dokładnego rozważenia
+- **Impact**: 🔬 HIGH — an architectural decision; needs careful consideration
 - **Dimension**: Architectural Fitness
-- **Location**: Phase 3 — Cast i Show (`plan.md:530–541`, `:558`), Definitions (`:75`, `:85`)
-- **Detail**: Zastąpiony `Cast` otrzymuje `replaced`, ale pokaz czeka wyłącznie na `stopped` albo `failed`. Podczas filmu może więc czekać bez końca. Podczas zdjęcia stary pokaz może obudzić się po interwale i zastąpić materiał uruchomiony ręcznie. Nie ma również reguły zatrzymywania poprzedniego `Show`. „Last SOAP wins” opisuje efekt wyścigu, a nie jednoznaczną kolejność poleceń. Dodatkowo pojedyncze zdjęcie ma według Definitions trwać do Stop, podczas gdy opis pętli kończy się po interwale. Obecny kod ma jednego synchronicznego właściciela odtwarzania (`cast-tv:473–510`); nie dostarcza wzorca rozstrzygającego te przypadki. Uwaga obejmuje także brakujące decyzje w Requirement Definition.
-- **Fix**: Zdefiniować jednego właściciela odtwarzania; ręczny cast i nowy pokaz anulują poprzedni pokaz. Serializować `SetURI + Play`, kończyć oczekiwanie również przy anulowaniu i osobno opisać pojedyncze zdjęcie.
-  - Strength: Jednoznaczny stan TV i UI przy równoczesnym sterowaniu.
-  - Tradeoff: Potrzebne testy współbieżności i anulowania.
-  - Confidence: HIGH — sprzeczność wynika bezpośrednio z kontraktu stanów.
-  - Blind spot: Moment rozpoczęcia odliczania interwału podczas wolnej konwersji.
-- **Decision**: FIXED — inaczej niż w propozycji: jeden właściciel plus `generation` sprawdzana po przygotowaniu materiału i przed komendami, jednowątkowy executor porządkujący żądania (zamiast samego locka), przerywalne oczekiwanie Show na `replaced`/`cancelled` (250 ms to reakcja pętli, sieć ma własne timeouty), interwał liczony od udanego `Play`; jedno zdjęcie w pokazie trzyma do Stop (Critical Implementation Details, Phase 3 §2 i §6, Definitions `slideshow` i `cast (while playing)`)
+- **Location**: Phase 3 — Cast and Show (`plan.md:530–541`, `:558`), Definitions (`:75`, `:85`)
+- **Detail**: A replaced `Cast` gets `replaced`, but the show waits only for `stopped` or `failed`. During a video it can therefore wait forever. During a photo the old show can wake up after the interval and replace material started by hand. There is also no rule for stopping the previous `Show`. "Last SOAP wins" describes the outcome of a race, not an unambiguous order of commands. In addition, according to Definitions a single photo lasts until Stop, while the loop description ends it after the interval. The current code has one synchronous owner of playback (`cast-tv:473–510`); it offers no pattern that settles these cases. The finding also covers the missing decisions under Requirement Definition.
+- **Fix**: Define one owner of playback; a manual cast and a new show cancel the previous show. Serialise `SetURI + Play`, also end the wait on cancellation, and describe the single photo separately.
+  - Strength: Unambiguous TV and UI state under concurrent control.
+  - Tradeoff: Concurrency and cancellation tests are needed.
+  - Confidence: HIGH — the contradiction follows directly from the state contract.
+  - Blind spot: When the interval countdown starts during a slow conversion.
+- **Decision**: FIXED — differently from the proposal: one owner plus a `generation` checked after the material is prepared and before commands, a single-threaded executor ordering requests (instead of a lock alone), an interruptible wait of the Show on `replaced`/`cancelled` (250 ms is the loop's reaction time; the network has its own timeouts), the interval counted from a successful `Play`; a single photo in a show holds until Stop (Critical Implementation Details, Phase 3 §2 and §6, Definitions `slideshow` and `cast (while playing)`)
 
-### F3 — Eviction może usunąć aktualnie odtwarzany materiał
+### F3 — Eviction can remove the material being played
 
 - **Severity**: ❌ CRITICAL
-- **Impact**: 🔎 MEDIUM — istotna decyzja; wymaga namysłu
+- **Impact**: 🔎 MEDIUM — a significant decision; needs thought
 - **Dimension**: Blind Spots
 - **Location**: Phase 1 — Registry (`plan.md:268–275`), Phase 5 manual verification (`:804–806`)
-- **Detail**: `evict(idle_seconds)` bazuje na czasie ostatniego żądania. Brakuje ochrony aktualnego castu, trwających transferów i napisów. Po 60 sekundach pauzy wpis może zniknąć, więc wymagane w fazie 5 wznowienie po godzinie zakończy się lokalnym 404, zanim resolver odświeży URL. Decyzja w Definitions dotyczy poprzedniego castu, ale kontrakt Registry opisuje ogólne usuwanie po bezczynności. Obecny kod utrzymuje trasy plików przez życie procesu (`cast-tv:108–112`, `:451–460`).
-- **Fix**: Chronić aktywny cast, jego napisy i otwarte transfery; usuwać po okresie bezczynności dopiero wpisy wycofane z odtwarzania.
-  - Strength: Zachowuje możliwość wznowienia i późnego pobrania napisów.
-  - Tradeoff: Registry potrzebuje informacji o właścicielach i aktywnych żądaniach.
-  - Confidence: HIGH — obecny kontrakt nie rozróżnia aktywnych i wycofanych wpisów.
-  - Blind spot: Zachowanie Samsungowego bufora wymaga testu sprzętowego.
-- **Decision**: FIXED — `retire(id)` od supervisora, `evict()` tylko dla wycofanych wpisów bez transferów w toku, napisy dzielą los wideo (Phase 1 §3 i §10, Definitions `cast (while playing)`)
+- **Detail**: `evict(idle_seconds)` goes by the time of the last request. There is no protection for the current cast, transfers in progress, or subtitles. After 60 seconds of pause an entry can disappear, so the resume after an hour required in Phase 5 ends in a local 404 before the resolver refreshes the URL. The decision in Definitions concerns the previous cast, but the Registry contract describes general removal after inactivity. The current code keeps file routes for the life of the process (`cast-tv:108–112`, `:451–460`).
+- **Fix**: Protect the active cast, its subtitles and open transfers; after a period of inactivity remove only entries retired from playback.
+  - Strength: Keeps resume and late subtitle fetches possible.
+  - Tradeoff: The Registry needs to know about owners and active requests.
+  - Confidence: HIGH — the current contract does not tell active entries from retired ones.
+  - Blind spot: The behaviour of Samsung's buffer needs a hardware test.
+- **Decision**: FIXED — `retire(id)` from the supervisor, `evict()` only for retired entries with no transfers in progress, subtitles share the video's fate (Phase 1 §3 and §10, Definitions `cast (while playing)`)
 
-### F4 — Lista nie dostarcza adresu miniaturek
+### F4 — The listing gives no thumbnail address
 
 - **Severity**: ⚠️ WARNING
-- **Impact**: 🔎 MEDIUM — istotna decyzja; wymaga namysłu
+- **Impact**: 🔎 MEDIUM — a significant decision; needs thought
 - **Dimension**: Plan Completeness
 - **Location**: Routing (`plan.md:299–301`), API (`:557`), Source (`:650–661`)
-- **Detail**: Jedyna trasa miniaturek wymaga ID z Registry: `/m/<token>/<id>/thumb`. `Entry` zwraca ID źródła i `thumb: bool`, a rejestracja następuje dopiero przy castowaniu. Siatka nie otrzymuje więc adresowalnej miniaturki przed uruchomieniem materiału.
-- **Fix**: Dodać chronioną trasę miniaturek po `(source, source_id)` i zwracać jej URL w `Entry`.
-  - Strength: Korzysta z istniejącego `Source.thumb()` bez rejestrowania całej biblioteki.
-  - Tradeoff: Trzeba dopisać kontrakt odpowiedzi i błędów trasy.
-  - Confidence: HIGH — luka między listowaniem i routingiem.
-  - Blind spot: Odświeżanie wygasłych URL-i miniaturek.
-- **Decision**: FIXED — trasa `GET /api/sources/<name>/thumb/<source_id>` za Origin/Host, `Entry.thumb: str | None`, `/m/.../thumb` usunięta (Phase 1 §5, Phase 3 §3 i §6, Phase 4 §1)
+- **Detail**: The only thumbnail route needs an ID from the Registry: `/m/<token>/<id>/thumb`. `Entry` returns the source ID and `thumb: bool`, and registration happens only when casting. So the grid gets no addressable thumbnail before the material is started.
+- **Fix**: Add a protected thumbnail route by `(source, source_id)` and return its URL in `Entry`.
+  - Strength: Uses the existing `Source.thumb()` without registering the whole library.
+  - Tradeoff: The route's response and error contract has to be written.
+  - Confidence: HIGH — a gap between listing and routing.
+  - Blind spot: Refreshing expired thumbnail URLs.
+- **Decision**: FIXED — route `GET /api/sources/<name>/thumb/<source_id>` behind Origin/Host, `Entry.thumb: str | None`, `/m/.../thumb` removed (Phase 1 §5, Phase 3 §3 and §6, Phase 4 §1)
 
-### F5 — Konwersja zdjęcia następuje za późno dla DIDL
+### F5 — Photo conversion happens too late for DIDL
 
 - **Severity**: ⚠️ WARNING
-- **Impact**: 🔎 MEDIUM — istotna decyzja; wymaga namysłu
+- **Impact**: 🔎 MEDIUM — a significant decision; needs thought
 - **Dimension**: End-State Alignment
-- **Location**: Phase 2 — Serving photos (`plan.md:449–455`), profile i konwersja (`:423–447`)
-- **Detail**: Plan wywołuje `prepare()` przy żądaniu HTTP od TV. Tymczasem DIDL trafia do TV wcześniej, w `SetAVTransportURI` — tak działa obecny kod (`cast-tv:473–475`). HEIC może zostać zapowiedziany jako HEIC, a dostarczony jako JPEG. Zachowany PNG również otrzymuje wspólny profil `JPEG_LRG`. Brakuje przygotowania i publikacji wynikowych MIME, rozmiaru i wymiarów przed SOAP.
-- **Fix**: Przygotować zdjęcie przed SOAP i budować DIDL oraz odpowiedź HTTP z tych samych danych `Prepared`; profil dobierać do wynikowego MIME.
-  - Strength: Zgodne MIME, rozmiar i wymiary na całej ścieżce.
-  - Tradeoff: Uruchomienie zdjęcia czeka na konwersję.
-  - Confidence: HIGH — kolejność operacji jest widoczna w kodzie.
-  - Blind spot: Akceptowane profile obrazu nadal wymagają Samsunga.
-- **Decision**: FIXED — inaczej niż w propozycji: `Prepared` jako osobny obiekt (źródłowe pola `MediaItem` zostają), profil z wynikowego MIME i wymiarów (`photo_profile`), trasa publikowana dopiero po udanym przygotowaniu i kontroli generacji, HTTP nie konwertuje, błąd konwersji kończy zadanie przed SOAP (Phase 1 §3, Phase 2 §2–§4 i §6, Definitions `kind → wire`)
+- **Location**: Phase 2 — Serving photos (`plan.md:449–455`), profiles and conversion (`:423–447`)
+- **Detail**: The plan calls `prepare()` on the TV's HTTP request. But DIDL reaches the TV earlier, in `SetAVTransportURI` — that is how the current code works (`cast-tv:473–475`). A HEIC can be announced as HEIC and delivered as JPEG. A PNG kept as is also gets the common `JPEG_LRG` profile. Preparing and publishing the resulting MIME, size and dimensions before SOAP is missing.
+- **Fix**: Prepare the photo before SOAP and build both the DIDL and the HTTP response from the same `Prepared` data; choose the profile from the resulting MIME.
+  - Strength: Consistent MIME, size and dimensions along the whole path.
+  - Tradeoff: Starting a photo waits for the conversion.
+  - Confidence: HIGH — the order of operations is visible in the code.
+  - Blind spot: The accepted image profiles still need the Samsung.
+- **Decision**: FIXED — differently from the proposal: `Prepared` as a separate object (the source fields of `MediaItem` stay), the profile from the resulting MIME and dimensions (`photo_profile`), the route published only after a successful preparation and generation check, HTTP does not convert, a conversion error ends the task before SOAP (Phase 1 §3, Phase 2 §2–§4 and §6, Definitions `kind → wire`)
 
-### F6 — Mapowanie źródeł nie realizuje zasad dotyczących zdjęć
+### F6 — The source mapping does not carry out the rules for photos
 
 - **Severity**: ⚠️ WARNING
-- **Impact**: 🔎 MEDIUM — istotna decyzja; wymaga namysłu
+- **Impact**: 🔎 MEDIUM — a significant decision; needs thought
 - **Dimension**: End-State Alignment
 - **Location**: Phase 4 (`plan.md:674–681`), Phase 5 (`:770–772`)
-- **Detail**: GoPro ma obsługiwać zdjęcia przez istniejące `library_url()`, które odrzuca warianty obrazów (`cast-gopro:119–122`) i sprawdza je przez `is_video()` (`:137`; `castcloud.py:75–80`). Brakuje ścieżki pobierania zdjęć opartej na zweryfikowanej odpowiedzi API; fallback `files` nie gwarantuje obsługi wariantu zawierającego wyłącznie obraz. OneDrive natomiast akceptuje każde `image/*`, więc przepuszcza również `image/gif`, mimo jawnego wykluczenia GIF-ów.
-- **Fix**: Dopisać rozwiązywanie zdjęć GoPro na podstawie rzeczywistych fixture’ów oraz wspólny filtr dozwolonych formatów przed tworzeniem `Entry`.
-  - Strength: Lista odpowiada zadeklarowanemu zakresowi obsługiwanych mediów.
-  - Tradeoff: Potrzebny probe zdjęcia GoPro, nie tylko jego miniaturki.
-  - Confidence: HIGH — oba problemy wynikają z konkretnych warunków.
-  - Blind spot: Rzeczywisty format pobierania burst/livephoto pozostaje niezweryfikowany.
-- **Decision**: FIXED — drugi probe GoPro (download zdjęcia/burst/livephoto) i `photo_url()` z rankingiem wariantów obrazu; wspólny `is_allowed_photo()` w `media.py` stosowany przez GoPro, OneDrive i Picker; przypadek `image/gif` w `test_kind_from_facets` (Phase 2 §2 i §6, Phase 4 §2 i §5, Phase 5 §2, Phase 6 §2, Definitions `media`)
+- **Detail**: GoPro is to handle photos through the existing `library_url()`, which rejects image variants (`cast-gopro:119–122`) and checks them with `is_video()` (`:137`; `castcloud.py:75–80`). A photo download path based on a verified API response is missing; the `files` fallback does not guarantee handling of an image-only variant. OneDrive, on the other hand, accepts any `image/*`, so it lets `image/gif` through as well, despite GIFs being explicitly excluded.
+- **Fix**: Add GoPro photo resolution based on real fixtures, and a common filter of allowed formats before an `Entry` is created.
+  - Strength: The listing matches the declared scope of supported media.
+  - Tradeoff: A probe of a GoPro photo is needed, not only of its thumbnail.
+  - Confidence: HIGH — both problems follow from specific conditions.
+  - Blind spot: The actual download format of burst/livephoto remains unverified.
+- **Decision**: FIXED — a second GoPro probe (download of a photo/burst/livephoto) and `photo_url()` with a ranking of image variants; a common `is_allowed_photo()` in `media.py` used by GoPro, OneDrive and the Picker; an `image/gif` case in `test_kind_from_facets` (Phase 2 §2 and §6, Phase 4 §2 and §5, Phase 5 §2, Phase 6 §2, Definitions `media`)
 
-### F7 — Cache zdjęć przeczy obietnicy tymczasowego przechowywania
+### F7 — The photo cache contradicts the promise of temporary storage
 
 - **Severity**: ⚠️ WARNING
-- **Impact**: 🏃 LOW — szybka decyzja; poprawka oczywista i lokalna
+- **Impact**: 🏃 LOW — a quick decision; the fix is obvious and local
 - **Dimension**: Blind Spots
 - **Location**: Phase 2 — Photo pipeline (`plan.md:440–443`), scope (`:132–133`), Phase 7 paths (`:934–936`)
-- **Detail**: Plan obiecuje cache w katalogu tymczasowym, ale wskazuje `cache_dir()/photos`. `cache_dir()` oznacza obecnie `~/.cache/cast-tv` (`castcloud.py:18`), a w fazie 7 `user_cache_dir()`. Nie opisano usuwania zdjęć przy zakończeniu procesu.
-- **Fix**: Użyć osobnego katalogu tymczasowego procesu z cleanupem; trwały cache metadanych pozostawić oddzielnie.
-- **Decision**: FIXED — `tempfile.mkdtemp` per proces usuwany w `atexit` i na Ctrl+C, `cache_dir()` tylko dla metadanych, `photo_tmp_dir()` w `config.py`, `test_tmp_dir_removed_at_exit` (Phase 1 §8, Phase 2 §3 i §6)
+- **Detail**: The plan promises a cache in a temporary directory but points to `cache_dir()/photos`. `cache_dir()` currently means `~/.cache/cast-tv` (`castcloud.py:18`), and in Phase 7 `user_cache_dir()`. Removing the photos when the process ends is not described.
+- **Fix**: Use a separate per-process temporary directory with cleanup; keep the persistent metadata cache apart.
+- **Decision**: FIXED — `tempfile.mkdtemp` per process, removed in `atexit` and on Ctrl+C, `cache_dir()` for metadata only, `photo_tmp_dir()` in `config.py`, `test_tmp_dir_removed_at_exit` (Phase 1 §8, Phase 2 §3 and §6)
 
-### F8 — Test ręcznego zastąpienia wyprzedza potrzebną funkcjonalność
+### F8 — The manual replacement test comes before the functionality it needs
 
 - **Severity**: ⚠️ WARNING
-- **Impact**: 🏃 LOW — szybka decyzja; poprawka oczywista i lokalna
+- **Impact**: 🏃 LOW — a quick decision; the fix is obvious and local
 - **Dimension**: Plan Completeness
 - **Location**: Phase 1 — Manual Verification (`plan.md:389–390`)
-- **Detail**: Faza 1 wymaga uruchomienia drugiego castu przy działającym pierwszym. Drugie wywołanie CLI na tym samym porcie kończy się obecnie błędem bind (`cast-tv:462–466`). Registry wewnątrz procesu tego nie zmienia, a sterowanie wieloma castami pojawia się dopiero w fazie 3.
-- **Fix**: W fazie 1 sprawdzać dwa wpisy w jednym serwerze testem integracyjnym; ręczne zastępowanie odtwarzania pozostawić w fazie 3.
-- **Decision**: FIXED — punkt 1.5 zastąpiony automatycznym 1.4 (`test_second_item_does_not_replace_first` na dwóch wpisach w jednym serwerze); ręczne zastępowanie zostaje w 3.5 (Phase 1 Success Criteria, Progress)
+- **Detail**: Phase 1 requires starting a second cast while the first is running. A second CLI call on the same port currently ends in a bind error (`cast-tv:462–466`). A Registry inside the process does not change that, and controlling several casts arrives only in Phase 3.
+- **Fix**: In Phase 1, check two entries in one server with an integration test; leave manual replacement of playback to Phase 3.
+- **Decision**: FIXED — item 1.5 replaced by automated 1.4 (`test_second_item_does_not_replace_first` on two entries in one server); manual replacement stays in 3.5 (Phase 1 Success Criteria, Progress)

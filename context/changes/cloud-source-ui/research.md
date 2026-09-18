@@ -1013,7 +1013,7 @@ relay). Three links pasted:
   22:20:58. Share links are video-only by design (`plan.md:995`), so not a regression; follow-ups
   in `follow-ups/review-fixes.md`.
 - `link-3` `cMSPYewNYdYXjrJq6` — a share link to a **video**: **played to its end** (Piotr: "po
-  wklejeniu video 6.5 działa"); cast `stopped` with no error, duration `0:00:08`, seven TV
+  wklejeniu video 6.5 działa" - after pasting the video, 6.5 works); cast `stopped` with no error, duration `0:00:08`, seven TV
   requests, 3 553 136 bytes relayed whole-per-request as before (`bytes=3553008-` trimmed by the
   relay). The earlier known-good link `KwhGzcxkNtQpudc46` also still resolves to the same H.264
   file with the new code (checked off the TV).
@@ -1025,7 +1025,7 @@ phone: `VID_20240830_220448.mp4` (1920×1080) cast as **Original**. It was fetch
 6 132 233 bytes into `/var/tmp/cast-tv-videos-726890-d6d3zl1_/` (the new pid-named directory; the size is well inside the per-file
 limit, the budget and the reserve) — and the TV's ranges were answered from the local file
 (`Range=bytes=6132105- -> 6132105-6132232/6132233`, no relay trimming). **The video played**
-(Piotr: "6.3 zrobione, film zagrał"); cast `stopped` with no error, duration `0:00:11`, six TV
+(Piotr: "6.3 zrobione, film zagrał" - 6.3 done, the film played); cast `stopped` with no error, duration `0:00:11`, six TV
 requests. The file stays in the download LRU after the cast (for a re-cast) and goes on eviction
 or at exit.
 
