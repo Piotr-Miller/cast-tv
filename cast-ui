@@ -48,6 +48,8 @@ PHOTOS_HISTORY = os.path.join(cc.CONFIG, "photos-history.json")
 ONEDRIVE_DEFAULT = os.path.expanduser("~/.onedrive-sync")
 VIDEO_EXT = (".mp4", ".m4v", ".mov", ".mkv", ".avi", ".ts", ".m2ts", ".webm",
              ".mpg", ".mpeg", ".wmv")
+PHOTO_EXT = (".jpg", ".jpeg", ".png")        # what the TV decodes as a still
+STILL_EXT = PHOTO_EXT + (".heic",)           # what is listed as a photo
 LIST_COUNT = 60          # one API page is more than enough to pick from
 
 
@@ -144,6 +146,205 @@ def gopro_thumb(media_id):
     return None
 
 
+# ---------------------------------------------------------------- thumbnails
+class ThumbProvider:
+    """One way of getting a small picture for an item.
+
+    The page never builds a thumbnail address. Every listing hands each item its
+    `thumb` - or None, and the tile keeps its gradient - taken from the first
+    provider registered for that source which says it can serve it. `can` has
+    to be cheap: it runs for every item of a folder before anyone looks, so it
+    may consult what the listing already knows and nothing more. `serve` does
+    the work, and only when the browser asks for the picture.
+    """
+    name = ""
+
+    def can(self, item):
+        return False
+
+    def key(self, item):
+        return ""
+
+    def serve(self, key):
+        """("redirect", url), ("image", bytes, content type), or None."""
+        return None
+
+
+class GoproStills(ThumbProvider):
+    """GoPro's own stills: a video's "large" label, a photo's source."""
+    name = "gopro"
+
+    def can(self, item):
+        return bool(item.get("id"))
+
+    def key(self, item):
+        return item["id"]
+
+    def serve(self, key):
+        if not re.match(r"^[0-9a-f]{16,40}$", key):
+            return None
+        url = gopro_thumb(key)
+        return ("redirect", url) if url else None
+
+
+class ExifPreviews(ThumbProvider):
+    """The preview a camera or phone embeds in a JPEG's EXIF header, read from
+    the first 128 KB of the file rather than the whole of it - the photos in the
+    mirror average about 12 MB.
+
+    A placeholder whose bytes are only in the cloud is refused outright: reading
+    even its head makes Windows fetch the whole file. That refusal is exactly the
+    gap a Microsoft Graph provider would fill - registered after this one for
+    "onedrive", it would take the items this one turns down, and no view would
+    need to change.
+    """
+    name = "exif"
+    HEAD = 128 * 1024
+    cache = {}              # (path, mtime) -> (bytes, content type)
+
+    def can(self, item):
+        return (item.get("kind") == "photo" and not item.get("cloud")
+                and item.get("name", "").lower().endswith((".jpg", ".jpeg")))
+
+    def key(self, item):
+        return item["path"]
+
+    def serve(self, key):
+        full = onedrive_file(key)
+        if not full:
+            return None
+        try:
+            st = os.stat(full)
+        except OSError:
+            return None
+        if in_cloud_only(st):
+            return None     # asked for directly: still never read
+        hit = self.cache.get((full, st.st_mtime))
+        if hit:
+            return ("image",) + hit
+        try:
+            with open(full, "rb") as fh:
+                found = exif_thumbnail(fh.read(self.HEAD))
+        except OSError:
+            return None
+        if not found:
+            return None
+        body, ctype = upright(*found)
+        if len(self.cache) > 800:
+            self.cache.clear()
+        self.cache[(full, st.st_mtime)] = (body, ctype)
+        return ("image", body, ctype)
+
+
+# The order is the policy: the first provider for a source that can serve an
+# item serves it. A Graph provider for cloud-only files goes after ExifPreviews.
+THUMBNAILS = {"gopro": [GoproStills()], "onedrive": [ExifPreviews()]}
+PROVIDERS = {p.name: p for chain in THUMBNAILS.values() for p in chain}
+
+
+def thumb_for(source, item, version=""):
+    """The address of an item's picture, or None - the only place one is built."""
+    for provider in THUMBNAILS.get(source, []):
+        if provider.can(item):
+            return "/api/thumb/%s?k=%s%s" % (
+                provider.name, urllib.parse.quote(provider.key(item), safe=""),
+                "&v=" + version if version else "")
+    return None
+
+
+def exif_thumbnail(head):
+    """(jpeg bytes, orientation) from the EXIF block in the head of a JPEG, or None."""
+    if head[:2] != b"\xff\xd8":
+        return None
+    i = 2
+    while i + 4 <= len(head):
+        if head[i] != 0xFF:
+            return None
+        marker = head[i + 1]
+        if marker in (0xD9, 0xDA):      # end of image, start of scan: no EXIF ahead
+            return None
+        size = int.from_bytes(head[i + 2:i + 4], "big")
+        if marker == 0xE1 and head[i + 4:i + 10] == b"Exif\x00\x00":
+            return _thumb_in_tiff(head[i + 10:i + 2 + size])
+        i += 2 + size
+    return None
+
+
+def _thumb_in_tiff(t):
+    order = {b"II": "little", b"MM": "big"}.get(t[:2])
+    if not order or len(t) < 8:
+        return None
+
+    def u16(o):
+        return int.from_bytes(t[o:o + 2], order)
+
+    def u32(o):
+        return int.from_bytes(t[o:o + 4], order)
+
+    def ifd(off):
+        if off <= 0 or off + 2 > len(t):
+            return {}, 0
+        n = u16(off)
+        tags = {}
+        for k in range(n):
+            e = off + 2 + 12 * k
+            if e + 12 > len(t):
+                break
+            tag, kind, count = u16(e), u16(e + 2), u32(e + 4)
+            tags[tag] = u16(e + 8) if kind == 3 and count == 1 else u32(e + 8)
+        after = off + 2 + 12 * n
+        return tags, (u32(after) if after + 4 <= len(t) else 0)
+
+    ifd0, next_off = ifd(u32(4))
+    ifd1, _ = ifd(next_off)
+    start, length = ifd1.get(0x0201), ifd1.get(0x0202)
+    if not start or not length or start + length > len(t):
+        return None
+    jpeg = t[start:start + length]
+    if jpeg[:2] != b"\xff\xd8":
+        return None
+    return jpeg, ifd0.get(0x0112, 1)
+
+
+def jpeg_size(jpeg):
+    """(width, height) from a JPEG's frame header, or (0, 0)."""
+    i = 2
+    while i + 9 <= len(jpeg):
+        if jpeg[i] != 0xFF:
+            return 0, 0
+        marker = jpeg[i + 1]
+        if 0xC0 <= marker <= 0xC3:
+            return (int.from_bytes(jpeg[i + 7:i + 9], "big"),
+                    int.from_bytes(jpeg[i + 5:i + 7], "big"))
+        i += 2 + int.from_bytes(jpeg[i + 2:i + 4], "big")
+    return 0, 0
+
+
+def upright(jpeg, orientation):
+    """The preview the right way up. EXIF previews are stored as the sensor saw
+    them, and the orientation tag belongs to the photo, not the preview, so a
+    portrait shot's preview lies on its side. Turning JPEG pixels needs a
+    decoder; wrapping the preview in an SVG that turns it needs none."""
+    if orientation not in (3, 6, 8):
+        return jpeg, "image/jpeg"
+    w, h = jpeg_size(jpeg)
+    if not w or not h:
+        return jpeg, "image/jpeg"
+    if orientation == 3:
+        size, turn = (w, h), "translate(%d %d) rotate(180)" % (w, h)
+    elif orientation == 6:
+        size, turn = (h, w), "translate(%d 0) rotate(90)" % h
+    else:
+        size, turn = (h, w), "translate(0 %d) rotate(-90)" % w
+    data = "data:image/jpeg;base64," + base64.b64encode(jpeg).decode()
+    svg = ('<svg xmlns="http://www.w3.org/2000/svg" '
+           'xmlns:xlink="http://www.w3.org/1999/xlink" width="%d" height="%d" '
+           'viewBox="0 0 %d %d"><image width="%d" height="%d" transform="%s" '
+           'href="%s" xlink:href="%s"/></svg>'
+           % (size[0], size[1], size[0], size[1], w, h, turn, data, data))
+    return svg.encode(), "image/svg+xml"
+
+
 def token_state():
     """What can honestly be said about the stored GoPro token.
 
@@ -197,7 +398,7 @@ def gopro_items(refresh=False):
     items = cc.cache_read("gopro-list.json")
     if items is None:
         return {"items": [], "never_listed": True}
-    return {"items": items}
+    return {"items": [dict(i, thumb=thumb_for("gopro", i)) for i in items]}
 
 
 # OneDrive on Windows keeps files it has not downloaded as placeholders with
@@ -213,29 +414,105 @@ def in_cloud_only(st):
     return bool(getattr(st, "st_file_attributes", 0) & CLOUD_ONLY)
 
 
-def onedrive_items(root):
-    """Video files in the mirrored account - an ordinary directory walk."""
+def onedrive_file(rel):
+    """The full path of a file inside the mirror, or None. Everything the page
+    names in OneDrive comes through here: a page open in a browser must not be
+    able to reach past the mirror."""
+    if not isinstance(rel, str):
+        return None
+    root = os.path.realpath(onedrive_root())
+    full = os.path.realpath(os.path.join(root, os.path.expanduser(rel)))
+    if not full.startswith(root + os.sep) or not os.path.isfile(full):
+        return None
+    return full
+
+
+def media_kind(name):
+    low = name.lower()
+    if low.endswith(VIDEO_EXT):
+        return "video"
+    if low.endswith(STILL_EXT):
+        return "photo"
+    return None
+
+
+def shallow_counts(path):
+    """What a folder holds one level down - enough for its tile, without
+    walking a mirror of thousands of files every time a folder opens."""
+    videos = photos = folders = 0
+    try:
+        with os.scandir(path) as entries:
+            for e in entries:
+                if e.name.startswith("."):
+                    continue
+                if e.is_dir(follow_symlinks=False):
+                    folders += 1
+                else:
+                    kind = media_kind(e.name)
+                    videos += kind == "video"
+                    photos += kind == "photo"
+    except OSError:
+        pass
+    return {"videos": videos, "photos": photos, "folders": folders}
+
+
+def onedrive_folder(rel=""):
+    """One folder of the mirror: its subfolders, and the videos and photos in it.
+
+    The mirror holds thousands of photos, most of them only in the cloud, so it
+    is browsed a folder at a time, as the design's breadcrumb has it, rather
+    than walked whole. Nothing here reads a file's contents: size, date and
+    whether it is a cloud-only placeholder all come with the directory entry.
+    """
+    root = onedrive_root()
     if not os.path.isdir(root):
         return {"root": root,
                 "error": "%s is not a directory - the OneDrive mirror lives "
                          "somewhere else, or is not set up yet." % root}
-    found = []
-    for base, dirs, names in os.walk(root):
-        dirs[:] = [d for d in dirs if not d.startswith(".")]
-        for name in names:
-            if name.lower().endswith(VIDEO_EXT):
-                full = os.path.join(base, name)
-                try:
-                    st = os.stat(full)
-                except OSError:
-                    continue      # a placeholder the mirror has not filled in
-                found.append({"path": full, "name": os.path.relpath(full, root),
-                              "size": st.st_size,
-                              "cloud": in_cloud_only(st),
-                              "date": time.strftime("%Y-%m-%d",
-                                                    time.localtime(st.st_mtime))})
-    found.sort(key=lambda i: i["date"], reverse=True)
-    return {"root": root, "items": found}
+    base = os.path.realpath(root)
+    here = os.path.realpath(os.path.join(base, rel or ""))
+    if here != base and not here.startswith(base + os.sep):
+        here = base
+    if not os.path.isdir(here):
+        return {"root": root, "error": "No such folder in the mirror: %s" % rel}
+    rel = "" if here == base else os.path.relpath(here, base)
+
+    folders, items = [], []
+    with os.scandir(here) as entries:
+        for e in entries:
+            if e.name.startswith("."):
+                continue
+            path = os.path.join(rel, e.name) if rel else e.name
+            if e.is_dir(follow_symlinks=False):
+                folders.append(dict({"name": e.name, "path": path}, **shallow_counts(e.path)))
+                continue
+            kind = media_kind(e.name)
+            if not kind:
+                continue
+            try:
+                st = e.stat()
+            except OSError:
+                continue
+            item = {"name": e.name, "path": path, "kind": kind, "size": st.st_size,
+                    "cloud": in_cloud_only(st),
+                    # HEIC is listed, since it is there, but the TV cannot decode
+                    # it and there is nothing here that converts it
+                    "playable": not e.name.lower().endswith(".heic"),
+                    "date": time.strftime("%Y-%m-%d", time.localtime(st.st_mtime))}
+            item["thumb"] = thumb_for("onedrive", item, str(int(st.st_mtime)))
+            items.append(item)
+    folders.sort(key=lambda f: f["name"].lower())
+    items.sort(key=lambda i: i["name"].lower())
+    crumbs = [{"name": os.path.basename(base.rstrip(os.sep)) or base, "path": ""}]
+    walked = ""
+    for part in (rel.split(os.sep) if rel else []):
+        walked = os.path.join(walked, part) if walked else part
+        crumbs.append({"name": part, "path": walked})
+    return {"root": root, "path": rel, "crumbs": crumbs, "folders": folders,
+            "items": items,
+            "counts": {"videos": sum(i["kind"] == "video" for i in items),
+                       "photos": sum(i["kind"] == "photo" for i in items),
+                       "cloud": sum(1 for i in items if i["cloud"])}}
 
 
 def photos_history():
@@ -513,15 +790,19 @@ class Show:
                     "count": len(cls.items), "interval": cls.interval,
                     "paused": cls.paused, "loading": cls.loading,
                     "left": round(left, 1), "error": cls.error,
-                    "items": [{k: it.get(k) for k in ("title", "thumb", "meta")}
+                    "items": [{k: it.get(k) for k in ("title", "thumb", "preview", "meta")}
                               for it in cls.items]}
 
     @classmethod
     def resolve(cls, i):
-        """The address of picture i, fetched once and kept for the show."""
+        """Where picture i comes from - ("file", path) off disk, or ("url",
+        address) upstream - found once and kept for the show."""
         if i in cls.urls or not 0 <= i < len(cls.items):
             return cls.urls.get(i)
         item = cls.items[i]
+        if item["source"] == "onedrive":
+            cls.urls[i] = ("file", item["full"])
+            return cls.urls[i]
         g = gopro_module()
         said = io.StringIO()
         try:
@@ -530,8 +811,8 @@ class Show:
         except SystemExit:
             raise RuntimeError(said.getvalue().strip().split("\n")[0] or
                                "GoPro would not hand over %s" % item["title"])
-        cls.urls[i] = url
-        return url
+        cls.urls[i] = ("url", url)
+        return cls.urls[i]
 
     @classmethod
     def put(cls, gen, i):
@@ -542,9 +823,15 @@ class Show:
                 return
             cls.loading, cls.idx = True, i
         try:
-            upstream = cls.resolve(i)
-            path = "/still/%d-%d.jpg" % (gen, i)    # fresh per picture, per show
-            ct.RangeHandler.remote[path] = upstream
+            kind, where = cls.resolve(i)
+            ext = os.path.splitext(where if kind == "file" else
+                                   urllib.parse.urlparse(where).path)[1].lower()
+            # fresh per picture, per show; the extension gives the TV its type
+            path = "/still/%d-%d%s" % (gen, i, ext if ext in PHOTO_EXT else ".jpg")
+            if kind == "file":
+                ct.RangeHandler.files[path] = where
+            else:
+                ct.RangeHandler.remote[path] = where
             url = cls.base + path
             ct.soap(cls.avt, ct.AVT, "SetAVTransportURI",
                     "<CurrentURI>%s</CurrentURI><CurrentURIMetaData>%s"
@@ -678,6 +965,7 @@ class Show:
             server.shutdown()
             server.server_close()
         ct.RangeHandler.remote = {}
+        ct.RangeHandler.files = {}
         cls.wake.set()
         return cls.state()
 
@@ -689,17 +977,38 @@ class Show:
 
 
 def show_items(raw):
-    """Only photos of our own listing make a queue - an id the page sends is
-    checked against it, never passed on as it came."""
+    """What makes a queue: photos of our own GoPro listing, and photos inside
+    the OneDrive mirror. Whatever the page sends is checked against those,
+    never passed on as it came."""
     listed = {i.get("id"): i for i in (cc.cache_read("gopro-list.json") or [])}
     out = []
     for r in raw if isinstance(raw, list) else []:
-        item = listed.get(r.get("id")) if isinstance(r, dict) else None
-        if item is None or item.get("kind") != "Photo" or r.get("source") != "gopro":
+        if not isinstance(r, dict):
             continue
-        out.append({"source": "gopro", "id": item["id"], "title": item.get("name"),
-                    "thumb": "/api/gopro/thumb?id=" + urllib.parse.quote(item["id"]),
-                    "meta": r.get("meta") if isinstance(r.get("meta"), str) else ""})
+        meta = r.get("meta") if isinstance(r.get("meta"), str) else ""
+        if r.get("source") == "gopro":
+            item = listed.get(r.get("id"))
+            if item is None or item.get("kind") != "Photo":
+                continue
+            thumb = thumb_for("gopro", item)
+            out.append({"source": "gopro", "id": item["id"], "title": item.get("name"),
+                        "thumb": thumb, "preview": thumb, "meta": meta})
+        elif r.get("source") == "onedrive":
+            full = onedrive_file(r.get("path"))
+            if not full or not full.lower().endswith(PHOTO_EXT):
+                continue
+            st = os.stat(full)
+            rel = os.path.relpath(full, os.path.realpath(onedrive_root()))
+            item = {"name": os.path.basename(full), "path": rel, "kind": "photo",
+                    "cloud": in_cloud_only(st)}
+            out.append({"source": "onedrive", "path": rel, "full": full,
+                        "title": item["name"], "cloud": item["cloud"],
+                        "thumb": thumb_for("onedrive", item, str(int(st.st_mtime))),
+                        # the whole photo for the preview on the page, but only one
+                        # that is on disk: a cloud-only one would be fetched for it
+                        "preview": None if item["cloud"] else
+                                   "/api/onedrive/file?k=" + urllib.parse.quote(rel, safe=""),
+                        "meta": meta})
     return out
 
 
@@ -734,12 +1043,12 @@ def cast_command(req):
         return cmd + extra, "Google Photos", None
 
     if source == "onedrive":
-        path = req.get("path") or ""
-        root = os.path.realpath(onedrive_root())
-        full = os.path.realpath(os.path.expanduser(path))
         # the page may be open in a browser, so only the mirror is castable
-        if not full.startswith(root + os.sep) or not os.path.isfile(full):
-            return None, None, "Not a file inside %s." % root
+        full = onedrive_file(req.get("path") or "")
+        if not full:
+            return None, None, "Not a file inside %s." % onedrive_root()
+        if full.lower().endswith(".heic"):
+            return None, None, "The TV cannot decode HEIC, and nothing here converts it."
         return cc.sibling("cast-tv") + [full] + extra, os.path.basename(full), None
 
     return None, None, "Unknown source %r." % source
@@ -886,8 +1195,11 @@ PAGE = r"""<!doctype html>
     position: absolute; right: 7px; bottom: 7px; font-size: 10.5px; padding: 2px 5px;
     border-radius: 4px; background: var(--badge); color: var(--text);
   }
+  /* flags stack in the top-left corner: a file can be HEIC and in the cloud at once */
+  .flags { position: absolute; left: 7px; top: 7px; display: flex; flex-direction: column;
+           align-items: flex-start; gap: 4px; }
   .flag {
-    position: absolute; left: 7px; top: 7px; display: flex; align-items: center; gap: 4px;
+    display: flex; align-items: center; gap: 4px;
     padding: 3px 6px; border-radius: 4px; background: var(--badge);
     font-size: 10px; color: var(--warn-text);
   }
@@ -1087,6 +1399,28 @@ PAGE = r"""<!doctype html>
                      text-overflow: ellipsis; white-space: nowrap; }
   .svctl .bfill { background: var(--accent); transition: width 1s linear; }
 
+
+  /* OneDrive: the breadcrumb, and the folders above the grid */
+  .crumb { cursor: pointer; color: var(--dim); }
+  .crumb:hover { color: var(--text-2); }
+  .crumb.here { color: var(--text-2); cursor: default; }
+  .crumbsep { color: oklch(0.42 0.008 65); }
+  .folders {
+    display: grid; gap: 10px; padding: 18px 28px 0;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  }
+  .folder {
+    display: flex; align-items: center; gap: 11px; padding: 11px 13px; min-width: 0;
+    border-radius: 10px; background: var(--tile); border: 1px solid var(--tile-line); cursor: pointer;
+  }
+  .folder:hover { border-color: var(--chip-line); }
+  .folder svg { flex-shrink: 0; color: var(--accent); }
+  .folder .fn { font-size: 12.5px; color: var(--text); overflow: hidden;
+                text-overflow: ellipsis; white-space: nowrap; }
+  .folder .fc { margin-top: 2px; font-size: 10.5px; color: var(--dim-2); }
+  .tile-wrap.dead { cursor: default; }
+  .tile-wrap.dead .thumb { opacity: .55; }
+
   @media (max-width: 640px) {
     header, .tabsbar, .strip { padding-left: 16px; padding-right: 16px; }
     .grid { padding: 16px; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
@@ -1096,6 +1430,7 @@ PAGE = r"""<!doctype html>
     #bar { flex-wrap: wrap; }
     #showview { height: auto; min-height: calc(100vh - 56px); }
     .svbody { flex-direction: column; }
+    .folders { padding: 14px 16px 0; }
     .svprev { padding: 16px; }
     .svstage { min-height: 45vh; }
     .svqueue { width: auto; border-left: 0; border-top: 1px solid var(--line); max-height: 32vh; }
@@ -1244,8 +1579,8 @@ const STOP_ICON = '<svg width="12" height="12" viewBox="0 0 24 24" fill="current
 
 function drawTabs() {
   const [th, tcls] = tokenHint(state && state.token);
-  const root = data.onedrive && data.onedrive.root;
-  const odHint = root ? root.split(/[\\/]/).filter(Boolean).pop() : "a folder on disk";
+  const crumbs = data.onedrive && data.onedrive.crumbs;
+  const odHint = crumbs && crumbs.length ? crumbs[crumbs.length - 1].name : "a folder on disk";
   const defs = [["gopro", "GoPro", th, tcls], ["onedrive", "OneDrive", odHint, ""],
                 ["photos", "Google Photos", "paste a link", ""]];
   $("tabs").innerHTML = defs.map(([id, label, hint, cls]) =>
@@ -1427,7 +1762,9 @@ function inShow() { return !!(state && state.show && (state.show.active || state
 async function startShow() {
   const b = $("startshow");
   if (b) b.disabled = true;
-  const items = [...sel.values()].map((x) => ({ source: x.source, id: x.id, meta: x.meta }));
+  const items = [...sel.values()].map((x) => x.source === "onedrive"
+    ? { source: "onedrive", path: x.path, meta: x.meta }
+    : { source: x.source, id: x.id, meta: x.meta });
   const out = await api("/api/show", { action: "start", items, interval: iv });
   if (out.error) { if (b) b.disabled = false; say(out.error, true); return; }
   sel.clear();
@@ -1481,7 +1818,8 @@ function drawShow() {
       '<div class="s">The TV went back to its own input</div>' +
       '<button class="bstart" id="restart">Start over</button>' +
       '<div><span class="link" id="back">Back to the library</span></div></div>'
-    : (cur.thumb ? '<img class="svhero" alt="" src="' + esc(cur.thumb) + '">' : "");
+    : (cur.preview || cur.thumb ? '<img class="svhero" alt="" src="' +
+       esc(cur.preview || cur.thumb) + '">' : "");
   $("showview").innerHTML =
     '<div class="svbody">' +
       '<div class="svprev">' +
@@ -1542,17 +1880,19 @@ function drawShow() {
 /* --------------------------------------------------------------- the tiles */
 function tile(o) {
   clicks.set(o.key, o.toggle ? { toggle: o.toggle } : { cast: o.click });
-  return '<div class="tile-wrap' + (o.on ? " on" : "") + '" data-k="' + esc(o.key) +
+  return '<div class="tile-wrap' + (o.on ? " on" : "") + (o.dead ? " dead" : "") +
+    '" data-k="' + esc(o.key) +
     '"><div class="tile">' +
     '<div class="thumb" style="background:' + gradient(o.hue) + '">' +
       (o.thumb ? '<img loading="lazy" alt="" src="' + esc(o.thumb) +
                  '" onload="this.classList.add(\'in\')" onerror="this.remove()">' : "") +
       (o.dur ? '<span class="dur mono">' + esc(o.dur) + "</span>" : "") +
-      (o.warn ? '<div class="flag">' + WARN_ICON + '<span class="mono">' + esc(o.warn) +
-                "</span></div>" : "") +
+      (o.warn || o.cloud ? '<div class="flags">' +
+        (o.warn ? '<div class="flag">' + WARN_ICON + '<span class="mono">' + esc(o.warn) +
+                  "</span></div>" : "") +
       (o.selectable ? '<div class="check">' + CHECK_ICON + "</div>" : "") +
-      (o.cloud ? '<div class="flag cloud mono" title="Only in the cloud: casting it ' +
-                 'downloads it first">in the cloud</div>' : "") +
+        (o.cloud ? '<div class="flag cloud mono" title="Only in the cloud: casting it ' +
+                   'downloads it first">in the cloud</div>' : "") + "</div>" : "") +
     "</div>" +
     '<div class="info"><div class="name mono" title="' + esc(o.title || o.name) + '">' + esc(o.name) +
       '</div><div class="metarow"><span class="meta mono">' + esc(o.meta) + "</span>" +
@@ -1574,7 +1914,7 @@ function wireGrid(root, redraw) {
   root.querySelectorAll(".tile-wrap").forEach((el) => {
     el.onclick = () => {
       const what = clicks.get(el.dataset.k);
-      if (!what) return;
+      if (!what || el.classList.contains("dead")) return;
       if (what.toggle) { what.toggle(); return; }
       if (sel.size) clearSel();
       cast(what.cast(), el);
@@ -1592,7 +1932,7 @@ function goproTile(it, index) {
   const refused = video && q !== "proxy" && height(it.res) > 2160;
   return tile({
     key: it.id, name: it.name, hue: hue(it.name),
-    thumb: "/api/gopro/thumb?id=" + encodeURIComponent(it.id),
+    thumb: it.thumb,
     dur: video ? duration(it.ms) : "",
     warn: refused ? "TV will refuse" : "",
     meta: video ? [it.res, rate ? rate + " Mbit/s" : size(it.size)].filter(Boolean).join(" · ")
@@ -1603,26 +1943,13 @@ function goproTile(it, index) {
                                              meta: ["photo", size(it.size)].join(" \u00b7 ") }),
     click: () => ({ source: "gopro", index: index, title: it.name,
                     quality: quality[it.id] || "proxy",
-                    thumb: "/api/gopro/thumb?id=" + encodeURIComponent(it.id),
+                    thumb: it.thumb,
                     meta: video ? [it.res, QLABEL[quality[it.id] || "proxy"]].filter(Boolean)
                                     .join(" \u00b7 ")
                                 : "photo" }),
   });
 }
 
-function odTile(it) {
-  /* The file's own name on the tile, as the design has it; the folder it sits
-     in belongs to a breadcrumb, and until browsing by folder exists it lives in
-     the tooltip rather than eating the name. */
-  return tile({
-    key: it.path, name: it.name.split(/[\\/]/).pop(), title: it.name,
-    hue: hue(it.name), thumb: null, cloud: it.cloud,
-    meta: [size(it.size), it.date].join(" · "),
-    click: () => ({ source: "onedrive", path: it.path,
-                    meta: it.cloud ? "OneDrive \u00b7 downloading from the cloud"
-                                   : "OneDrive \u00b7 off disk" }),
-  });
-}
 
 function filtered(items, isPhoto) {
   if (filter === "vid") return items.filter((x) => !isPhoto(x));
@@ -1685,43 +2012,97 @@ async function loadGopro(refresh) {
 }
 
 /* --------------------------------------------------------------- OneDrive */
+/* Browsed a folder at a time, as the design's breadcrumb has it: the mirror
+   holds thousands of photos, most only in the cloud. Every tile takes its
+   picture from the listing - the page never decides how a thumbnail is made,
+   so a new source of pictures changes nothing here. */
+let odPath = "";
+
+function plural(n, one, many) { return n + " " + (n === 1 ? one : many); }
+
+function odTile(it) {
+  const photo = it.kind === "photo";
+  const key = "od:" + it.path;
+  const heic = !it.playable;
+  return tile({
+    key: key, name: it.name, title: it.path, hue: hue(it.name),
+    thumb: it.thumb, cloud: it.cloud,
+    warn: heic ? "HEIC \u00b7 TV cannot show it" : "",
+    meta: [photo ? "photo" : "video", size(it.size), it.date].join(" \u00b7 "),
+    dead: heic,
+    selectable: photo && !heic, on: photo && sel.has(key),
+    toggle: photo && !heic ? () => toggleSel({
+      source: "onedrive", id: key, path: it.path, title: it.name,
+      meta: ["OneDrive", size(it.size)].concat(it.cloud ? ["in the cloud"] : []).join(" \u00b7 ") }) : null,
+    click: () => ({ source: "onedrive", path: it.path,
+                    meta: it.cloud ? "OneDrive \u00b7 downloading from the cloud"
+                                   : "OneDrive \u00b7 off disk" }),
+  });
+}
+
+function folderTile(f) {
+  const bits = [];
+  if (f.folders) bits.push(plural(f.folders, "folder", "folders"));
+  if (f.photos) bits.push(plural(f.photos, "photo", "photos"));
+  if (f.videos) bits.push(plural(f.videos, "video", "videos"));
+  return '<div class="folder" data-path="' + esc(f.path) + '">' + FOLDER_ICON +
+    '<div style="min-width:0"><div class="fn">' + esc(f.name) + "</div>" +
+    '<div class="fc mono">' + esc(bits.join(" \u00b7 ") || "nothing to show") + "</div></div></div>";
+}
+
 function drawOnedrive() {
   const d = data.onedrive;
-  const root = (d && d.root) || "";
-  const items = (d && d.items) || [];
-  const cloud = items.filter((x) => x.cloud).length;
-  const count = items.length + (items.length === 1 ? " video" : " videos") +
-                (cloud ? ", " + cloud + " only in the cloud" : "");
+  const crumbs = (d && d.crumbs) || [];
+  const c = (d && d.counts) || { videos: 0, photos: 0, cloud: 0 };
+  const said = [];
+  if (c.videos) said.push(plural(c.videos, "video", "videos"));
+  if (c.photos) said.push(plural(c.photos, "photo", "photos"));
+  const count = (said.join(", ") || "no videos or photos here") +
+                (c.cloud ? " \u00b7 " + c.cloud + " only in the cloud" : "");
+  const trail = crumbs.map((cr, i) =>
+    '<span class="crumb mono' + (i === crumbs.length - 1 ? " here" : "") + '" data-path="' +
+    esc(cr.path) + '">' + esc(cr.name) + "</span>").join('<span class="crumbsep">/</span>');
   const strip =
-    '<div class="strip">' + FOLDER_ICON + '<span class="mono here">' + esc(root) + "</span>" +
-    (d && !d.error ? "<span>&mdash; " + count + "</span>" : "") +
+    '<div class="strip">' + FOLDER_ICON + (trail || '<span class="mono here">' +
+      esc((d && d.root) || "") + "</span>") +
+    (d && !d.error ? "<span>&mdash; " + esc(count) + "</span>" : "") +
     '<span class="grow"></span>' +
-    '<input id="root" class="mono" value="' + esc(root) + '" hidden>' +
-    '<span class="link" id="setroot">change folder</span></div>';
+    '<input id="root" class="mono" value="' + esc((d && d.root) || "") + '" hidden>' +
+    '<span class="link" id="setroot">change the mirror\u2019s folder</span></div>';
 
   let body;
   if (!d) body = '<div class="empty">Loading...</div>';
   else if (d.error) body = '<div class="err">' + esc(d.error) + "</div>";
-  else if (filter === "pho") body = '<div class="empty">Photos from OneDrive come with ' +
-    "browsing by folder, which is still to be built: the mirror holds too many to show " +
-    "in one flat grid, and most exist only in the cloud.</div>";
-  else if (!items.length) body = '<div class="empty">No video files there.</div>';
-  else body = '<div class="grid">' + items.map(odTile).join("") + "</div>";
+  else {
+    const items = filtered(d.items, (x) => x.kind === "photo");
+    body = (d.folders.length ? '<div class="folders">' + d.folders.map(folderTile).join("") +
+                               "</div>" : "") +
+      (items.length ? '<div class="grid">' + items.map(odTile).join("") + "</div>"
+        : '<div class="empty">' + (d.items.length ? "Nothing of that kind in this folder."
+                                                  : d.folders.length ? "Only folders here."
+                                                                     : "This folder is empty.") +
+          "</div>");
+  }
   $("tab-onedrive").innerHTML = strip + body;
 
   wireGrid($("tab-onedrive"), drawOnedrive);
+  $("tab-onedrive").querySelectorAll(".folder, .crumb:not(.here)").forEach((el) => {
+    el.onclick = () => loadOnedrive(el.dataset.path);
+  });
   $("setroot").onclick = async () => {
     const input = $("root");
     if (input.hidden) { input.hidden = false; $("setroot").textContent = "use it"; input.focus(); return; }
     await api("/api/settings", { onedrive: input.value.trim() });
-    loadOnedrive();
+    loadOnedrive("");
   };
 }
 
-async function loadOnedrive() {
+async function loadOnedrive(path) {
+  if (typeof path === "string") odPath = path;
   data.onedrive = null;
   drawOnedrive();
-  data.onedrive = await api("/api/onedrive");
+  data.onedrive = await api("/api/onedrive?path=" + encodeURIComponent(odPath));
+  if (data.onedrive && typeof data.onedrive.path === "string") odPath = data.onedrive.path;
   drawTabs();
   drawOnedrive();
 }
@@ -1773,7 +2154,7 @@ function showTab(name) {
   ["gopro", "onedrive", "photos"].forEach((n) => { $("tab-" + n).hidden = n !== tab; });
   drawTabs();
   if (tab === "gopro" && !data.gopro) loadGopro(false);
-  else if (tab === "onedrive" && !data.onedrive) loadOnedrive();
+  else if (tab === "onedrive" && !data.onedrive) loadOnedrive("");
   else if (tab === "photos" && !data.photos) loadPhotos();
   else drawTab();
 }
@@ -1824,6 +2205,18 @@ class UI(http.server.BaseHTTPRequestHandler):
         except (BrokenPipeError, ConnectionResetError):
             pass
 
+    def _send_bytes(self, code, body, ctype, cache):
+        self.answered = True
+        self.send_response(code)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", cache)
+        self.end_headers()
+        try:
+            self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+
     def _json(self, data, code=200):
         self._send(code, json.dumps(data), "application/json; charset=utf-8")
 
@@ -1868,25 +2261,39 @@ class UI(http.server.BaseHTTPRequestHandler):
             self._json({"tv": tv_address(), "tv_name": config().get("tv_name"),
                         "token": token_state(), "cast": Cast.state(),
                         "show": Show.state()})
-        elif path == "/api/gopro/thumb":
-            media_id = urllib.parse.parse_qs(query).get("id", [""])[0]
-            url = (gopro_thumb(media_id)
-                   if re.match(r"^[0-9a-f]{16,40}$", media_id) else None)
-            if url:
-                # the browser fetches the picture from GoPro's CDN itself;
-                # nothing of it passes through here
+        elif path.startswith("/api/thumb/"):
+            provider = PROVIDERS.get(path[len("/api/thumb/"):])
+            key = urllib.parse.parse_qs(query).get("k", [""])[0]
+            got = provider.serve(key) if provider and key else None
+            if got and got[0] == "redirect":
+                # the browser fetches the picture from where it lives; nothing
+                # of it passes through here
                 self.answered = True
                 self.send_response(302)
-                self.send_header("Location", url)
+                self.send_header("Location", got[1])
                 self.send_header("Cache-Control", "private, max-age=900")
                 self.send_header("Content-Length", "0")
                 self.end_headers()
+            elif got:
+                self._send_bytes(200, got[1], got[2], "private, max-age=86400")
+            else:
+                self._send(404, "", "text/plain")
+        elif path == "/api/onedrive/file":
+            # the whole photo, for the slideshow's preview - never a cloud-only
+            # one, which reading would fetch
+            full = onedrive_file(urllib.parse.parse_qs(query).get("k", [""])[0])
+            if (full and full.lower().endswith(PHOTO_EXT)
+                    and not in_cloud_only(os.stat(full))):
+                with open(full, "rb") as fh:
+                    body = fh.read()
+                self._send_bytes(200, body, "image/png" if full.lower().endswith(".png")
+                                 else "image/jpeg", "private, max-age=3600")
             else:
                 self._send(404, "", "text/plain")
         elif path == "/api/gopro":
             self._json(gopro_items(refresh="refresh=1" in query))
         elif path == "/api/onedrive":
-            self._json(onedrive_items(onedrive_root()))
+            self._json(onedrive_folder(urllib.parse.parse_qs(query).get("path", [""])[0]))
         elif path == "/api/photos":
             self._json({"history": photos_history()})
         else:
@@ -1899,7 +2306,7 @@ class UI(http.server.BaseHTTPRequestHandler):
             # the bar shows the tile that was clicked; only our own thumbnail
             # route is accepted, since it ends up in an <img src>
             thumb = req.get("thumb")
-            if not (isinstance(thumb, str) and thumb.startswith("/api/gopro/thumb?id=")):
+            if not (isinstance(thumb, str) and thumb.startswith("/api/thumb/")):
                 thumb = None
             meta = req.get("meta") if isinstance(req.get("meta"), str) else None
             self._json({"error": problem} if problem
