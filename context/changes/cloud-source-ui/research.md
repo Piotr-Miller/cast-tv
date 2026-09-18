@@ -1287,3 +1287,44 @@ battery, and only the display turns off, after 3 min. Before any cast the system
 (`CallNtPowerInformation(SystemExecutionState)`, no administrator needed) was `0x00000000`: a
 usable baseline for the next attempt. Ctrl+C was not tried here (Piotr's decision to stop testing
 on this laptop).
+
+### Row 7.3 — second attempt, an unmanaged Windows laptop (2026-09-18, 21:56–22:52, Claude on the laptop, Piotr for Ctrl+C, the Samsung showing) — passed
+
+Windows 11 Pro 10.0.26200, not joined to any MDM, not an administrator; Python 3.14.5 only.
+Wi-Fi `192.168.50.213` (Intel Wireless-AC 9560) on a **Public** profile, plus Hyper-V
+`192.168.112.1`. On AC power; the Balanced plan sleeps after 30 min idle on AC (`STANDBYIDLE`
+`0x708`) and turns the display off after 15 min (`VIDEOIDLE` `0x384`).
+
+- **pipx, as the README says.** `py -m pip install --user pipx`, `py -m pipx ensurepath`, then
+  `pipx install git+https://github.com/Piotr-Miller/cast-tv@shape-the-cloud-source-ui` (`6cc8f61`)
+  → cast-tv 0.2.0, `cast-tv.exe`, `cast-gopro.exe`, `cast-photos.exe` in `~\.local\bin`.
+- **The UI.** `cast-tv -d` from `~` in a new PowerShell window: `C:\Python314\python.exe`
+  listening on `0.0.0.0:8895`, `/api/status` answering 22 s after start.
+- **The TV found.** `tv` `83" OLED` `192.168.50.142` `ready`; `interfaces` = Intel Wi-Fi
+  `192.168.50.213` **1 response**, Hyper-V `192.168.112.1` **0 responses**.
+- **The firewall.** Accepted, though not at this start: the active store already held an inbound
+  `Python` rule, Allow, profile Public, program `C:\python314\python.exe`, from the prompt accepted
+  earlier the same day for the base interpreter. The pipx venv runs that same interpreter, so no
+  new prompt came. No Block rule is in the active store. A Public profile with such an allow rule
+  does not block: the README's "Windows blocks silently when Public" holds only without it.
+- **A cast that plays.** `cast-tv -d -i 30 <Przejazd - SuperCars.mp4> <75 Olympus JPEGs from
+  ~\OneDrive\Pictures\OM Workspace>` at 22:07:05 (a CLI show, so every item is a local file that
+  is really on disk, none cloud-only). The TV's `HEAD`, `GET bytes=0-`, the tail reads for the
+  `moov` and `bytes=48-`, then `playing 0:00:00.014 / 0:02:59` rising every 2 s.
+- **30 minutes without sleep.** Logged once a minute: the system execution state
+  (`CallNtPowerInformation(SystemExecutionState)`), seconds since the last input
+  (`GetLastInputInfo`), and `/api/status`. Every sample from 22:07:50 to 22:49:13 read
+  `0x00000003` (`ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED`); the last input was at about 22:12:51,
+  so idle passed the 30-minute sleep timeout at about 22:43 and reached 2 182 s at 22:49:13 with the
+  show still advancing (index 75 of 76, every cast `playing` or `starting`). The show printed
+  `Show finished.` after 76/76 and exited; at 22:50:17 the state was `0x00000000`. The System log
+  has no Kernel-Power entry from the hour before.
+- **Ctrl+C while casting.** The same film cast alone at about 22:51:05; Piotr was asked to press Ctrl+C in its
+  window, and about 18 s in cast-tv exited, at 22:51:30, the execution state was `0x00000000` at
+  22:51:32, and `GetTransportInfo` on the TV answered `STOPPED` - so the Stop reached the TV rather
+  than the process just dying mid-stream. The console's last lines did not reach the `Tee-Object`
+  copy, which Ctrl+C ends with the pipeline, so the `Stopped.` line was not captured.
+
+Not run here, unlike row 7.4: a control showing this laptop does sleep by itself after 30 min with
+nothing casting. The evidence for the lock is the execution state, which Windows' idle timer reads
+directly.
