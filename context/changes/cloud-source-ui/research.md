@@ -1288,7 +1288,7 @@ battery, and only the display turns off, after 3 min. Before any cast the system
 usable baseline for the next attempt. Ctrl+C was not tried here (Piotr's decision to stop testing
 on this laptop).
 
-### Row 7.3 — second attempt, an unmanaged Windows laptop (2026-09-18, 21:56–22:52, Claude on the laptop, Piotr for Ctrl+C, the Samsung showing) — passed
+### Row 7.3 — second attempt, an unmanaged Windows laptop (2026-09-18, 21:56–22:52, Claude on the laptop, the Samsung showing) — row stays open for Ctrl+C
 
 Windows 11 Pro 10.0.26200, not joined to any MDM, not an administrator; Python 3.14.5 only.
 Wi-Fi `192.168.50.213` (Intel Wireless-AC 9560) on a **Public** profile, plus Hyper-V
@@ -1319,11 +1319,14 @@ Wi-Fi `192.168.50.213` (Intel Wireless-AC 9560) on a **Public** profile, plus Hy
   show still advancing (index 75 of 76, every cast `playing` or `starting`). The show printed
   `Show finished.` after 76/76 and exited; at 22:50:17 the state was `0x00000000`. The System log
   has no Kernel-Power entry from the hour before.
-- **Ctrl+C while casting.** The same film cast alone at about 22:51:05; Piotr was asked to press Ctrl+C in its
-  window, and about 18 s in cast-tv exited, at 22:51:30, the execution state was `0x00000000` at
-  22:51:32, and `GetTransportInfo` on the TV answered `STOPPED` - so the Stop reached the TV rather
-  than the process just dying mid-stream. The console's last lines did not reach the `Tee-Object`
-  copy, which Ctrl+C ends with the pipeline, so the `Stopped.` line was not captured.
+- **Ctrl+C was not tried; the window was closed instead.** The same film cast alone at about
+  22:51:05, for Piotr to press Ctrl+C in its window; Piotr closed the window instead (said
+  afterwards). cast-tv exited at 22:51:30, about 18 s into the film, the execution state was
+  `0x00000000` at 22:51:32 (Windows drops a dead process's request by itself), and
+  `GetTransportInfo` on the TV answered `STOPPED`. That `STOPPED` does not show a clean shutdown:
+  cast-tv installs no console-control handler, so closing the window ends the process without
+  `Stop`, `atexit` or `close()`, and a video the TV is streaming stops by itself when the
+  connection drops. A photo would have stayed on screen. Follow-up in `follow-ups/review-fixes.md`.
 
 Not run here, unlike row 7.4: a control showing this laptop does sleep by itself after 30 min with
 nothing casting. The evidence for the lock is the execution state, which Windows' idle timer reads
