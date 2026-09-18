@@ -1,7 +1,7 @@
 ---
 change_id: cloud-source-ui
 title: Pick media from GoPro, Google Photos and OneDrive in a UI, and cast it
-status: new
+status: done
 created: 2026-09-07
 updated: 2026-09-18
 archived_at: null
@@ -456,3 +456,37 @@ made a number where it enters, in `cast-gopro`. The tiles now carry the length (
 2:03) and, where the size used to be, the bit rate: every camera original in the library
 runs at 118-121 Mbit/s - the figure this TV refuses - which is the case for opening every
 tile on the proxy, now shown on each one.
+
+## Closed
+
+Done, on 2026-09-18. What the notes asked for - browse GoPro, Google Photos and OneDrive,
+separate tabs, and cast what is picked to the Samsung - is there, and the design canvas that
+followed the notes is built out as far as was decided:
+
+- the page and its three tabs, casting through the commands verified on the TV (#2)
+- Windows 11 as well as Linux (#2)
+- the cast bar, with the TV's own position and a state for a cast that did not play (#3)
+- photos selected into a slideshow the laptop drives, across sources (#4)
+- OneDrive browsed by folder, with photos and EXIF previews behind a swappable
+  thumbnail layer (#5)
+- the phone layout (#6)
+- lengths and bit rates on the tiles, seen with a live token (#7)
+
+Left out on purpose, each with its reason above:
+
+- **The Microsoft sign-in gate.** The mirror is on disk on both machines. The one thing it
+  would add - previews for files that exist only in the cloud - has a place ready in the
+  thumbnail layer.
+- **HEIC to JPEG.** The standard library cannot decode HEIC and the tool has no
+  dependencies; HEIC is listed and marked instead.
+- **Filters at phone width,** which the Phone artboard has no row for.
+
+Not verified: a real phone. The phone layout was checked at 390 px in a frame, not with
+touch or iOS Safari, and reaching the page from a phone means `--bind 0.0.0.0`, which gives
+everyone on the network the page, with no password.
+
+Worth knowing the next time this is touched: GoPro's token is a JWE whose expiry cannot be
+read, and it keeps working for items already listed well after the listing starts
+refusing it; this TV refuses camera originals at the 118-121 Mbit/s every one of them runs
+at; and over anything it is showing, it starts a new address by itself and answers Play
+with UPnP 701.
