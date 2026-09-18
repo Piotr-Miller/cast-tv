@@ -16,7 +16,7 @@ import urllib.parse
 import urllib.request
 import webbrowser
 
-from castlib import net
+from castlib import net, platform
 from castlib.app import AlreadyRunning, App
 from castlib.diagnostics import check_codecs
 from castlib.discovery import control_urls, discover
@@ -281,6 +281,7 @@ def ui(port=DEFAULT_PORT, tv=None, debug=False, browser=True):
 
 
 def main_tv(argv=None):
+    platform.end_on_console_close()     # a closed window ends it like Ctrl+C
     ap = argparse.ArgumentParser(
         prog="cast-tv",
         description="Play a video or photo on a Samsung TV; with no arguments, open the UI.")
@@ -348,6 +349,7 @@ def show_gopro(items):
 
 
 def main_gopro(argv=None):
+    platform.end_on_console_close()     # a closed window ends it like Ctrl+C
     ap = argparse.ArgumentParser(prog="cast-gopro",
                                  description="Play GoPro cloud material on a TV.")
     ap.add_argument("what", nargs="?",
@@ -483,6 +485,7 @@ def _pick_and_cast(src, tv, port, url_only):
 
 
 def main_photos(argv=None):
+    platform.end_on_console_close()     # a closed window ends it like Ctrl+C
     ap = argparse.ArgumentParser(prog="cast-photos",
                                  description="Play a Google Photos video on a TV, or pick items in Google's picker.")
     ap.add_argument("link", nargs="?", help="link to a video in Google Photos")

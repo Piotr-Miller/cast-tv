@@ -209,9 +209,10 @@ class FakeTV:
 
 @pytest.fixture(autouse=True)
 def _no_stay_awake(monkeypatch):
-    """No test spawns ``systemd-inhibit`` or touches the Windows execution state."""
+    """No test spawns ``systemd-inhibit``, touches the Windows execution state or hooks the console."""
     from castlib import platform
     monkeypatch.setattr(platform, "default_backend", lambda: platform.NullBackend())
+    monkeypatch.setattr(platform, "end_on_console_close", lambda: False)
 
 
 @pytest.fixture

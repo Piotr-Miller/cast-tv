@@ -1,17 +1,22 @@
-"""What differs per operating system: firewall advice and staying awake.
+"""What differs per operating system: firewall advice, staying awake, a closed console.
 
 ``StayAwake`` is counted: the supervisor holds it once per promoted cast and
 once per running show, and the machine is kept awake while the count is above
 zero. The backend is ``systemd-inhibit`` on Linux and
 ``SetThreadExecutionState`` on Windows; anywhere else, or when the backend
 fails, staying awake is best effort and never stops a cast.
+
+``end_on_console_close`` makes closing the console window on Windows end
+cast-tv the way Ctrl+C does, instead of the process simply being ended.
 """
 from __future__ import annotations
 
+import _thread
 import shutil
 import subprocess
 import sys
 import threading
+import time
 
 
 def firewall_hint(port: int) -> str:
@@ -179,3 +184,67 @@ class StayAwake:
     def active(self) -> bool:
         with self._lock:
             return self._count > 0
+
+
+class ConsoleClose:
+    """Windows: closing the console window, logging off or shutting down ends cast-tv like Ctrl+C.
+
+    Windows delivers these as ``CTRL_CLOSE_EVENT``, ``CTRL_LOGOFF_EVENT`` and
+    ``CTRL_SHUTDOWN_EVENT``, which Python does not turn into
+    ``KeyboardInterrupt``: without a handler the process is ended outright - no
+    ``Stop`` to the TV, which shows a broken-stream error mid-film or keeps a
+    photo up, no ``close()`` on the sources, no ``atexit``. The handler runs on
+    a thread of its own: it interrupts the main thread, whose
+    ``except KeyboardInterrupt`` already stops the TV and cleans up, and then
+    waits. The process is ended as soon as the handler returns, so it waits out
+    the grace Windows gives (about 5 s) unless the main thread exits first,
+    which ends the process with the handler still waiting. Measured behind the
+    pipx launcher and the venv's ``python.exe``: both let the Python process
+    run out its handler before they go.
+    """
+
+    CLOSE_EVENTS = (2, 5, 6)        # CTRL_CLOSE_EVENT, CTRL_LOGOFF_EVENT, CTRL_SHUTDOWN_EVENT
+    GRACE = 4.5                     # seconds; Windows ends the process at about 5
+
+    def __init__(self, kernel32=None, interrupt=_thread.interrupt_main, sleep=time.sleep):
+        self._kernel32 = kernel32
+        self._interrupt = interrupt
+        self._sleep = sleep
+        self._callback = None       # the ctypes callback must outlive the registration
+
+    def handle(self, event: int) -> bool:
+        """True when the event is ours; Ctrl+C and Ctrl+Break go on to Python's own handler."""
+        if event not in self.CLOSE_EVENTS:
+            return False
+        self._interrupt()
+        self._sleep(self.GRACE)
+        return True
+
+    def install(self) -> bool:
+        import ctypes
+        from ctypes import wintypes
+        k32 = self._kernel32
+        if k32 is None:
+            k32 = ctypes.WinDLL("kernel32")
+            k32.SetConsoleCtrlHandler.restype = wintypes.BOOL
+        routine = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.DWORD)
+        self._callback = routine(lambda event: bool(self.handle(event)))
+        return bool(k32.SetConsoleCtrlHandler(self._callback, True))
+
+
+_console_close: ConsoleClose | None = None
+
+
+def end_on_console_close() -> bool:
+    """Install ``ConsoleClose`` once, on Windows; elsewhere a closed terminal already sends SIGHUP."""
+    global _console_close
+    if sys.platform != "win32" or _console_close is not None:
+        return False
+    handler = ConsoleClose()
+    try:
+        if not handler.install():
+            return False
+    except Exception:
+        return False
+    _console_close = handler
+    return True

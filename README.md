@@ -73,7 +73,8 @@ on the same network and it is the same UI.
   `ffmpeg` line that fixes it), a source too heavy for the TV.
 
 The process stays in the foreground: it is what streams to the TV. `Ctrl+C` stops playback on
-the TV and ends it. Starting a second `cast-tv` while one runs opens the running one's UI instead.
+the TV and ends it; on Windows, closing the console window does the same. Starting a second
+`cast-tv` while one runs opens the running one's UI instead.
 
 **Exposure.** The server listens on the LAN, because the TV has to reach it. `/api` and `/ui`
 answer only requests whose `Host` is this machine and whose `Origin`, if any, matches it, so a web
