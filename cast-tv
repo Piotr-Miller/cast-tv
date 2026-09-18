@@ -592,9 +592,18 @@ def main():
         soap(avt, AVT, "SetAVTransportURI",
              "<CurrentURI>%s</CurrentURI><CurrentURIMetaData>%s</CurrentURIMetaData>"
              % (escape(url), didl(url, title, path, caption)))
-        soap(avt, AVT, "Play", "<Speed>1</Speed>")
+        try:
+            soap(avt, AVT, "Play", "<Speed>1</Speed>")
+        except urllib.error.HTTPError as e:
+            # 701, "Transition not available": a TV that was busy with something
+            # when the new address came - still showing a slideshow's last
+            # picture, say - starts that address by itself and refuses the
+            # Play that follows. It is already doing what was asked.
+            e.upnp = upnp_error(e)
+            if e.upnp[0] != 701:
+                raise
     except urllib.error.HTTPError as e:
-        code, desc = upnp_error(e)
+        code, desc = getattr(e, "upnp", None) or upnp_error(e)
         print("The TV rejected the request: %s"
               % ("UPnP error %d, %s" % (code, desc or "no description") if code
                  else e))

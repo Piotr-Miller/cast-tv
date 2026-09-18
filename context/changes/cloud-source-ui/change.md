@@ -358,3 +358,61 @@ The standard library cannot decode HEIC and the tool has no dependencies; there 
 files in the OneDrive mirror today and the GoPro photos are JPEG, so it waits for a decision
 about an outside decoder. OneDrive photos join the slideshow when OneDrive is browsed by
 folder.
+
+## OneDrive by folder, with photos
+
+No Microsoft sign-in, by decision: on both machines the account is mirrored to disk, so
+there is nothing to log in to for browsing. The gate the canvas draws would buy one thing
+the disk cannot - thumbnails for files that exist only in the cloud - and the code is laid
+out so that can be added later without touching a view.
+
+**Browsing.** The mirror is opened a folder at a time under the canvas's breadcrumb, with
+subfolders as tiles above the grid and their contents counted one level down; the tab's
+hint names the folder that is open. Nothing reads a file's contents to list it - size,
+date and whether it is a cloud-only placeholder all come with the directory entry. Photos
+(JPEG, PNG) are listed with the videos and filtered by the same All / Videos / Photos;
+HEIC is listed because it is there, marked because the TV cannot decode it, and does
+nothing when clicked. Everything the page names in the mirror - a folder to open, a file
+to cast or show, a thumbnail, a preview - goes through one function that refuses a path
+leaving it.
+
+**The thumbnail layer.** A provider has a cheap `can(item)`, run for every item of a folder
+using only what the listing already knows, and a `serve(key)` that does the work only when
+the browser asks. Each source has an ordered list of providers, and each listing gives
+every item the address from the first that can serve it; the views render whatever address
+they are handed, or keep the gradient. GoPro's stills moved behind the same door - the page
+no longer builds `/api/gopro/thumb?id=` itself. A Microsoft Graph provider would go after
+the EXIF one for "onedrive" and take the cloud-only files it refuses.
+
+**EXIF previews,** measured on the mirror before the view was built: 1811 JPEGs on disk and
+609 only in the cloud, which were never opened. Of 300 sampled from disk, 299 carry an
+embedded preview - all 160 x 120, 8.9 KB at the median, about 3 ms to fetch from the first
+128 KB. The one without was a non-camera JPEG in Documents. 36 of the 300 - one in eight -
+were portrait shots whose previews lie on their side, because the orientation tag belongs
+to the photo rather than its preview; turning JPEG pixels needs a decoder, so those are
+served as an SVG that holds the preview turned. The previews are small and look soft on a
+tile, which is what they cost: the alternative was the whole file.
+
+**Cloud-only files.** A folder of 84 of them: 84 tiles marked "in the cloud", no image
+elements, and no thumbnail requests at all. Casting one - a slideshow with one cloud-only
+photo and one on disk - worked, the pictures went up in turn, and afterwards the listing
+said the file was local and offered its preview: Windows had fetched it. The marker is read
+from the file each time, not remembered.
+
+**Mixed slideshows,** as the canvas's note says: two OneDrive photos and a GoPro one,
+picked across tabs, played in order - OneDrive's straight off disk through the show's server,
+GoPro's relayed - with the whole OneDrive photo, 5184 x 3888, as the page's preview.
+
+**A fault in cast-tv this turned up.** A OneDrive video cast right after a slideshow ended
+failed with "UPnP error 701, Transition not available": the TV, still busy with the last
+picture, started the new address by itself on SetAVTransportURI and refused the Play after
+it - the behaviour measured for slides. The slideshow already tolerated it; a single cast
+did not. It does now, and the same cast played twice in a row where it had failed. On any
+other answer to Play, nothing changed.
+
+Also: two flags on one tile (HEIC and in the cloud, together) overlapped in the corner;
+they stack now. And the canvas no longer promises "token · 2 h 14 min" - it says what the
+page can know, "token working · stored 5 min ago" (artifact version 4).
+
+Left, as agreed: the layout at phone width, and a fresh GoPro token for lengths and bit
+rates, after this.

@@ -139,12 +139,23 @@ tabs are shaped by what each source will allow, and the asymmetry is the point:
   before casting from it stops working.
 - **Google Photos** cannot be browsed, so that tab is a paste field and a record of what has
   been pasted before - which is as close to a library as the API restriction permits.
-- **OneDrive** needs no API at all: the mirror is a directory, so the tab is a directory
-  browse and `cast-tv` serves the file off disk. Only paths inside that folder can be cast,
-  since a page in a browser should not be able to name any file on the machine. On Windows
-  most of a OneDrive folder may exist only in the cloud, and reading such a placeholder
-  makes Windows download it; those tiles are marked, and nothing reads a file just to show
-  it - casting one downloads it, because casting it was asked for.
+- **OneDrive** needs no API at all: the mirror is a directory, browsed a folder at a time
+  under a breadcrumb, with its videos and its photos, and `cast-tv` serves each file off
+  disk. Only paths inside the mirror can be named, since a page in a browser should not be
+  able to reach any file on the machine. A photo's picture is the preview its camera or
+  phone embedded in the EXIF header, read from the first 128 KB rather than the whole file -
+  about 9 KB and a few milliseconds each, and turned the right way up for portrait shots,
+  whose previews lie on their side. On Windows much of a mirror may exist only in the cloud,
+  and reading even the head of such a placeholder makes Windows download all of it; those
+  tiles are marked "in the cloud" and are never read to be shown - casting one downloads it,
+  because casting it was asked for. HEIC is listed, since it is there, but marked, since the
+  TV cannot decode it and nothing here converts it.
+
+Pictures come through one layer: every listing gives each item its thumbnail address, taken
+from the first provider registered for that source that can serve it - GoPro's own stills,
+or the EXIF preview. The views never build one. A provider that fetched OneDrive thumbnails
+from Microsoft Graph would register after the EXIF one and take the cloud-only files it
+refuses, without a change to any view.
 
 A photo is not cast on its own: clicking one selects it, the selection holds across tabs,
 and the bar turns into a picker with the interval and a button that starts a slideshow.
