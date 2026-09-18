@@ -5,8 +5,9 @@ import types
 import pytest
 
 from castlib import discovery, platform
-from castlib.platform import ExecutionState, StayAwake, SystemdInhibit
+from castlib.platform import ConsoleClose, ExecutionState, StayAwake, SystemdInhibit
 from castlib.platform import default_backend as real_default_backend   # bound before conftest swaps it
+from castlib.platform import end_on_console_close as real_end_on_console_close   # likewise
 
 
 # ------------------------------------------------------------- discovery
@@ -211,3 +212,46 @@ def test_casts_and_shows_hold_it_and_close_releases(app, tmp_path):
     assert rec.calls[-1] == "acquire" and app.stay_awake.active
     app.close()
     assert rec.calls[-1] == "release" and not app.stay_awake.active
+
+
+# ------------------------------------------------------- a closed console
+def test_console_close_interrupts_main_and_waits_out_the_grace():
+    calls = []
+    handler = ConsoleClose(interrupt=lambda: calls.append("interrupt"),
+                           sleep=lambda s: calls.append(("sleep", s)))
+    for event in (2, 5, 6):                         # close, logoff, shutdown
+        calls.clear()
+        assert handler.handle(event) is True
+        assert calls == ["interrupt", ("sleep", ConsoleClose.GRACE)]
+    for event in (0, 1):                            # Ctrl+C, Ctrl+Break: Python's own handler
+        calls.clear()
+        assert handler.handle(event) is False
+        assert calls == []
+
+
+def test_console_close_registers_a_callback_that_outlives_install():
+    registered = []
+    k32 = types.SimpleNamespace(SetConsoleCtrlHandler=lambda cb, add: registered.append((cb, add)) or 1)
+    handler = ConsoleClose(kernel32=k32, interrupt=lambda: None, sleep=lambda s: None)
+    assert handler.install() is True
+    (cb, add), = registered
+    assert add is True and cb is handler._callback  # held, or ctypes would free it
+    assert cb(2) and not cb(0)
+
+
+def test_end_on_console_close_only_on_windows_and_once(monkeypatch):
+    installed = []
+
+    class Fake(ConsoleClose):
+        def install(self):
+            installed.append(self)
+            return True
+
+    monkeypatch.setattr(platform, "ConsoleClose", Fake)
+    monkeypatch.setattr(platform, "_console_close", None)
+    monkeypatch.setattr(platform, "sys", types.SimpleNamespace(platform="linux"))
+    assert real_end_on_console_close() is False and installed == []   # SIGHUP covers it there
+    monkeypatch.setattr(platform, "sys", types.SimpleNamespace(platform="win32"))
+    assert real_end_on_console_close() is True
+    assert real_end_on_console_close() is False                      # already installed
+    assert len(installed) == 1
