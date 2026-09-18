@@ -416,3 +416,33 @@ page can know, "token working · stored 5 min ago" (artifact version 4).
 
 Left, as agreed: the layout at phone width, and a fresh GoPro token for lengths and bit
 rates, after this.
+
+## Phone width
+
+Checked at 390 x 780, the width of the canvas's Phone artboard, in a frame on the page's own
+origin so the frame's width drove the media queries and the page inside could be inspected.
+The browser window itself would not resize.
+
+What was wrong: the page scrolled sideways on a phone - the three tabs with their hint lines
+came to 402 px on a 390 px screen, Google Photos wrapping out past the edge. A filter row the
+artboard does not have sat under the tabs, the token strip took two lines, and the idle bar
+split into two.
+
+What it does now, as the artboard has it: the header names the TV without its address; the
+tabs are one segmented control with short names - GoPro, OneDrive, Photos - and no hint
+line; two columns; and a bar with a thumb's room - "Tap to cast to the TV" centred when idle,
+the count and a full-width "Start slideshow" when picking, a 54 x 32 picture, the name, the
+line and a square 46 px Stop when playing. The Google Photos field and button are 46 px and
+full width. The filters step aside on a phone, since the artboard has no row for them and
+"Photos" there names the Google Photos tab.
+
+Two things the artboard does not cover, decided here. The slideshow's controls, stacked under
+the queue, sat a scroll away from pausing it; they stay pinned to the bottom, in two rows,
+without the interval's label or the next picture's name, which have no room. And a "Log"
+button stays in the bar, where the artboard has none, because the reason a cast did not play
+is in it.
+
+Also, everywhere: the page kept clear of the bar by a fixed 76 px, and a bar that says "Did
+not play" and why is taller than that; it keeps clear of the bar's real height now, and of
+nothing while the slideshow hides it. At full width nothing changed - long names, hints,
+filters, six columns - which was checked after.
