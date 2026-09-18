@@ -71,7 +71,10 @@ same H.264 file.
   into `KeyboardInterrupt`: the process is ended without `Stop` to the TV, without `atexit` (the
   photo and video temp directories stay until a later run reclaims them) and without `close()` on
   the sources (Google Photos picker sessions are not deleted). A streaming video stops by itself
-  when the connection drops; a photo stays on the TV. Possible fix: on Windows, register a handler
+  when the connection drops, and the TV says so: at row 7.3 it dropped the film and showed an
+  error along the lines of a broken stream or network (Piotr's recollection, not the exact
+  wording) instead of simply clearing. A photo most likely stays on the TV (it answered
+  `PLAYING` after the process was killed; not yet seen on screen). Possible fix: on Windows, register a handler
   with `SetConsoleCtrlHandler` that runs the same path as Ctrl+C for `CTRL_CLOSE_EVENT`,
   `CTRL_LOGOFF_EVENT` and `CTRL_SHUTDOWN_EVENT`, within the roughly 5 s Windows allows.
   Source: `research.md`, "Row 7.3 — second attempt, an unmanaged Windows laptop".
