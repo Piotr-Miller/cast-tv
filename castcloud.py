@@ -15,10 +15,8 @@ import urllib.request
 
 UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
       "Chrome/128.0 Safari/537.36")
-# normpath because expanduser mixes separators on Windows, and both of
-# these are printed at people
-CACHE = os.path.normpath(os.path.expanduser("~/.cache/cast-tv"))
-CONFIG = os.path.normpath(os.path.expanduser("~/.config/cast-tv"))
+CACHE = os.path.expanduser("~/.cache/cast-tv")
+CONFIG = os.path.expanduser("~/.config/cast-tv")
 
 
 def die(msg, code=1):
@@ -93,34 +91,16 @@ def human(size):
         size /= 1024.0
 
 
-def how_to_run(name):
-    """How a person types one of these commands on this platform.
-
-    A message that says "cast-gopro --token ..." is good advice on Linux and
-    sends a Windows reader straight into WinError 193. These strings are also
-    what the page shows when a resolver complains, so they have to be right.
-    """
-    return ("python %s" % name) if os.name == "nt" else name
-
-
-def sibling(name):
-    """The argv for a command sitting next to this file.
-
-    On Linux the shebang carries it, and a symlink in ~/.local/bin works too.
-    Windows will not execute an extensionless script at all - it answers
-    WinError 193 - so there the interpreter has to be named, which is why this
-    returns an argv list rather than a path.
-    """
+def cast_tv_path():
+    """cast-tv sits next to this file (a symlink in ~/.local/bin works too)."""
     here = os.path.dirname(os.path.realpath(__file__))
-    local = os.path.join(here, name)
-    if os.name == "nt":
-        return [sys.executable, local] if os.path.isfile(local) else [name]
-    return [local] if os.access(local, os.X_OK) else [name]
+    local = os.path.join(here, "cast-tv")
+    return local if os.access(local, os.X_OK) else "cast-tv"
 
 
 def cast(url, tv=None, cookies=None, port=None, title=None):
     """Hand the address to cast-tv, which relays the stream to the TV."""
-    cmd = sibling("cast-tv") + [url]
+    cmd = [cast_tv_path(), url]
     if tv:
         cmd += ["-t", tv]
     if cookies:

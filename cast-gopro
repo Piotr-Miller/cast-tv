@@ -17,7 +17,6 @@ import castcloud as cc  # noqa: E402
 
 API = "https://api.gopro.com"
 MEDIA_ACCEPT = "application/vnd.gopro.jk.media+json; version=2.0.0"
-IMAGE_TYPES = ("jpg", "jpeg", "png", "heic", "webp")
 TOKEN_FILE = os.path.join(cc.CONFIG, "gopro-token")
 HOW_TO_GET_A_TOKEN = """
 The token comes from a logged-in browser and lasts a few hours:
@@ -27,8 +26,8 @@ The token comes from a logged-in browser and lasts a few hours:
   3. copy the value of gp_access_token (it starts with eyJ)
      or: F12 -> Network -> any api.gopro.com request -> Request Headers ->
          the part of "authorization" after "Bearer "
-  4. %s --token eyJhbGc...
-""" % cc.how_to_run("cast-gopro")
+  4. cast-gopro --token eyJhbGc...
+"""
 
 
 def token(explicit=None):
@@ -53,9 +52,7 @@ def save_token(value):
     with open(TOKEN_FILE, "w") as fh:
         fh.write(value)
     os.chmod(TOKEN_FILE, 0o600)
-    # chmod on Windows only moves the read-only flag, so do not claim a mode there
-    print("Token stored in %s%s." % (
-        TOKEN_FILE, "" if os.name == "nt" else " (yours only, mode 0600)"))
+    print("Token stored in %s (yours only, mode 0600)." % TOKEN_FILE)
 
 
 def api(path, tok, params=None):
@@ -73,18 +70,10 @@ def api(path, tok, params=None):
         cc.die("GoPro's answer is not JSON:\n%s" % body[:400])
 
 
-def number(value):
-    """An integer out of whatever the API sent, or None."""
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return None
-
-
 def list_media(tok, count):
     data = api("/media/search", tok, params=(
         "fields=id,filename,captured_at,content_title,file_size,type,resolution,"
-        "source_duration&order_by=captured_at&per_page=%d&page=1" % count))
+        "duration&order_by=captured_at&per_page=%d&page=1" % count))
     media = data.get("_embedded", {}).get("media")
     if media is None:
         cc.die("Unfamiliar answer from GoPro (keys: %s).\n"
@@ -98,10 +87,6 @@ def list_media(tok, count):
             "kind": m.get("type", ""),
             "size": m.get("file_size"),
             "res": m.get("resolution", ""),
-            # source_duration is milliseconds; the API has no "duration"
-            # field at all, which is why asking for one returned nothing -
-            # and it arrives as a string ("9280"), so it is made a number here
-            "ms": number(m.get("source_duration")),
         })
     cc.cache_write("gopro-list.json", items)
     return items
@@ -116,7 +101,7 @@ def show(items):
         print("%3d. %-*s  %s  %-6s %8s  %s" % (
             n, width, i["name"], i["date"] or "----------",
             i["res"] or "", cc.human(i["size"]), i["kind"]))
-    print("\nCast one:  %s <number>" % cc.how_to_run("cast-gopro"))
+    print("\nCast one:  cast-gopro <number>")
 
 
 def _rank(label):
@@ -127,36 +112,18 @@ def _rank(label):
 
 
 def library_url(media_id, tok, quality="auto"):
-    """Signed address for a cloud entry: the best video variant, or the still.
-
-    A Photo item carries one variation and it is the picture. Before this told
-    them apart, the jpg variation was filtered out as "not video", leaving only
-    the files entry - which the CDN labels binary/octet-stream, so it passed as
-    video, was announced to the TV as a videoItem, and the TV answered that the
-    file is not supported.
-    """
+    """Signed mp4 address for a cloud entry; best quality first."""
     data = api("/media/%s/download" % media_id, tok)
     emb = data.get("_embedded", {})
-    plays, stills = [], []
+    options = []
     for var in emb.get("variations", []) or []:
-        kind = (var.get("type") or "").lower()
-        entry = (_rank(var.get("label")), var.get("label", "?"), var.get("url"))
-        if kind in ("mp4", "video", ""):
-            plays.append(entry)
-        elif kind in IMAGE_TYPES:
-            stills.append(entry)
-    # not the source: for the media tested these were 1280 px proxies
-    files = [(_rank("file"), "file", f.get("url"))
-             for f in emb.get("files", []) or []]
-
-    if stills and not plays:
-        stills = [s for s in stills if s[2]]
-        stills.sort(key=lambda o: o[0])
-        if stills:
-            print("  still: %s" % stills[0][1])
-            return stills[0][2]
-
-    options = [o for o in plays + files if o[2]]
+        if (var.get("type") or "").lower() in ("mp4", "video", ""):
+            options.append((_rank(var.get("label")), var.get("label", "?"),
+                            var.get("url")))
+    for f in emb.get("files", []) or []:
+        # not the source: for the media tested these were 1280 px proxies
+        options.append((_rank("file"), "file", f.get("url")))
+    options = [o for o in options if o[2]]
     if not options:
         cc.die("No download address in GoPro's answer (keys: %s).\n"
                "Send the JSON over and the parser can be adjusted."
@@ -214,7 +181,7 @@ def main():
         if args.what.isdigit() and items and 1 <= int(args.what) <= len(items):
             item = items[int(args.what) - 1]
         elif args.what.isdigit():
-            cc.die("No listing cached - run `%s` first." % cc.how_to_run("cast-gopro"))
+            cc.die("No listing cached - run `cast-gopro` first.")
         else:
             item = {"id": args.what, "name": args.what}
         print("Resolving: %s" % item["name"])

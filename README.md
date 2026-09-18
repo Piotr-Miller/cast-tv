@@ -1,7 +1,7 @@
 # cast-tv
 
-Push a local video file — or a remote stream — to a Samsung TV from Linux or Windows, with
-no app installed on either end. A single Python file, standard library only.
+Push a local video file — or a remote stream — to a Samsung TV from Linux, with no app
+installed on either end. A single Python file, standard library only.
 
 ```bash
 cast-tv film.mkv                       # find the TV, serve the file, start playback
@@ -25,27 +25,6 @@ ln -s ~/Source/cast-tv/cast-tv ~/.local/bin/cast-tv
 
 Needs Python 3 and nothing else. `ffprobe` is used, when present, only to warn about audio
 codecs the TV cannot decode.
-
-On Windows there is no shebang and no symlink, so the interpreter is named instead:
-
-```powershell
-git clone <this repo> C:\Source\cast-tv
-cd C:\Source\cast-tv
-python cast-ui                        # the page; everything else follows from it
-python cast-tv film.mkv               # or a single cast, as on Linux
-```
-
-Two things differ there, and both are handled rather than documented away:
-
-- **The TV has to be allowed in.** Windows blocks incoming connections by default, so the
-  TV cannot fetch the file and answers the control call with UPnP error 716. `cast-tv`
-  now reports that code by name and prints the one-off rule to add:
-  `netsh advfirewall firewall add rule name="cast-tv" dir=in action=allow protocol=TCP
-  localport=8895` (as administrator).
-- **Discovery asks through every interface.** One multicast search leaves by whichever
-  route the table prefers, and on a machine with a Hyper-V switch and a few idle adapters
-  Windows prefers the wrong one — the search goes where no TV can hear it and nothing
-  answers at all. The search now goes out of each address the machine holds.
 
 ## Options
 
@@ -108,78 +87,6 @@ without notice: when nothing resolves, the command says what it saw instead of f
 a real share link the page yielded eight candidates, of which `=dv` - the original, not a
 downscaled stream - was the one that answered as video.
 
-## A page for picking
-
-Casting was solved before choosing was. `cast-ui` serves one page on localhost that browses
-the three sources and then runs exactly the command you would have typed, so nothing about
-the verified path changes - the page only decides its arguments.
-
-```bash
-cast-ui                        # serve on http://localhost:8896 and open a browser
-cast-ui --no-open              # just serve it
-cast-ui -t 192.168.1.50        # skip discovery, and remember the address
-cast-ui --onedrive ~/OneDrive  # a mirror kept somewhere else
-```
-
-The look follows the cast-tv UI design canvas: a grid of tiles with a picture, the length
-and the bit rate, filters for videos and photos, and the TV named in the header. The three
-tabs are shaped by what each source will allow, and the asymmetry is the point:
-
-- **GoPro** is the only one that browses. Its pictures come from a `large` label that
-  `/media/{id}/download` returns only when asked for by name, a 1280 px jpg; the
-  `/thumbnail` endpoint answers 406 to everything. The page redirects the browser to
-  GoPro's CDN for each one, as the rows scroll into view, so none of it passes through
-  here. Every tile carries the quality choice `cast-gopro -q` already had and opens on the
-  proxy, because camera originals are what the TV refuses; pick the original anyway and
-  the tile says so.
-- The GoPro token is encrypted — a JWE, not the JWT it looks like — so nothing can read
-  when it expires. The page says when it was stored and how GoPro answered, and tells two
-  answers apart: a day-old token was refused for the library listing yet still accepted
-  for the pictures and streams of items already listed, so the list stops refreshing well
-  before casting from it stops working.
-- **Google Photos** cannot be browsed, so that tab is a paste field and a record of what has
-  been pasted before - which is as close to a library as the API restriction permits.
-- **OneDrive** needs no API at all: the mirror is a directory, browsed a folder at a time
-  under a breadcrumb, with its videos and its photos, and `cast-tv` serves each file off
-  disk. Only paths inside the mirror can be named, since a page in a browser should not be
-  able to reach any file on the machine. A photo's picture is the preview its camera or
-  phone embedded in the EXIF header, read from the first 128 KB rather than the whole file -
-  about 9 KB and a few milliseconds each, and turned the right way up for portrait shots,
-  whose previews lie on their side. On Windows much of a mirror may exist only in the cloud,
-  and reading even the head of such a placeholder makes Windows download all of it; those
-  tiles are marked "in the cloud" and are never read to be shown - casting one downloads it,
-  because casting it was asked for. HEIC is listed, since it is there, but marked, since the
-  TV cannot decode it and nothing here converts it.
-
-Pictures come through one layer: every listing gives each item its thumbnail address, taken
-from the first provider registered for that source that can serve it - GoPro's own stills,
-or the EXIF preview. The views never build one. A provider that fetched OneDrive thumbnails
-from Microsoft Graph would register after the EXIF one and take the cloud-only files it
-refuses, without a change to any view.
-
-A photo is not cast on its own: clicking one selects it, the selection holds across tabs,
-and the bar turns into a picker with the interval and a button that starts a slideshow.
-DLNA has no playlist, so the laptop drives it - one server for the whole show, and the TV
-simply pointed at the next picture when its time comes. On this TV that takes nothing but
-`SetAVTransportURI`: over a picture that is showing it starts the next one by itself, and
-answers a `Play` sent after it with UPnP error 701, "Transition not available", so `Play`
-goes only to a TV that has stopped. A still left alone stayed up for as long as it was
-watched, so nothing has to be kept alive between slides. The slideshow has its own view -
-what is on screen, the queue, previous, pause, next, the countdown - and when the queue runs
-out the TV is stopped and goes back to its own input.
-
-One cast runs at a time, because the TV plays one thing. A bar pinned to the bottom says
-what is playing and how far along - the position is the TV's own, read from the status line
-`cast-tv` redraws every two seconds - or that nothing is, or that the last cast did not play
-and the line that says why. The command's full output sits behind it, a click away. Stop
-sends the same interrupt that Ctrl+C does, so the TV stops too.
-
-It listens on `127.0.0.1` only. `--bind 0.0.0.0` reaches it from a phone on the same
-network, and hands everyone there a button that starts a cast; there is no password. At a
-phone's width the page takes the design's phone layout: the tabs as one segmented control,
-two columns, a bar with room for a thumb, and a slideshow whose controls stay pinned to the
-bottom of the screen.
-
 ## Limitations
 
 **Audio codecs.** Video is passed through untouched, so the TV has to decode it. H.264, HEVC,
@@ -200,8 +107,6 @@ because it carries course-licensed material that must not enter a public reposit
 
 ## Tested on
 
-Samsung QE83S85FAEXXH (83" OLED, Tizen, 2025) from Fedora 44, against a live GoPro cloud
-library and a live Google Photos share link — and from Windows 11 Pro 26200 against the
-same TV: discovery, a file played off disk and a remote stream relayed through to the end,
-both serving the TV's own range requests, and the page starting and stopping either. Any
-DLNA renderer exposing `AVTransport:1` should work; the subtitle path is Samsung-specific.
+Samsung QE83S85FAEXXH (83" OLED, Tizen, 2025) and Fedora 44, against a live GoPro cloud library
+and a live Google Photos share link. Any DLNA renderer exposing
+`AVTransport:1` should work; the subtitle path is Samsung-specific.
