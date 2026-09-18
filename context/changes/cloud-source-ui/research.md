@@ -1326,7 +1326,8 @@ Wi-Fi `192.168.50.213` (Intel Wireless-AC 9560) on a **Public** profile, plus Hy
   `GetTransportInfo` on the TV answered `STOPPED`. That `STOPPED` does not show a clean shutdown:
   cast-tv installs no console-control handler, so closing the window ends the process without
   `Stop`, `atexit` or `close()`, and a video the TV is streaming stops by itself when the
-  connection drops. A photo would have stayed on screen. Follow-up in `follow-ups/review-fixes.md`.
+  connection drops. On screen it did not just clear: the TV showed an error along the lines of a
+  broken stream or network (Piotr's recollection, not the exact wording). A photo would have stayed on screen. Follow-up in `follow-ups/review-fixes.md`.
 
 - **Ctrl+C while casting, with a photo** - chosen because a photo tells the two endings apart:
   a process that just dies leaves it on the screen, while `Stop` clears it.
