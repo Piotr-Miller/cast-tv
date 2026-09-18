@@ -287,6 +287,31 @@ def renderers():
 
 
 # ------------------------------------------------------------------- casting
+# cast-tv redraws "PLAYING      0:00:07.451 / 0:00:09" every two seconds; the
+# last such line is the TV's own word on where it is
+STATUS = re.compile(r"^(PLAYING|PAUSED_PLAYBACK|TRANSITIONING|STOPPED|"
+                    r"NO_MEDIA_PRESENT)\s+(\S+)\s*/\s*(\S+)")
+# lines the commands print when a cast will not happen; the first one found
+# is what the bar says, since it is usually the whole reason
+FAILURES = ("never started playing", "rejected the request", "could not reach",
+            "does not expose AVTransport", "No DLNA renderer answered",
+            "rejected the token", "No stream found", "No media found",
+            "serves no video", "No download address", "Cannot bind",
+            "No such file", "Could not run")
+
+
+def seconds(stamp):
+    """0:00:07.451 -> 7; anything unparseable, such as "-", -> 0."""
+    try:
+        parts = [float(p) for p in stamp.split(":")]
+    except ValueError:
+        return 0
+    total = 0
+    for p in parts:
+        total = total * 60 + p
+    return int(total)
+
+
 class Cast:
     """The one running cast. The TV plays one thing, so one child at a time."""
     lock = threading.Lock()
@@ -295,18 +320,44 @@ class Cast:
     command = None
     log = deque(maxlen=60)
     started = 0
+    stopped = False     # ended by Stop, which is not a failure whatever it exits with
+    thumb = None        # what the tile showed, so the bar can show it too
+    meta = None
 
     @classmethod
     def state(cls):
         proc = cls.proc
         running = proc is not None and proc.poll() is None
+        lines = list(cls.log)
+        tv, position, duration = None, 0, 0
+        for line in reversed(lines):
+            m = STATUS.match(line.strip())
+            if m:
+                tv, position, duration = m.group(1), seconds(m.group(2)), seconds(m.group(3))
+                break
+        reason = next((line.strip() for line in lines
+                       if any(f in line for f in FAILURES)), None)
+        if proc is None:
+            outcome = None
+        elif running:
+            outcome = "running"
+        elif cls.stopped:
+            outcome = "stopped"
+        elif reason or proc.returncode:
+            outcome = "failed"
+        else:
+            outcome = "finished"
         return {"running": running, "title": cls.title, "command": cls.command,
                 "exit": None if running or proc is None else proc.returncode,
-                "log": list(cls.log),
+                "log": lines, "outcome": outcome, "reason": reason,
+                "tv_state": tv, "position": position, "duration": duration,
+                "resolving": running and tv is None and any(
+                    line.startswith("Resolving") for line in lines),
+                "thumb": cls.thumb, "meta": cls.meta,
                 "seconds": int(time.time() - cls.started) if cls.started else 0}
 
     @classmethod
-    def start(cls, cmd, title):
+    def start(cls, cmd, title, thumb=None, meta=None):
         with cls.lock:
             if cls.proc is not None and cls.proc.poll() is None:
                 return {"error": "Something is already playing - stop that first."}
@@ -327,6 +378,7 @@ class Cast:
                 return {"error": "Could not run this:\n%s\n%s"
                                  % (" ".join(cmd), e)}
             cls.title, cls.command = title, " ".join(cmd)
+            cls.thumb, cls.meta, cls.stopped = thumb, meta, False
             cls.started = time.time()
             cls.log.clear()
             threading.Thread(target=cls._read, args=(cls.proc,), daemon=True).start()
@@ -337,7 +389,11 @@ class Cast:
         r"""cast-tv redraws its status line with \r, so a line can end either way."""
         buf = b""
         while True:
-            chunk = proc.stdout.read(256)
+            # read1, not read: on a buffered pipe read(256) waits until it has
+            # all 256 bytes, and at one 40-byte status line every two seconds
+            # the log reached the page in bursts some twelve seconds apart -
+            # a nine-second clip could play from start to end inside one wait
+            chunk = proc.stdout.read1(4096)
             if not chunk:
                 break
             buf += chunk
@@ -358,6 +414,7 @@ class Cast:
             proc = cls.proc
             if proc is None or proc.poll() is not None:
                 return cls.state()
+            cls.stopped = True
             told_the_tv = False
             if os.name == "posix":
                 # cast-tv stops the TV on Ctrl+C, and every process in the
@@ -607,18 +664,61 @@ PAGE = r"""<!doctype html>
     border: 1px solid var(--chip-line); background: var(--chip); white-space: pre-wrap;
   }
   #say.bad { color: var(--bad); border-color: oklch(0.40 0.08 40); }
-  #now:not(:empty) { margin: 16px 28px 0; }
-  .nowcard {
-    border: 1px solid var(--chip-line); border-radius: 10px; background: var(--chip); padding: 12px 14px;
+  /* the cast bar, pinned to the bottom as in the design */
+  body { padding-bottom: 76px; }
+  #bar {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; min-height: 76px;
+    display: flex; align-items: center; gap: 12px 20px; padding: 10px 28px;
+    background: oklch(0.18 0.006 65); border-top: 1px solid var(--line);
   }
-  .nowcard.live { border-color: var(--accent); }
-  .nowhead { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-  .nowhead .t { font-weight: 600; }
-  .nowcmd { font-size: 11px; color: var(--faint); margin: 6px 0 8px; word-break: break-all; }
+  .bdot { width: 7px; height: 7px; border-radius: 999px; flex-shrink: 0;
+          background: oklch(0.44 0.008 65); }
+  .bdot.bad { background: var(--bad-dot); }
+  .bidle { font-size: 13px; color: var(--dim); white-space: nowrap; }
+  .blast { font-size: 11.5px; color: var(--faint); overflow: hidden;
+           text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .bthumb { position: relative; width: 74px; height: 42px; border-radius: 6px;
+            flex-shrink: 0; overflow: hidden; }
+  .bthumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .bmain { flex: 1; min-width: 0; }
+  .bname { display: flex; align-items: center; gap: 9px; font-size: 12.5px;
+           color: oklch(0.92 0.005 65); }
+  .bname span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .btrack { margin-top: 8px; height: 3px; border-radius: 999px;
+            background: oklch(0.28 0.008 65); overflow: hidden; }
+  .bfill { height: 100%; background: var(--live); transition: width 1.9s linear; }
+  /* before the TV has said how long the thing is: a pulse, not a fake number */
+  .bfill.wait { width: 30% !important; transition: none;
+                animation: waiting 1.3s ease-in-out infinite alternate; }
+  @keyframes waiting { from { margin-left: 0; } to { margin-left: 70%; } }
+  .bsub { margin-top: 6px; display: flex; justify-content: space-between; gap: 12px;
+          font-size: 10.5px; color: oklch(0.56 0.008 65); }
+  .bsub span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bfail { font-size: 13px; color: var(--bad); overflow: hidden;
+           text-overflow: ellipsis; white-space: nowrap; }
+  .bbtn {
+    display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 15px;
+    border-radius: 8px; border: 1px solid oklch(0.34 0.008 65);
+    background: oklch(0.22 0.008 65); font-size: 13px; cursor: pointer;
+    color: var(--text-2); flex-shrink: 0;
+  }
+  .bbtn:hover:not(:disabled) { border-color: var(--dim-2); }
+  .bbtn:disabled { opacity: .5; cursor: default; }
+  .bbtn.quiet { background: transparent; border-color: transparent; color: var(--dim);
+                padding: 0 8px; }
+  .bbtn.quiet:hover { color: var(--text-2); }
+  /* The log, opened from the bar. The design has no place for it; it stays
+     because on the day something does not play, the reason is in it. */
+  #drawer {
+    position: fixed; left: 0; right: 0; bottom: 76px; z-index: 9; max-height: 45vh;
+    overflow: auto; padding: 12px 28px 14px;
+    background: oklch(0.16 0.006 65); border-top: 1px solid var(--line);
+  }
+  #drawer .cmd { font-size: 11px; color: var(--faint); margin-bottom: 8px; word-break: break-all; }
   pre {
     margin: 0; padding: 10px; background: var(--field); border: 1px solid var(--line);
-    border-radius: 7px; font-size: 12px; line-height: 1.45; max-height: 220px;
-    overflow: auto; white-space: pre-wrap; color: var(--text-2);
+    border-radius: 7px; font-size: 12px; line-height: 1.45;
+    white-space: pre-wrap; color: var(--text-2);
   }
 
   /* Google Photos: a paste field and what was pasted before */
@@ -642,7 +742,9 @@ PAGE = r"""<!doctype html>
     header, .tabsbar, .strip { padding-left: 16px; padding-right: 16px; }
     .grid { padding: 16px; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
     .tvchip .tvip { display: none; }
-    #say:not(:empty), #now:not(:empty) { margin-left: 16px; margin-right: 16px; }
+    #say:not(:empty) { margin-left: 16px; margin-right: 16px; }
+    #bar, #drawer { padding-left: 16px; padding-right: 16px; }
+    #bar { flex-wrap: wrap; }
     .panel { margin: 16px; }
   }
 </style>
@@ -660,12 +762,14 @@ PAGE = r"""<!doctype html>
   <div id="filters"></div>
 </div>
 <div id="say"></div>
-<div id="now"></div>
 <section id="tab-gopro"></section>
 <section id="tab-onedrive" hidden></section>
 <section id="tab-photos" hidden></section>
+<div id="drawer" hidden></div>
+<footer id="bar"></footer>
 <script>
 let tab = "gopro", filter = "all", state = null, busy = false, tokenOpen = false;
+let logOpen = false;
 const data = { gopro: null, onedrive: null, photos: null };
 const quality = {};          // media id -> the variant chosen on its tile
 const clicks = new Map();    // tile key -> what casting it means
@@ -769,6 +873,18 @@ function drawHeader() {
     : '<span class="dot off"></span><span class="tvn">No TV chosen · find it</span>';
 }
 
+function hms(s) {
+  s = Math.max(0, Math.round(s));
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60;
+  return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(x).padStart(2, "0");
+}
+const PLAY_ICON = '<svg width="13" height="13" viewBox="0 0 24 24" fill="oklch(0.74 0.14 190)" ' +
+  'stroke="none"><path d="M8 5v14l11-7z"></path></svg>';
+const PAUSE_ICON = '<svg width="13" height="13" viewBox="0 0 24 24" fill="oklch(0.74 0.14 190)" ' +
+  'stroke="none"><path d="M7 5h4v14H7zM13 5h4v14h-4z"></path></svg>';
+const STOP_ICON = '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" ' +
+  'stroke="none"><rect x="6" y="6" width="12" height="12" rx="1.5"></rect></svg>';
+
 function drawTabs() {
   const [th, tcls] = tokenHint(state && state.token);
   const root = data.onedrive && data.onedrive.root;
@@ -790,39 +906,82 @@ function drawTabs() {
   });
 }
 
-/* Deliberately redraws only the header, the tab hints and the cast: the poll
+/* Deliberately redraws only the header, the tab hints and the bar: the poll
    runs every two seconds, and redrawing a grid would reload its pictures and
    wipe a token being pasted. Whoever changes the data redraws its own tab. */
 async function refreshState() {
   state = await api("/api/state");
   drawHeader();
   drawTabs();
-  drawNow();
+  drawBar();
 }
 
-function drawNow() {
+/* The bar says three things, as the design does: nothing is playing, or what
+   is playing and how far along, or - which the design leaves to the States
+   board - that it did not play, and the line that says why. */
+function drawBar() {
   const c = state && state.cast;
-  if (!c || (!c.running && !c.log.length)) { $("now").innerHTML = ""; return; }
-  const log = $("now").querySelector("pre");
-  const pinned = !log || log.scrollTop + log.clientHeight >= log.scrollHeight - 24;
-  $("now").innerHTML =
-    '<div class="nowcard' + (c.running ? " live" : "") + '">' +
-      '<div class="nowhead"><span class="t">' + (c.running ? "Playing" : "Last cast") +
-      "</span><span>" + esc(c.title || "?") + "</span>" +
-      (c.running ? '<span class="mono" style="color:var(--dim);font-size:12px">' +
-                   clock(c.seconds) + "</span>" : "") +
-      '<span class="grow"></span>' +
-      (c.running ? '<button class="btn" id="stop">Stop</button>' : "") + "</div>" +
-      '<div class="nowcmd mono">' + esc(c.command || "") + "</div>" +
-      "<pre>" + esc(c.log.join("\n")) + "</pre>" +
-    "</div>";
-  const fresh = $("now").querySelector("pre");
-  if (fresh && pinned) fresh.scrollTop = fresh.scrollHeight;
+  const hasLog = !!(c && c.log && c.log.length);
+  const logBtn = hasLog ? '<button class="bbtn quiet" id="logbtn">' +
+                          (logOpen ? "Hide log" : "Log") + "</button>" : "";
+  let html;
+  if (c && c.running) {
+    const phase = c.resolving ? "Resolving the address..." :
+      c.tv_state === "PLAYING" ? "" :
+      c.tv_state === "PAUSED_PLAYBACK" ? "Paused on the TV" :
+      c.tv_state === "TRANSITIONING" ? "Starting on the TV..." :
+      c.tv_state === "STOPPED" ? "Stopping..." : "Handing it to the TV...";
+    const known = c.duration > 0 && !phase;
+    const pct = known ? Math.min(100, 100 * c.position / c.duration) : 0;
+    html =
+      '<div class="bthumb" style="background:' + gradient(hue(c.title || "")) + '">' +
+        (c.thumb ? '<img alt="" src="' + esc(c.thumb) + '" onerror="this.remove()">' : "") +
+      "</div>" +
+      '<div class="bmain">' +
+        '<div class="bname">' + (c.tv_state === "PAUSED_PLAYBACK" ? PAUSE_ICON : PLAY_ICON) +
+        '<span class="mono">' + esc(c.title || "") + "</span></div>" +
+        '<div class="btrack"><div class="bfill' + (known ? "" : " wait") + '" style="width:' +
+        pct.toFixed(1) + '%"></div></div>' +
+        '<div class="bsub mono"><span>' +
+          (known ? hms(c.position) + " / " + hms(c.duration) : esc(phase)) +
+        "</span><span>" + esc(c.meta || "") + "</span></div>" +
+      "</div>" + logBtn +
+      '<button class="bbtn" id="stop">' + STOP_ICON + "Stop</button>";
+  } else if (c && c.outcome === "failed") {
+    html =
+      '<span class="bdot bad"></span>' +
+      '<div class="bmain"><div class="bfail">Did not play: ' + esc(c.title || "") + "</div>" +
+      '<div class="blast mono">' + esc(c.reason || "the command ended without saying why") +
+      "</div></div>" +
+      (hasLog ? '<button class="bbtn" id="logbtn">' + (logOpen ? "Hide log" : "Why") +
+                "</button>" : "");
+  } else {
+    const idle = state && state.tv ? "Nothing playing \u2014 TV ready"
+                                   : "Nothing playing \u2014 no TV chosen";
+    const last = c && c.title ? (c.outcome === "stopped" ? "stopped: " : "last: ") + c.title : "";
+    html = '<span class="bdot"></span><span class="bidle">' + idle + "</span>" +
+           (last ? '<span class="blast mono">\u00b7 ' + esc(last) + "</span>" : "") +
+           '<span class="grow"></span>' + logBtn;
+  }
+  $("bar").innerHTML = html;
+
+  const d = $("drawer");
+  if (logOpen && hasLog) {
+    const pinned = d.hidden || d.scrollTop + d.clientHeight >= d.scrollHeight - 24;
+    d.innerHTML = '<div class="cmd mono">' + esc(c.command || "") + "</div><pre>" +
+                  esc(c.log.join("\n")) + "</pre>";
+    d.hidden = false;
+    if (pinned) d.scrollTop = d.scrollHeight;
+  } else {
+    d.hidden = true;
+  }
+  const lb = $("logbtn");
+  if (lb) lb.onclick = () => { logOpen = !logOpen; drawBar(); };
   const stop = $("stop");
   if (stop) stop.onclick = async () => {
     stop.disabled = true;
     state.cast = await api("/api/stop", {});
-    drawNow();
+    drawBar();
   };
 }
 
@@ -836,8 +995,7 @@ async function cast(payload, el) {
   if (out.error) { say(out.error, true); return; }
   say("");
   state.cast = out;
-  drawNow();
-  window.scrollTo({ top: 0, behavior: "smooth" });
+  drawBar();
 }
 
 /* --------------------------------------------------------------- the tiles */
@@ -895,7 +1053,11 @@ function goproTile(it, index) {
                 : ["photo", size(it.size)].join(" · "),
     quality: video ? q : null,
     click: () => ({ source: "gopro", index: index, title: it.name,
-                    quality: quality[it.id] || "proxy" }),
+                    quality: quality[it.id] || "proxy",
+                    thumb: "/api/gopro/thumb?id=" + encodeURIComponent(it.id),
+                    meta: video ? [it.res, QLABEL[quality[it.id] || "proxy"]].filter(Boolean)
+                                    .join(" \u00b7 ")
+                                : "photo" }),
   });
 }
 
@@ -907,7 +1069,9 @@ function odTile(it) {
     key: it.path, name: it.name.split(/[\\/]/).pop(), title: it.name,
     hue: hue(it.name), thumb: null, cloud: it.cloud,
     meta: [size(it.size), it.date].join(" · "),
-    click: () => ({ source: "onedrive", path: it.path }),
+    click: () => ({ source: "onedrive", path: it.path,
+                    meta: it.cloud ? "OneDrive \u00b7 downloading from the cloud"
+                                   : "OneDrive \u00b7 off disk" }),
   });
 }
 
@@ -1032,7 +1196,8 @@ function drawPhotos() {
         : '<div class="empty" style="padding:14px 0">Nothing pasted yet.</div>') + "</div>" +
     "</div>";
 
-  const go = (link, button) => cast({ source: "photos", link, cookies: $("ck").value.trim() }, button);
+  const go = (link, button) => cast({ source: "photos", link, cookies: $("ck").value.trim(),
+                                      meta: "Google Photos link" }, button);
   $("castlink").onclick = () => go($("link").value.trim(), $("castlink"));
   $("link").onkeydown = (e) => { if (e.key === "Enter") $("castlink").click(); };
   $("tab-photos").querySelectorAll("button[data-again]").forEach((b) => {
@@ -1180,7 +1345,14 @@ class UI(http.server.BaseHTTPRequestHandler):
         req = self._body()
         if self.path == "/api/cast":
             cmd, title, problem = cast_command(req)
-            self._json({"error": problem} if problem else Cast.start(cmd, title))
+            # the bar shows the tile that was clicked; only our own thumbnail
+            # route is accepted, since it ends up in an <img src>
+            thumb = req.get("thumb")
+            if not (isinstance(thumb, str) and thumb.startswith("/api/gopro/thumb?id=")):
+                thumb = None
+            meta = req.get("meta") if isinstance(req.get("meta"), str) else None
+            self._json({"error": problem} if problem
+                       else Cast.start(cmd, title, thumb=thumb, meta=(meta or "")[:120]))
         elif self.path == "/api/stop":
             self._json(Cast.stop())
         elif self.path == "/api/gopro/token":
