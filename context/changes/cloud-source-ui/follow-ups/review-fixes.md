@@ -74,5 +74,7 @@ same H.264 file.
   Windows' grace. Checked on the Samsung with one photo, the window closed with `WM_CLOSE` to a
   classic console: `main`'s build died in 0.1 s and the photo stayed up (`PLAYING`) - so without
   the fix a photo does stay, which was open here - while the fixed build printed `Stopped.`,
-  exited in 0.6 s and the TV answered `STOPPED`. Still to try: a Windows Terminal window.
+  exited in 0.6 s and the TV answered `STOPPED`. Windows Terminal too: after `pipx reinstall
+  cast-tv` from `main`, Piotr cast one photo and closed the Windows Terminal window with X; the photo
+  left the TV within about a second, the TV then answered `STOPPED` and no `cast-tv` was left.
   Source: `research.md`, "Row 7.3 — second attempt, an unmanaged Windows laptop".
