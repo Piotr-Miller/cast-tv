@@ -1344,6 +1344,21 @@ Wi-Fi `192.168.50.213` (Intel Wireless-AC 9560) on a **Public** profile, plus Hy
     through the pipx launcher on Windows, the show's `except KeyboardInterrupt` runs, and `Stop`
     reaches the TV.
 
-Not run here, unlike row 7.4: a control showing this laptop does sleep by itself after 30 min with
-nothing casting. The evidence for the lock is the execution state, which Windows' idle timer reads
-directly.
+### Row 7.3 — the control, nothing casting (2026-09-18, 23:05–23:58, Piotr away from the laptop)
+
+Run after the row was stamped, as row 7.4 had one: the same once-a-minute log of the execution
+state and the seconds since the last input, with no `cast-tv` running. This laptop has no S3;
+`powercfg /a` lists only **Standby (S0 Low Power Idle) Network Connected** - Modern Standby.
+
+- The last input was at about 23:11:17. Every sample read `0x00000000`.
+- **At 23:26:18, 15 min idle, the display went off and the system entered Modern Standby**
+  (Kernel-Power 506, "entering connected standby"). The logger went on running in it.
+- **At 23:42:18, 30 min idle, the log stops** (last sample `idle=1860s`; Kernel-Power 566, the
+  session moving on, at 23:42:19): the laptop went fully to sleep, the desktop process with it.
+- At 23:57:48 Piotr woke it (Kernel-Power 507, "exiting connected standby").
+
+So, left alone, this laptop stops at 15 min and suspends everything at 30. During the 42-minute
+show (22:07–22:49) the System log has **no** 506 at all: `cast-tv`'s
+`ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED` kept the display on, so standby never began. On Modern
+Standby hardware the display flag is not cosmetic: without it, the laptop would have entered
+standby at the 15-minute display timeout and cut the stream to the TV.
