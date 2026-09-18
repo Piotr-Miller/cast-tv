@@ -146,8 +146,10 @@ tabs are shaped by what each source will allow, and the asymmetry is the point:
   makes Windows download it; those tiles are marked, and nothing reads a file just to show
   it - casting one downloads it, because casting it was asked for.
 
-One cast runs at a time, because the TV plays one thing, and the page shows that command's
-own output - the variant that answered, what the TV asks for, why it refused to start. Stop
+One cast runs at a time, because the TV plays one thing. A bar pinned to the bottom says
+what is playing and how far along - the position is the TV's own, read from the status line
+`cast-tv` redraws every two seconds - or that nothing is, or that the last cast did not play
+and the line that says why. The command's full output sits behind it, a click away. Stop
 sends the same interrupt that Ctrl+C does, so the TV stops too.
 
 It listens on `127.0.0.1` only. `--bind 0.0.0.0` reaches it from a phone on the same

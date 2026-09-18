@@ -241,8 +241,9 @@ Where it departs on purpose:
   it on the one oversized sample; in a real library where all 48 videos are 3360p, and
   every tile opens on the proxy that plays, a flag on each would be noise saying
   something untrue. It appears once someone switches a tile to auto or original.
-- **The text is English.** The canvas is in Polish; the tool's output, which the page
-  shows verbatim, is English by an earlier decision. Switching is a matter of strings.
+- **The text is English**, and since then so is the canvas: it was in Polish, and was
+  translated (version 3 of the artifact) so the design and the page say the same things
+  in the same words.
 - **Photos in OneDrive are not listed yet.** The mirror holds 2420 JPGs, 28 GB, 609 of
   them only in the cloud, so they belong with the breadcrumb browsing the canvas also
   shows, not in one flat grid. Until then the Photos filter says so on that tab.
@@ -265,3 +266,39 @@ Left from the canvas, in the order proposed: the bottom bar that says what is pl
 holds Stop; selecting photos and the slideshow the laptop drives; browsing OneDrive by
 folder, with its photos. The length and bit rate show once the list is refreshed with a
 live token - the cache on this machine predates the `source_duration` fix.
+
+## The cast bar
+
+The panel that sat above the grid with the command's log is gone; the bar from the canvas
+is pinned to the bottom instead. Idle, it says nothing is playing and whether a TV is
+chosen. Casting, it carries the tile's picture, the name, a progress line and the time,
+the tile's meta on the right, and Stop. The phases before playback are named - resolving
+the address, handing it to the TV, starting on the TV - and the progress line pulses
+rather than inventing a number until the TV has said how long the thing is.
+
+The position is the TV's own. `cast-tv` already redraws `PLAYING 0:00:07.451 / 0:00:09`
+every two seconds; the server keeps the last such line from the log, so the bar needs
+no second channel to the TV.
+
+The canvas has no state for a cast that did not play - it leaves that to the States
+board - and the bar needs one. When the command's output contains one of the lines the
+tools print on the way to giving up, the bar says "Did not play", quotes that line, and
+"Why" opens the full log. It is read from the output rather than the exit status because
+`cast-tv` exits 0 after "The TV never started playing", and a cast ended by Stop exits
+with whatever the interrupt leaves (0xC000013A on Windows), so Stop is remembered and
+reported as stopped instead. The log itself is not in the canvas either; it stays behind
+the bar, because on the day something does not play, the reason is in it.
+
+Testing the bar turned up a fault that was older than the bar. The log was read with
+`read(256)` on a buffered pipe, which waits until it has all 256 bytes: at one 40-byte
+status line every two seconds the output reached the page in bursts about twelve seconds
+apart. The old panel looked live and was not, and a nine-second clip could play from start
+to finish inside a single wait - the bar went from "resolving" straight to "finished".
+The stand-in used to test this exited at once, and end of file flushes everything, so it
+could not have shown it. `read1` hands over whatever has arrived; the bar now follows the
+TV to the second: playing 1/9, 3/9, 5/9. It also showed that resolving takes about two
+seconds, not the nine the bursts had suggested.
+
+The first cast of the day went TRANSITIONING for forty seconds and gave up, and the same
+clip played at once when tried again: the TV coming out of standby. The bar reported it as
+it should - "Did not play", with the line - which is the state that exists for such a day.
