@@ -28,7 +28,7 @@ from castlib.diagnostics import check_codecs, explain_failure
 from castlib.dlna import AVT
 from castlib.errors import CastError, TVError
 from castlib.media import didl
-from castlib.platform import firewall_hint
+from castlib.platform import FirewallPolicy, firewall_advice
 
 POLL_INTERVAL = 2.0           # seconds between GetTransportInfo calls
 BUDGET_TRANSITIONING = 40.0   # TRANSITIONING is still an attempt
@@ -317,8 +317,8 @@ class Cast:
         return TVError(
             "tv_fetched_nothing",
             "The TV never started playing and never asked for the file.",
-            hint="That is almost always the firewall. Open the port:  "
-                 + firewall_hint(self.app.server.port),
+            hint="That is almost always the firewall. "
+                 + firewall_advice(self.app.server.port, wait=FirewallPolicy.TIMEOUT),
             source=self.item.source, item=self.item.source_id)
 
     def _never_started(self) -> TVError:

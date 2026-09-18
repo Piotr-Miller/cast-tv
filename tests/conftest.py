@@ -213,6 +213,7 @@ def _no_stay_awake(monkeypatch):
     from castlib import platform
     monkeypatch.setattr(platform, "default_backend", lambda: platform.NullBackend())
     monkeypatch.setattr(platform, "end_on_console_close", lambda: False)
+    monkeypatch.setattr(platform, "firewall_policy", platform.FirewallPolicy(platform="none"))
 
 
 @pytest.fixture

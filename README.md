@@ -99,6 +99,12 @@ netsh advfirewall firewall add rule name="cast-tv" dir=in action=allow protocol=
 Windows also blocks silently when the network is classed **Public**; make the home network
 Private. The startup banner prints the same hint.
 
+A laptop managed by an employer can carry a firewall policy that blocks every incoming
+connection. No allow rule outranks it, so the command above cannot help, and casting from that
+machine is not possible. On Windows cast-tv checks for such a rule at startup (no administrator
+rights needed) and, when it finds one, says so in the banner and in the "fetched nothing" error
+instead of offering the command.
+
 ## Sources
 
 ### GoPro

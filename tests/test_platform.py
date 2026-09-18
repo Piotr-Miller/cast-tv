@@ -257,3 +257,62 @@ def test_end_on_console_close_only_on_windows_and_once(monkeypatch):
     assert real_end_on_console_close() is True
     assert real_end_on_console_close() is False                      # already installed
     assert len(installed) == 1
+
+
+# ------------------------------------------------- a managed laptop's firewall
+# the rule an employer's Intune pushed to the laptop of row 7.3's first attempt
+MDM_RULE = {"name": "Block InBound connection Public Private", "profile": "Private, Public"}
+
+
+def test_blocking_rule_matches_the_current_profile_only():
+    assert platform.blocking_rule({"profiles": ["Private"], "rules": [MDM_RULE]}) == MDM_RULE["name"]
+    assert platform.blocking_rule({"profiles": ["Public"], "rules": [MDM_RULE]}) == MDM_RULE["name"]
+    assert platform.blocking_rule({"profiles": ["DomainAuthenticated"], "rules": [MDM_RULE]}) is None
+    domain = {"name": "Corp", "profile": "Domain"}
+    assert platform.blocking_rule({"profiles": ["DomainAuthenticated"], "rules": [domain]}) == "Corp"
+    assert platform.blocking_rule({"profiles": [], "rules": [{"name": "All", "profile": "Any"}]}) == "All"
+    assert platform.blocking_rule({"profiles": ["Public"], "rules": []}) is None
+    assert platform.blocking_rule({}) is None
+
+
+def _policy(stdout=b"", fail=None):
+    asked = []
+
+    def run(cmd, **kw):
+        asked.append(cmd)
+        if fail:
+            raise fail
+        return types.SimpleNamespace(stdout=stdout, returncode=0)
+
+    return platform.FirewallPolicy(run=run, platform="win32"), asked
+
+
+def test_firewall_policy_asks_powershell_once_and_reads_the_rule():
+    policy, asked = _policy(b'{"profiles":["Private"],"rules":[{"name":"Block InBound connection '
+                            b'Public Private","profile":"Private, Public"}]}\r\n')
+    assert policy.blocked(wait=5) == MDM_RULE["name"]
+    assert policy.blocked(wait=5) == MDM_RULE["name"]
+    assert len(asked) == 1 and asked[0][0] == "powershell.exe"
+    assert "-PolicyStore ActiveStore" in asked[0][-1]
+
+
+def test_firewall_policy_unanswered_means_not_blocked():
+    for policy, _ in (_policy(fail=FileNotFoundError("powershell.exe")), _policy(b"not json"),
+                      _policy(b"")):
+        assert policy.blocked(wait=5) is None
+    linux = platform.FirewallPolicy(run=lambda *a, **k: pytest.fail("ran"), platform="linux")
+    assert linux.blocked(wait=5) is None
+
+
+def test_firewall_advice_names_the_rule_or_gives_the_command(monkeypatch):
+    blocked, _ = _policy(b'{"profiles":["Public"],"rules":[{"name":"Block InBound connection Public Private",'
+                         b'"profile":"Private, Public"}]}')
+    monkeypatch.setattr(platform, "firewall_policy", blocked)
+    advice = platform.firewall_advice(8895, wait=5)
+    assert MDM_RULE["name"] in advice and "no allow rule can override it" in advice
+    assert "TCP port 8895" in advice and "netsh" not in advice
+    open_, _ = _policy(b'{"profiles":["Public"],"rules":[]}')
+    monkeypatch.setattr(platform, "firewall_policy", open_)
+    monkeypatch.setattr(platform, "sys", types.SimpleNamespace(platform="win32"))
+    assert platform.firewall_advice(8895, wait=5) == (
+        "Open the port, in PowerShell as administrator:  " + platform.firewall_hint(8895))

@@ -54,14 +54,18 @@ same H.264 file.
 
 ## From manual row 7.3, first attempt (2026-09-17)
 
-- **The firewall hint misleads on a managed Windows machine.** `tv_fetched_nothing` hints
-  `netsh advfirewall firewall add rule … action=allow …`, but on a laptop whose MDM pushes an
-  inbound block-all rule (`Block InBound connection Public Private`, every filter `Any`) no allow
-  rule can win, and `netsh` needs administrator rights the user may not have. The diagnosis itself
-  was right. Possible fix: on Windows, when an enabled inbound Block rule with no port or program
-  filter is active for the current profile (`Get-NetFirewallRule -PolicyStore ActiveStore`), say
-  that the organisation's policy blocks incoming connections and that casting from this machine is
-  not possible; otherwise keep the `netsh` line, noting it needs an administrator prompt.
+- **Done 2026-09-19.** ~~The firewall hint misleads on a managed Windows machine.~~ An MDM's
+  inbound block-all rule (`Block InBound connection Public Private`, every filter `Any`) outranks
+  any allow rule, so the `netsh` hint could not help. `platform.FirewallPolicy` now asks the active
+  store once, in the background (PowerShell, no administrator rights; about 6 s on this laptop),
+  for an enabled inbound Block rule covering TCP on any port, program and address for a current
+  network profile. When there is one, the banner warns, `tv_fetched_nothing` says that the
+  organisation's policy blocks incoming connections and casting from this computer is not
+  possible, and the UI shows that instead of the command; otherwise the `netsh` line stays, now
+  marked as needing an administrator PowerShell. Checked here: the query answers
+  `{"profiles":["Public"],"rules":[]}` (the same query on Allow rules lists them, so it reads the
+  store); the blocked path with the managed laptop's rule, simulated. Not tried on a managed
+  laptop itself.
   Source: `research.md`, "Row 7.3 — first attempt, a managed Windows laptop".
 
 ## From manual row 7.3, second attempt (2026-09-18)
