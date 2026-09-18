@@ -1246,7 +1246,7 @@ mocked).
 
 #### Manual
 
-- [x] 7.3 Windows: pipx install, UI opens, firewall accepted, TV found, cast plays, 30-min slideshow without sleep — 755e359
+- [ ] 7.3 Windows: pipx install, UI opens, firewall accepted, TV found, cast plays, 30-min slideshow without sleep
 - [x] 7.4 Fedora: 30-min slideshow without sleep; Ctrl+C releases the inhibitor — a91a87f
 - [x] 7.5 OneDrive film paused over an hour, then a seek: the relay re-resolves — 6acb54d
 

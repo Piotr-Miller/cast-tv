@@ -63,3 +63,15 @@ same H.264 file.
   that the organisation's policy blocks incoming connections and that casting from this machine is
   not possible; otherwise keep the `netsh` line, noting it needs an administrator prompt.
   Source: `research.md`, "Row 7.3 — first attempt, a managed Windows laptop".
+
+## From manual row 7.3, second attempt (2026-09-18)
+
+- **Closing the console window skips the clean shutdown on Windows.** Closing the window is how
+  many Windows users end a program, and it delivers `CTRL_CLOSE_EVENT`, which Python does not turn
+  into `KeyboardInterrupt`: the process is ended without `Stop` to the TV, without `atexit` (the
+  photo and video temp directories stay until a later run reclaims them) and without `close()` on
+  the sources (Google Photos picker sessions are not deleted). A streaming video stops by itself
+  when the connection drops; a photo stays on the TV. Possible fix: on Windows, register a handler
+  with `SetConsoleCtrlHandler` that runs the same path as Ctrl+C for `CTRL_CLOSE_EVENT`,
+  `CTRL_LOGOFF_EVENT` and `CTRL_SHUTDOWN_EVENT`, within the roughly 5 s Windows allows.
+  Source: `research.md`, "Row 7.3 — second attempt, an unmanaged Windows laptop".
