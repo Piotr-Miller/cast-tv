@@ -66,15 +66,13 @@ same H.264 file.
 
 ## From manual row 7.3, second attempt (2026-09-18)
 
-- **Closing the console window skips the clean shutdown on Windows.** Closing the window is how
-  many Windows users end a program, and it delivers `CTRL_CLOSE_EVENT`, which Python does not turn
-  into `KeyboardInterrupt`: the process is ended without `Stop` to the TV, without `atexit` (the
-  photo and video temp directories stay until a later run reclaims them) and without `close()` on
-  the sources (Google Photos picker sessions are not deleted). A streaming video stops by itself
-  when the connection drops, and the TV says so: at row 7.3 it dropped the film and showed an
-  error along the lines of a broken stream or network (Piotr's recollection, not the exact
-  wording) instead of simply clearing. A photo most likely stays on the TV (it answered
-  `PLAYING` after the process was killed; not yet seen on screen). Possible fix: on Windows, register a handler
-  with `SetConsoleCtrlHandler` that runs the same path as Ctrl+C for `CTRL_CLOSE_EVENT`,
-  `CTRL_LOGOFF_EVENT` and `CTRL_SHUTDOWN_EVENT`, within the roughly 5 s Windows allows.
+- **Done 2026-09-19 (PR #11, `106d76e`).** ~~Closing the console window skips the clean shutdown
+  on Windows.~~ `CTRL_CLOSE_EVENT` is not a `KeyboardInterrupt` to Python, so closing the window
+  ended the process without `Stop`, `close()` or `atexit`; mid-film the TV showed a broken-stream
+  error (Piotr's recollection, not the exact wording). `platform.ConsoleClose` now handles close,
+  logoff and shutdown: it interrupts the main thread, so the Ctrl+C path runs, and waits out
+  Windows' grace. Checked on the Samsung with one photo, the window closed with `WM_CLOSE` to a
+  classic console: `main`'s build died in 0.1 s and the photo stayed up (`PLAYING`) - so without
+  the fix a photo does stay, which was open here - while the fixed build printed `Stopped.`,
+  exited in 0.6 s and the TV answered `STOPPED`. Still to try: a Windows Terminal window.
   Source: `research.md`, "Row 7.3 — second attempt, an unmanaged Windows laptop".
