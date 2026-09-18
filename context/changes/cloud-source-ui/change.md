@@ -217,3 +217,51 @@ phone layout and the tiled grid with thumbnails are all still design rather than
 Also settled: the thumbnails I sketched in the option preview when asking which shape
 this UI should take were never built, and saying so only in this file was not enough -
 they were taken, reasonably, for something the tool already did on another machine.
+
+## The grid, built from the canvas
+
+The first thing the page had got wrong was that it was written without opening the design
+that already existed. The canvas is readable in full through the artifact - every
+artboard's markup, and a `DCLogic` class per artboard carrying its state, its sample data
+and what each click does - so there was never a need to ask for an export. What the
+page takes from `Main` now: the warm oklch palette at hue 65 with the amber accent, Archivo
+and IBM Plex Mono, the header with the TV named in a chip, tabs with a hint line under
+each label, the All / Videos / Photos filters, and the tile - 16:9 picture, the length
+bottom right, a warning top left, name and meta in mono, quality as a small badge.
+
+The pictures are real where the design has gradients: a video's `large` still, a photo's
+source, redirected to GoPro's CDN one row at a time as rows scroll into view. The
+gradient stays underneath each one, and is all a tile gets when there is no picture.
+
+Where it departs on purpose:
+
+- **Switching tabs does not stop a cast.** The canvas drops `casting` on a tab change,
+  which suits a mock-up; a real cast should not die because someone went to browse.
+- **The "TV will refuse" flag shows only when the original is picked.** The canvas shows
+  it on the one oversized sample; in a real library where all 48 videos are 3360p, and
+  every tile opens on the proxy that plays, a flag on each would be noise saying
+  something untrue. It appears once someone switches a tile to auto or original.
+- **The text is English.** The canvas is in Polish; the tool's output, which the page
+  shows verbatim, is English by an earlier decision. Switching is a matter of strings.
+- **Photos in OneDrive are not listed yet.** The mirror holds 2420 JPGs, 28 GB, 609 of
+  them only in the cloud, so they belong with the breadcrumb browsing the canvas also
+  shows, not in one flat grid. Until then the Photos filter says so on that tab.
+- **Clicking a photo still casts it.** In the canvas it selects the photo for a slideshow;
+  that arrives with the slideshow itself, and a selection with nothing to start it would
+  be a dead click.
+
+Found on the way:
+
+- **A token GoPro refuses for the list still works for everything on it.** A day-old
+  token drew a 401 from `/media/search` while `/media/{id}/download` went on answering,
+  so thumbnails loaded and a cast resolved. One "rejected" state had told a
+  half-true story; there are two now, the tab says "token refused for the list" rather
+  than "rejected", and the strip says what still works.
+- **OneDrive placeholders.** 8 of the 18 videos exist only in the cloud. Those tiles say
+  so, and nothing on the page reads a file merely to show it: a thumbnail would have made
+  Windows download the whole file.
+
+Left from the canvas, in the order proposed: the bottom bar that says what is playing and
+holds Stop; selecting photos and the slideshow the laptop drives; browsing OneDrive by
+folder, with its photos. The length and bit rate show once the list is refreshed with a
+live token - the cache on this machine predates the `source_duration` fix.
