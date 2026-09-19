@@ -167,7 +167,12 @@ Claude ran steps 1-2 on the laptop (Fedora release 44): `~/.config/cast-tv` move
   EXIF agree, so every HEIF-spec viewer shows the same, and `IMG_HEIC_portrait_irot` is the
   corrected one; the user confirmed it was that file). Not an app fault. The screensaver is worth remembering: a still photo can look
   like a dead cast.
-- Row 3.2 counts only on `v0.3.0-rc2`, run as is.
+- **The fix checked in a real build, 23:12.** The `build` job runs on pull requests too, so the
+  Linux binary of PR #27 (run 35469610627, 35 578 688 bytes) was downloaded with
+  `gh run download` and started on port 8896 with `SSL_CERT_FILE` and `SSL_CERT_DIR` unset:
+  `GET /api/sources/onedrive/list` answered with the drive's folders, so Graph was reached over
+  HTTPS and the certificate verified. The same call from rc1 would have failed.
+- Row 3.2 counts only on `v0.3.0-rc2`, run as is, from the Release rather than an artifact.
 - **Connect opened no browser tab** (the user's word, 22:5x): the consent had to be reached
   through Copy link. The binary runs with `LD_LIBRARY_PATH` set to its own `/tmp/_MEI…`
   directory, which leaks into anything it spawns - `xdg-open` and `gio open` run that way both
