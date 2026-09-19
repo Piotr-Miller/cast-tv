@@ -146,12 +146,12 @@ adds a tester. The Cloud-project steps move under "Your own Google client (optio
 ## Phase 3: Clean machines
 
 ### Manual Verification:
-- [ ] **3.1 Windows, clean**: a Windows user account that never ran cast-tv (no
+- [x] **3.1 Windows, clean**: a Windows user account that never ran cast-tv (no
       `%APPDATA%\cast-tv`), Python not on PATH. Download `cast-tv-windows-x64.exe` from the
       Release in Edge, run it (SmartScreen noted), allow the firewall if asked. Google Photos:
       Connect → consent (Piotr's account, a test user) → pick a photo and a video → both play on
       the Samsung. OneDrive: device-code sign-in, a video plays. Share link: the video link plays.
-      Closing the window stops the TV.
+      Closing the window stops the TV. — 86abd21
 - [ ] **3.2 Linux**: the same file on Fedora, `chmod +x`, run; Google Photos Connect and a pick
       cast; a HEIC photo from OneDrive or the picker converts and shows.
 - [ ] **3.3 Not a tester**: a second Google account that is not a test user: Google shows
