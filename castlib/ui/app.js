@@ -78,6 +78,7 @@ function castTv() {
     tokenInput: '',
     linkInput: '',
     pickNote: '',            // the outcome of the last pick that did not land (timeout, error)
+    linkNote: '',            // why the last pasted share link was refused; the status poll leaves it alone
     _picksSeq: null,         // picks_seq of the Google Photos list this page has fetched
     chooser: null,           // key of the tile whose variant chooser is open
     selection: [],
@@ -289,7 +290,9 @@ function castTv() {
     },
     ensureList(name) {
       const l = this.lists[name];
-      if (!this.connected(name) || (l && (l.loaded || l.loading))) return;
+      const s = this.source(name);
+      const listed = !!s && s.state !== 'expired' && !!s.detail && s.detail.picks > 0;   // pasted links list without a sign-in
+      if (!(this.connected(name) || listed) || (l && (l.loaded || l.loading))) return;
       this.loadList(name);
     },
     async loadList(name, more) {
@@ -369,11 +372,11 @@ function castTv() {
       try {
         await api('POST', '/api/sources/gphotos/link', { link });
         this.linkInput = '';
-        this.pickNote = '';
+        this.linkNote = '';
         if (this.lists.gphotos) this.lists.gphotos.loaded = false;
         await this.refresh();
       } catch (e) {
-        this.pickNote = String(e.message || '').split('\n')[0] + (e.hint ? ' ' + e.hint : '');
+        this.linkNote = String(e.message || '').split('\n')[0] + (e.hint ? ' ' + e.hint : '');
       }
       this.busy.connect = false;
     },

@@ -252,6 +252,13 @@
         </template>
         <div class="note" x-text="gate(tab).note"></div>
         <div class="later" x-show="gateNote[tab]" x-text="gateNote[tab]"></div>
+        <!-- a share link needs no consent: the page is scraped, so it is pasted here before any sign-in -->
+        <form class="paste linkpaste" x-show="tab === 'gphotos' && !connecting(tab) && !expired(tab)" x-cloak @submit.prevent="addLink()">
+          <span class="small muted">Or a video from a shared link, no sign-in needed:</span>
+          <input type="url" x-model="linkInput" placeholder="a photos.app.goo.gl link" autocomplete="off" spellcheck="false" aria-label="Google Photos share link">
+          <button type="submit" :disabled="busy.connect || !linkInput.trim()" x-text="busy.connect ? 'Checking…' : 'Add link'"></button>
+        </form>
+        <div class="later" x-show="tab === 'gphotos' && linkNote" x-text="linkNote"></div>
       </div>
     </section>
   </template>
@@ -279,7 +286,13 @@
       </h2>
       <!-- Google Photos: the pick happens in Google's own picker, on any device; the picks land here -->
       <div class="pickbar" x-show="tab === 'gphotos' && !expired(tab)" x-cloak>
-        <template x-if="!pickWaiting()">
+        <template x-if="!connected(tab)">
+          <div class="row">
+            <button class="primary" @click="connect(tab)" :disabled="busy.connect" x-text="busy.connect ? 'Starting…' : 'Connect'"></button>
+            <span class="small muted">These are pasted links, which need no sign-in. To pick from your own library, connect Google Photos once in this computer’s browser.</span>
+          </div>
+        </template>
+        <template x-if="connected(tab) && !pickWaiting()">
           <div class="row">
             <button class="primary" @click="startPick()" :disabled="busy.connect" x-text="busy.connect ? 'Opening…' : (items(tab).length ? 'Pick more' : 'Pick in Google Photos')"></button>
             <span class="small muted">Google’s picker opens in a new tab; choose photos and videos, press Done, and they appear here. Works from this phone too.</span>
@@ -293,6 +306,7 @@
             <button class="ghost" @click="cancelPick()">Cancel</button>
           </div>
         </template>
+        <div class="later" x-show="!connected(tab) && gateNote[tab]" x-text="gateNote[tab]"></div>
         <div class="later" x-show="pickNote" x-text="pickNote"></div>
       </div>
       <!-- folders: breadcrumbs from the drive root, then the folders in this one -->
@@ -354,6 +368,7 @@
         <input type="url" x-model="linkInput" placeholder="a photos.app.goo.gl link" autocomplete="off" spellcheck="false" aria-label="Google Photos share link">
         <button type="submit" :disabled="busy.connect || !linkInput.trim()" x-text="busy.connect ? 'Checking…' : 'Add link'"></button>
       </form>
+      <div class="later linknote" x-show="tab === 'gphotos' && linkNote" x-cloak x-text="linkNote"></div>
     </section>
   </template>
 </main>

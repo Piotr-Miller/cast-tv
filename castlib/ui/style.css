@@ -340,3 +340,4 @@ a.button.primary:hover { filter: brightness(1.06); }
 form.linkpaste { margin-top: 18px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 form.linkpaste .small { flex-basis: 100%; }
 form.linkpaste input { flex: 1 1 260px; font-family: var(--mono); font-size: 12px; }
+.section .linknote { margin-top: 8px; font-size: 12.5px; color: var(--warn); }
