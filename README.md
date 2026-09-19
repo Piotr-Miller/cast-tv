@@ -248,7 +248,8 @@ are cast from the command line, and then show up in the UI for that session.
 
 ## Repository tooling
 
-`ai-toolkit sync` installs the managed authoring skills locally. They are deliberately not
+`ai-toolkit sync` installs the managed authoring skills locally, from the version pinned in
+`.ai-toolkit/config.json` (1.4.0; the `install` field there is the exact command). They are deliberately not
 tracked here - see `.gitignore` - and the recovery channel is never installed into this repo,
 because it carries course-licensed material that must not enter a public repository.
 
