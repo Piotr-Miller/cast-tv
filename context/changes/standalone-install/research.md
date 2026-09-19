@@ -87,3 +87,24 @@ hold private photos).
   existing bitrate check on these 4K/5.3K files, not a regression, and no GoPro cast was
   claimed.
 - The user signed out of `casttest` afterwards.
+
+## Phase 3.3: a Google account that is not a test user (2026-09-19, 20:45-21:40)
+
+What follows is the user's report plus two screenshots Claude was shown (not committed, the
+first names the account).
+
+- On `casttest`, `google.json` under `%APPDATA%\cast-tv` renamed to `.bak` so the Google Photos
+  tab showed Connect; consent opened with a second Google account that is not on the app's
+  test-user list.
+- 20:45, Google's page (in Polish): "Dostęp zablokowany: aplikacja cast-tv nie przeszła
+  weryfikacji przez Google" ("Access blocked: cast-tv has not completed the Google verification
+  process"), "Błąd 403: access_denied".
+- 20:46, the cast-tv gate: "waiting for consent… valid 2 min", Copy link and Cancel, and the
+  line "cast-tv's Google app is in testing: if Google says "Access blocked", the cast-tv author
+  has to add your Google account as a test user first." - the gate's line explains the block.
+- The user then closed the console window before pressing Cancel; the UI stopped answering, as
+  it should (#11: closing the window ends cast-tv). `google.json` was restored on `casttest`.
+- Cancel, ~21:40, rechecked on the `pmill` account (Google Photos never connected there, so the
+  gate showed Connect without renaming anything) with `cast-tv-windows-x64.exe` from
+  `v0.3.0-rc1`: Connect → Google's tab closed without signing in → Cancel in the UI. The user's
+  word: "Wraca" ("it goes back") - the gate showed "Connect Google Photos" with Connect again.
