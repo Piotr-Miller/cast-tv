@@ -33,6 +33,14 @@ same H.264 file.
 - **Photos (and motion-photo clips) through share links** — a new feature, not in the Phase 6
   plan: probe candidates with `kinds=("photo", "video")` and list a photo tile; for a motion
   photo's clip offer `=m37` (H.264 1080p) as a variant, as picked videos already do.
+- **The share-link field hides behind Connect.** Found 2026-09-19 on the Windows laptop, which
+  has no `google-client.json`: the Google Photos tab shows only the Connect gate, and Connect
+  answers that no OAuth client is configured, so a share link cannot be pasted at all. A share
+  link needs no consent - `GooglePhotos.link()` (`castlib/sources/gphotos.py:752`) scrapes the page
+  without a token - but the form sits in the list section (`castlib/ui/index.html:352`), which
+  `listVisible()` (`castlib/ui/app.js:275`) shows only once the tab is connected. The field
+  should be reachable on the gate too, and a pasted link listed without a sign-in. Belongs with
+  the photos-through-share-links feature above.
 - **Done 2026-09-19.** ~~A GoPro hint on a Google Photos error.~~ `supervisor.lighter_hint()`
   names the lighter variant the item's source has: GoPro's Proxy (with `cast-gopro <n> -q proxy`),
   a picked Google Photos video's 1080p stream, the picker for a share link (which has no variant),
