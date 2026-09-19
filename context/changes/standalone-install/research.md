@@ -62,3 +62,28 @@ python -m PyInstaller --noconfirm --onefile --name cast-tv --paths C:/Source/cas
   download, the firewall), a Linux build.
 - `ffprobe` is optional: `castlib/diagnostics.py` returns nothing when it is missing (every call
   is under `except Exception`), so the bundle does not need it.
+
+## Phase 3.1: Windows, clean account (2026-09-19, about 17:50)
+
+A fresh Windows user account, `casttest`, on this laptop. What follows is the user's report, not
+something Claude observed; Claude was shown three screenshots from the run (not committed, they
+hold private photos).
+
+- The user's words: "wszystko na tak, wszystko zagrało na TV, około 17:50" ("yes to everything,
+  everything played on the TV, around 17:50"), answering the row's checklist item by item:
+  - the account had no `%APPDATA%\cast-tv` and Python was not on PATH;
+  - `cast-tv-windows-x64.exe` was downloaded from the `v0.3.0-rc1` pre-release in Edge;
+    SmartScreen and the firewall prompt were met and accepted;
+  - Google Photos: Connect → Google's consent (Piotr's account, a test user) → a photo and a
+    video picked, both played on the Samsung;
+  - OneDrive: device-code sign-in, a video played;
+  - a share link: the video played;
+  - closing the console window stopped the TV.
+- Screenshots: Google Photos with **4 picked** (3 photos, one 2160×3840 video) while GoPro and
+  OneDrive still said "not connected" - so the Google client came from the build, the account
+  had no `google-client.json`; later OneDrive signed in and browsing
+  `Pictures / OM Workspace / 2026_08_16` (187 items), GoPro "token stored", Google Photos
+  "5 picked". The GoPro grid shows "too heavy" (100-121 Mbit/s) on every clip; that is the
+  existing bitrate check on these 4K/5.3K files, not a regression, and no GoPro cast was
+  claimed.
+- The user signed out of `casttest` afterwards.
