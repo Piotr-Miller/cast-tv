@@ -201,6 +201,28 @@ from a terminal in his editor, with **no `SSL_CERT_FILE` and no `SSL_CERT_DIR`**
   `LD_LIBRARY_PATH`; the MESA-LOADER noise it prints is harmless.
 - Ctrl+C in that terminal ended it at about 23:29; the port was free afterwards.
 
+## Phase 2 rows, on the `v0.3.0-rc2` run (2026-09-19, 23:1x)
+
+Run 35470026493, tag `v0.3.0-rc2`, all three jobs `success`: `build (ubuntu-22.04)`,
+`build (windows-latest)` and `release`. Both smoke tests printed
+
+```
+cast-tv 0.3.0
+Google Photos client: built in
+self-check: HEIC -> image/jpeg 16x16 OK
+/ui/ 200, /api/status 200, gphotos disconnected
+```
+
+so the built-in client, `pillow_heif` inside the bundle and the server all work in the shipped
+binary. The pre-release carries `cast-tv-linux-x64` (35 580 152 bytes) and
+`cast-tv-windows-x64.exe` (22 808 128 bytes). The same thing had already happened on
+`v0.3.0-rc1`; rc2 is simply the run that was read line by line.
+
+The whole log (867 lines) was fetched with `gh run view --log` and searched: the only matches
+for the secret are the two masked lines `GOOGLE_CLIENT_SECRET: ***`, one per build job, printed
+where Actions lists a step's `env`. No value appears, and neither does any `GOCSPX` string.
+`write_client.py` prints nothing of what it writes.
+
 ## Phase 3.4: weekly consent (pending)
 
 - The user, 2026-09-19: "ustawiłem teraz nowy consent 21:46 19/09" ("I've just given a new
