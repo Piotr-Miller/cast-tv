@@ -155,6 +155,18 @@ Claude ran steps 1-2 on the laptop (Fedora release 44): `~/.config/cast-tv` move
   (`PXL_20260916_161438453.MP.jpg`, `image/jpeg`) was `playing` on the Samsung with `tv_state`
   PLAYING and 0 errors. The user: "Video and photo woorking". This is the diagnostic run, so it
   proves the fix's mechanism, not the row.
+- **HEIC, 23:05-23:06.** Three OneDrive HEIC files cast; the prepared JPEGs in
+  `/tmp/cast-tv-photos-…` are 4 360 546, 4 360 402 and 4 360 212 bytes, all 4096x3072 - byte for
+  byte the three files of cloud-source-ui row 5.4 (`IMG_HEIC_landscape`,
+  `IMG_HEIC_portrait_orient6`, `IMG_HEIC_portrait_irot`). The URL the TV held was fetched from
+  this laptop and answered 200, `image/jpeg`, `DLNA.ORG_PN=JPEG_LRG`. At first the user saw
+  nothing: **the TV's own screensaver had come on over the still photo and did not come back**,
+  while AVTransport still reported PLAYING and 0 errors. Once it woke, the photos were there,
+  "jeden plik jest odwrocyny" ("one file is upside down") - the `orient6` fixture, whose pixels
+  were rotated the wrong way when it was made (cloud-source-ui row 5.4 settles this: `irot` and
+  EXIF agree, so every HEIF-spec viewer shows the same, and `IMG_HEIC_portrait_irot` is the
+  corrected one). Not an app fault. The screensaver is worth remembering: a still photo can look
+  like a dead cast.
 - Row 3.2 counts only on `v0.3.0-rc2`, run as is.
 - **Connect opened no browser tab** (the user's word, 22:5x): the consent had to be reached
   through Copy link. The binary runs with `LD_LIBRARY_PATH` set to its own `/tmp/_MEI…`
