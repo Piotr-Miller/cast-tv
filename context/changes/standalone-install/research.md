@@ -108,3 +108,10 @@ first names the account).
   gate showed Connect without renaming anything) with `cast-tv-windows-x64.exe` from
   `v0.3.0-rc1`: Connect → Google's tab closed without signing in → Cancel in the UI. The user's
   word: "Wraca" ("it goes back") - the gate showed "Connect Google Photos" with Connect again.
+
+## Phase 3.4: weekly consent (pending)
+
+- The user, 2026-09-19: "ustawiłem teraz nowy consent 21:46 19/09" ("I've just given a new
+  consent, 21:46 19/09"), on this laptop right after the Cancel check of row 3.3. While the app
+  is in Testing, Google's refresh token lasts 7 days, so the tab should say "The Google Photos
+  consent expired" from about 2026-09-26 21:46; no Connect before then, or the week restarts.
