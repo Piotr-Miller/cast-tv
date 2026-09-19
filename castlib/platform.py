@@ -354,11 +354,13 @@ def end_on_console_close() -> bool:
     return True
 
 
-# Where Linux distributions keep the CA bundle: Fedora and RHEL, Debian, Ubuntu and Arch, then
-# Alpine and openSUSE, which keep it at the path OpenSSL itself falls back to.
+# Where Linux distributions keep the CA bundle. Debian, Ubuntu and Arch come first; Fedora 44
+# has the same file, a link into /etc/pki/ca-trust, and dropped the ca-bundle.crt that Fedora 42
+# and RHEL still use. The last two are Alpine's and openSUSE's.
 CA_BUNDLES = (
-    "/etc/pki/tls/certs/ca-bundle.crt",
     "/etc/ssl/certs/ca-certificates.crt",
+    "/etc/pki/tls/certs/ca-bundle.crt",
+    "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem",
     "/etc/ssl/cert.pem",
     "/etc/ssl/ca-bundle.pem",
 )

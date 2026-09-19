@@ -141,8 +141,21 @@ Claude ran steps 1-2 on the laptop (Fedora release 44): `~/.config/cast-tv` move
   default file and directory are both missing, it sets `SSL_CERT_FILE` to the first existing
   file of `CA_BUNDLES`. Tests cover the user's own setting, Fedora, a Debian layout, Ubuntu
   (default present, nothing changes), no bundle found, and every build other than frozen Linux.
-- Row 3.2 counts only on `v0.3.0-rc2`, run as is. Meanwhile rc1 was restarted at 22:44 with
-  `SSL_CERT_FILE=/etc/pki/tls/certs/ca-bundle.crt` for a diagnostic run of the rest of the row.
+- **Fedora 44 has no `/etc/pki/tls/certs/ca-bundle.crt`.** The first workaround (rc1 restarted
+  at 22:44 with `SSL_CERT_FILE` at that path) failed exactly as before, at 22:54:39; the path is
+  Fedora 42's and RHEL's. On 44 the bundle is `/etc/ssl/certs/ca-certificates.crt`, a link to
+  `/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem`; `/etc/pki/tls/cert.pem`, which Fedora's own
+  Python reports as its `openssl_cafile`, does not exist either, only the `capath`
+  `/etc/pki/tls/certs`. `CA_BUNDLES` therefore starts with the `/etc/ssl` file and keeps
+  `ca-bundle.crt` and the `/etc/pki/ca-trust` file behind it. rc1 was restarted at 22:56 with
+  `SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt`.
+- Row 3.2 counts only on `v0.3.0-rc2`, run as is.
+- **Connect opened no browser tab** (the user's word, 22:5x): the consent had to be reached
+  through Copy link. The binary runs with `LD_LIBRARY_PATH` set to its own `/tmp/_MEI…`
+  directory, which leaks into anything it spawns - `xdg-open` and `gio open` run that way both
+  print "MESA-LOADER: failed to open dri: /tmp/_MEI…/libstdc++.so.6: version `GLIBCXX_3.4.32`
+  not found" - though in a shell test both still reached the browser. Not explained yet; the
+  server was also started detached by Claude, not from the user's own terminal.
 
 ## Phase 3.4: weekly consent (pending)
 
