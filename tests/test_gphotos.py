@@ -1418,3 +1418,48 @@ def test_bearer_stays_on_its_origin():
     assert not carried("https://other.example/b")            # another host
     assert not carried("https://lh3.example:bad/b")          # an unreadable port counts as another origin
 
+
+
+# the head of the two real share pages compared on 2026-09-19 (row 6.5's links), trimmed
+VIDEO_HEAD = ('<meta property="og:title" content="New video · Friday, Sep 4">'
+              '<meta property="og:image" content="%s=w600-h315-p-k">'
+              '<meta property="og:video" content="%s=dv"><meta property="og:video:type" content="video/mp4">')
+PHOTO_HEAD = ('<meta property="og:title" content="New photo · Friday, Sep 4">'
+              '<meta property="og:image" content="%s=w600-h315-p-k">')
+
+
+def _page_with(head, *addresses):
+    status, headers, body = _page(*addresses)
+    return status, headers, head.encode() + body
+
+
+def test_page_kind_reads_the_open_graph_tags():
+    assert sharelink.page_kind(VIDEO_HEAD % (MEDIA_BASE, MEDIA_BASE)) == "video"
+    assert sharelink.page_kind(PHOTO_HEAD % MEDIA_BASE) == "photo"
+    assert sharelink.page_kind('<a href="%s">' % MEDIA_BASE) is None      # no tags: probed as before
+
+
+def test_share_link_to_a_photo_says_so_before_any_probe(monkeypatch):
+    # a motion photo's =dv is its clip and would pass the probe as video; the page says photo
+    transport = _scripted_links(monkeypatch, {
+        LINK: _page_with(PHOTO_HEAD % MEDIA_BASE, MEDIA_BASE), MEDIA_BASE + "=dv": PROBED})
+    with pytest.raises(NotMedia) as err:
+        sharelink.resolve(LINK)
+    assert err.value.code == "photo_link"
+    assert "videos only" in err.value.message and "picker" in err.value.message
+    assert transport.seen == [LINK]                             # nothing probed
+
+
+def test_share_link_to_a_video_page_still_resolves(monkeypatch):
+    transport = _scripted_links(monkeypatch, {
+        LINK: _page_with(VIDEO_HEAD % (MEDIA_BASE, MEDIA_BASE), MEDIA_BASE), MEDIA_BASE + "=dv": PROBED})
+    assert sharelink.resolve(LINK) == MEDIA_BASE + "=dv"
+    assert transport.seen[:2] == [LINK, MEDIA_BASE + "=dv"]
+
+
+def test_no_stream_says_share_links_are_video_only(monkeypatch):
+    still = (206, {"Content-Type": "image/jpeg", "Content-Range": "bytes 0-1/100"}, b"\xff\xd8")
+    _scripted_links(monkeypatch, {LINK: _page(MEDIA_BASE), **{MEDIA_BASE + s: still for s in sharelink.SUFFIXES}})
+    with pytest.raises(NotMedia) as err:
+        sharelink.resolve(LINK)
+    assert err.value.code == "no_stream" and "videos only" in err.value.message

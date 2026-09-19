@@ -27,6 +27,7 @@ from castlib.media import MIME, kind_of_extension
 from castlib.server import Server
 from castlib.sources import gopro, gphotos, sharelink
 from castlib.sources.local import item_for_path
+from castlib.supervisor import lighter_hint
 
 DEFAULT_PORT = 8895
 
@@ -176,7 +177,7 @@ def _follow(app, c, ip, relaying, debug):
         for reason in c.reasons:
             print("   ! %s" % reason)
         if c.reasons:
-            print("   Try a lighter variant:  cast-gopro <n> -q proxy")
+            print("   %s" % lighter_hint(c.item))
         elif c.reason.hint:
             print("   %s" % c.reason.hint)
     elif c.state == "stopped":

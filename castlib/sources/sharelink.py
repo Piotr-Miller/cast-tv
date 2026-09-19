@@ -34,6 +34,12 @@ ALLOWED_HOSTS = ("photos.app.goo.gl", "goo.gl", "photos.google.com", "photos.fif
 ALLOWED_DOMAINS = ("googleusercontent.com",
                    "googlevideo.com")    # =m37 and =m18 redirect to rr...googlevideo.com (probed 2026-09-13)
 LOGIN_HOST = "accounts.google.com"
+# a share page names what it shares: a video's carries og:video tags (og:video:type video/mp4),
+# a photo's - a motion photo's too, whose =dv is its short clip - only og:image (compared 2026-09-19)
+OG_VIDEO = re.compile(r'<meta\s+property="og:video')
+OG_IMAGE = re.compile(r'<meta\s+property="og:image')
+PHOTO_LINK = ("That link is to a photo. Share links cast videos only; to cast a photo, pick it in "
+              "Google's picker instead (the Google Photos tab, or cast-photos --pick).")
 
 
 def allowed(url) -> bool:
@@ -160,6 +166,9 @@ def resolve(link, cookies_path=None):
                             "The page answered %d - the link expired or is private.%s"
                             % (status, HOW_TO_GET_COOKIES), source="link")
 
+    if page_kind(html) == "photo":             # before any probe: a motion photo's clip would pass as video
+        raise NotMedia("photo_link", PHOTO_LINK, source="link")
+
     found = candidates(html)
     if not found:
         raise NotMedia("no_media", "No media found on that page.\n"
@@ -174,6 +183,17 @@ def resolve(link, cookies_path=None):
                                           net.human(info[2])))
             return url
     raise NotMedia("no_stream",
-                   "Found %d addresses, none of which serves video - they are probably\n"
-                   "stills, or Google changed the page format. Send the link over and the\n"
-                   "parser can be adjusted." % len(found), source="link")
+                   "Found %d addresses, none of which serves video. Share links cast videos only:\n"
+                   "if this is a photo, pick it in Google's picker instead (the Google Photos tab,\n"
+                   "or cast-photos --pick). If it is a video, Google may have changed the page\n"
+                   "format - send the link over and the parser can be adjusted." % len(found),
+                   source="link")
+
+
+def page_kind(html: str) -> str | None:
+    """``"video"`` or ``"photo"`` as the share page's Open Graph tags say, None when it has neither."""
+    if OG_VIDEO.search(html):
+        return "video"
+    if OG_IMAGE.search(html):
+        return "photo"
+    return None
