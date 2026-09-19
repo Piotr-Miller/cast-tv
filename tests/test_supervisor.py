@@ -62,7 +62,7 @@ def test_never_started_probes_a_relayed_item_by_its_fresh_address(app, monkeypat
     assert c.done.wait(5)
     assert c.state == "failed" and c.reason.code == "tv_never_started"
     assert probed == ["https://cdn.test/vid-1/source.mp4?sig=1"]      # the address, not the id
-    assert "Try a lighter variant" in c.reason.hint and c.media_line.startswith("hevc")
+    assert "cast-gopro <n> -q proxy" in c.reason.hint and c.media_line.startswith("hevc")
 
 
 def test_zero_requests_is_firewall_diagnosis(app, tmp_path):
@@ -492,3 +492,16 @@ def test_a_persistent_701_on_set_uri_is_still_a_refusal(app, tmp_path):
     assert "UPnP 701: Transition not available" in c.reason.message
     assert "after it the TV reported TRANSITIONING" in c.reason.message
     assert tv.actions().count("SetAVTransportURI") == 2 and "Play" not in tv.actions()
+
+
+def test_lighter_hint_names_the_variant_the_source_has():
+    from types import SimpleNamespace as Item
+    from castlib.supervisor import lighter_hint
+    assert "-q proxy" in lighter_hint(Item(source="gopro", source_id="vid-1"))
+    picked = lighter_hint(Item(source="gphotos", source_id="AF1Qip-picked"))
+    assert "1080p stream" in picked and "gopro" not in picked
+    linked = lighter_hint(Item(source="gphotos", source_id="link-1"))
+    assert "share link" in linked and "picker" in linked
+    for source in ("onedrive", "local"):
+        other = lighter_hint(Item(source=source, source_id="x"))
+        assert "gopro" not in other and "no lighter variant" in other

@@ -2,11 +2,9 @@
 
 ## From the Phase 6 implementation review (2026-09-13)
 
-- **Phase 7 — stale video directories on Windows.** `config.sweep_stale_video_dirs()` is
-  POSIX-only: it proves a `cast-tv-videos-<pid>-*` directory orphaned with `os.kill(pid, 0)`,
-  which on Windows would terminate the process. When Phase 7 moves paths to platformdirs, give
-  Windows its own liveness check (e.g. `OpenProcess` via ctypes, or a lock file held by the
-  owning process) or document that Storage Sense cleans `%TEMP%`.
+- **Done in Phase 7 (`7a7c885`), marked 2026-09-19.** ~~Phase 7 — stale video directories on
+  Windows.~~ `config.sweep_stale_video_dirs()` asks `OpenProcess` whether the owning pid lives on
+  Windows instead of `os.kill(pid, 0)`, and skips the ownership check there (`%TEMP%` is per user).
   Source: `reviews/impl-review-phase-6.md`, F3 decision.
 - **Manual re-check before the Phase 6 fixes are pushed.** Row 6.5 (a share link still plays)
   — **done 2026-09-13 22:23, played** (research.md, "Row 6.5 — re-check"); row 6.3 (a picked video, Original, downloads and plays) — **done 2026-09-13 22:27, played**
@@ -26,16 +24,20 @@ and the TV stayed `STOPPED` (`tv_never_started`). Share links are video-only by 
 regression. The known-good video link from row 6.5 (`KwhGzcxkNtQpudc46`) still resolves to the
 same H.264 file.
 
-- **A photo link should say so.** A motion photo passes as a video and ends in an opaque
-  `tv_never_started`; a plain photo ends in `no_stream` ("they are probably stills"). Neither says
-  that share links cast videos only. Tell the user plainly at paste time.
+- **Done 2026-09-19.** ~~A photo link should say so.~~ A share page names what it shares: a
+  video's carries `og:video` tags, a photo's - a motion photo's too - only `og:image` (the two
+  real links of row 6.5 compared). `sharelink.resolve()` now reads that before any probe and
+  answers `photo_link`: share links cast videos only, pick the photo in Google's picker. A page
+  with neither tag is probed as before, and `no_stream` says the same about photos. Checked on
+  the real links: the motion photo gets `photo_link`, the video still resolves to `=dv`.
 - **Photos (and motion-photo clips) through share links** — a new feature, not in the Phase 6
   plan: probe candidates with `kinds=("photo", "video")` and list a photo tile; for a motion
   photo's clip offer `=m37` (H.264 1080p) as a variant, as picked videos already do.
-- **A GoPro hint on a Google Photos error.** `castlib/supervisor.py:312` appends "Try a lighter
-  variant:  cast-gopro <n> -q proxy" to every `tv_never_started` hint, whatever the source; for
-  Google Photos the lighter choice is the tile's "1080p stream" variant. (`castlib/cli.py:179`
-  is the GoPro CLI and is right as it is.)
+- **Done 2026-09-19.** ~~A GoPro hint on a Google Photos error.~~ `supervisor.lighter_hint()`
+  names the lighter variant the item's source has: GoPro's Proxy (with `cast-gopro <n> -q proxy`),
+  a picked Google Photos video's 1080p stream, the picker for a share link (which has no variant),
+  and no variant for OneDrive and local files. `castlib/cli.py` printed the GoPro line for every
+  source too - it serves `cast-tv` and `cast-photos` as well - and now prints the same hint.
 
 ## From manual row 4.6 (2026-09-15)
 

@@ -30,6 +30,18 @@ from castlib.errors import CastError, TVError
 from castlib.media import didl
 from castlib.platform import FirewallPolicy, firewall_advice
 
+
+def lighter_hint(item) -> str:
+    """Where a lighter version of a video too heavy for the TV is, for the source it came from."""
+    if item.source == "gopro":
+        return "Try the lighter variant: Proxy (on the tile, or  cast-gopro <n> -q proxy)."
+    if item.source == "gphotos" and str(item.source_id).startswith("link-"):
+        return "A share link has no lighter variant; pick the video in Google's picker to cast its 1080p stream."
+    if item.source == "gphotos":
+        return "Try the lighter variant: 1080p stream on the tile."
+    return "It has no lighter variant here; a copy at a lower resolution or bitrate may play."
+
+
 POLL_INTERVAL = 2.0           # seconds between GetTransportInfo calls
 BUDGET_TRANSITIONING = 40.0   # TRANSITIONING is still an attempt
 BUDGET_OTHER = 24.0           # STOPPED after Play for this long is a refusal
@@ -338,7 +350,7 @@ class Cast:
         self.reasons = reasons
         hint = None
         if reasons:
-            hint = "; ".join(reasons) + ". Try a lighter variant:  cast-gopro <n> -q proxy"
+            hint = "; ".join(reasons) + ". " + lighter_hint(item)
         return TVError("tv_never_started", "The TV never started playing.", hint=hint,
                        source=item.source, item=item.source_id)
 
