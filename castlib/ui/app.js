@@ -35,7 +35,7 @@ const GATES = {
   },
   gphotos: {
     title: 'Connect Google Photos',
-    body: 'Google Photos cannot be browsed. Consent once in this computer’s browser; then pick photos in Google’s own picker from any device, this phone included.',
+    body: 'Google Photos cannot be browsed. Consent in this computer’s browser; then pick photos in Google’s own picker from any device, this phone included. While cast-tv’s Google app is in testing, Google asks again about once a week.',
     cta: 'Connect',
     note: 'photospicker.mediaitems.readonly',
     expired: 'The Google Photos consent expired',

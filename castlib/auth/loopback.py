@@ -11,10 +11,11 @@ The consent page must be opened on the machine running cast-tv: the
 redirect goes to that machine's loopback and nowhere else. A phone that opens
 the URL sees Google's page but the redirect lands nowhere; the UI says so.
 
-The client file is the ``client_secret_*.json`` the Cloud console offers for
-a *Desktop app* client, copied to ``config_dir()/google-client.json``
-(``GOOGLE_CLIENT_JSON`` overrides the path). Google's own docs say an installed
-app cannot keep the secret confidential; it is still stored 0600 and never logged.
+The client comes, in this order, from the file ``GOOGLE_CLIENT_JSON`` names,
+from ``config_dir()/google-client.json`` when it exists (either is the
+``client_secret_*.json`` the Cloud console offers for a *Desktop app* client),
+or from the one a release build carries (``_builtin_client``). Google's own docs
+say an installed app cannot keep the secret confidential; it is never logged.
 """
 from __future__ import annotations
 
@@ -40,10 +41,9 @@ CLIENT_FILE = "google-client.json"
 CONSENT_TIMEOUT = 300.0        # seconds the loopback waits for the browser
 TIMEOUT = 30
 HOW_TO_GET_A_CLIENT = (
-    "Create a Google Cloud project once, enable the \"Google Photos Picker API\", add "
-    "yourself as a test user on the OAuth consent screen (Testing mode is enough), create "
-    "an OAuth client of type \"Desktop app\", download its JSON and copy it to "
-    "%s (or point GOOGLE_CLIENT_JSON at it).")
+    "The cast-tv downloads on GitHub Releases carry one. A source install can use its own "
+    "Google Cloud client of type \"Desktop app\" (Photos Picker API enabled): point "
+    "GOOGLE_CLIENT_JSON at its JSON, or save it as %s.")
 
 PAGE_DONE = ("<!doctype html><meta charset=utf-8><title>cast-tv</title>"
              "<body style=\"font-family:sans-serif;padding:40px\">"
@@ -55,19 +55,41 @@ PAGE_FAIL = ("<!doctype html><meta charset=utf-8><title>cast-tv</title>"
 open_browser = webbrowser.open      # replaced in tests; ``False`` is not an error
 
 
-def client_path() -> str:
-    return os.environ.get("GOOGLE_CLIENT_JSON") or os.path.join(config.config_dir(), CLIENT_FILE)
+def builtin_client() -> dict | None:
+    """The client a release build wrote into ``_builtin_client``; ``None`` in a source tree."""
+    from castlib.auth import _builtin_client as b
+    cid, secret = getattr(b, "CLIENT_ID", None), getattr(b, "CLIENT_SECRET", None)
+    if isinstance(cid, str) and cid and isinstance(secret, str) and secret:
+        return {"client_id": cid, "client_secret": secret}
+    return None                                 # half filled counts as none
+
+
+def client_source() -> str | None:
+    """Where the client comes from: an override file's path, ``"built-in"``, or ``None``."""
+    env = os.environ.get("GOOGLE_CLIENT_JSON")
+    if env:
+        return env                              # named explicitly: used even if it is missing
+    path = os.path.join(config.config_dir(), CLIENT_FILE)
+    if os.path.exists(path):
+        return path
+    return "built-in" if builtin_client() else None
 
 
 def load_client(path: str | None = None) -> dict:
-    """``{client_id, client_secret}`` from the console's JSON; ``ConfigError`` when it is missing or odd."""
-    path = path or client_path()
+    """``{client_id, client_secret}`` in the module's order; ``ConfigError`` when there is none or a file is odd."""
     hint = HOW_TO_GET_A_CLIENT % os.path.join(config.config_dir(), CLIENT_FILE)
+    if path is None:
+        path = client_source()
+        if path == "built-in":
+            return builtin_client()
+        if path is None:
+            raise ConfigError("no_google_client", "This copy of cast-tv has no Google client built in.",
+                              hint=hint, source="gphotos")
     try:
         with open(path, encoding="utf-8") as fh:
             data = json.load(fh)
     except FileNotFoundError:
-        raise ConfigError("no_google_client", "No Google OAuth client is configured (%s is missing)." % path,
+        raise ConfigError("no_google_client", "The Google client file %s does not exist." % path,
                           hint=hint, source="gphotos")
     except (OSError, ValueError) as e:
         raise ConfigError("bad_google_client", "Could not read the Google client file %s: %s" % (path, e),

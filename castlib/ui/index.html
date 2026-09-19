@@ -221,6 +221,7 @@
                 <div class="lead">A Google consent page opened in the browser of the computer running cast-tv. Sign in there and allow access.</div>
                 <div class="wait"><span class="dot busy"></span><span>waiting for consent…</span><span class="muted mono" x-text="'valid ' + Math.max(1, Math.round(source(tab).detail.expires_in / 60)) + ' min'"></span></div>
                 <div class="phone small muted" x-text="source(tab).detail.note + ' If no browser tab opened, copy the link and open it on that computer.'"></div>
+                <div class="phone small muted">cast-tv’s Google app is in testing: if Google says “Access blocked”, the cast-tv author has to add your Google account as a test user first.</div>
                 <div class="phone small muted" x-show="source(tab).detail.attempt > 1">Google asked for consent a second time so that it issues a refresh token; allow it once more.</div>
                 <div class="cta">
                   <button @click="copy(source(tab).detail.auth_url)">Copy link</button>

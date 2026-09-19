@@ -222,3 +222,23 @@ def test_ctrl_c_before_run_forever_takes_over(monkeypatch):
     monkeypatch.setattr(cli.App, "start", classmethod(lambda cls, *a, **k: Early()))
     assert cli.ui(port=1, browser=False) == 0
     assert done == ["interrupted", "close"]
+
+
+def test_version_names_the_client(monkeypatch, tmp_path, capsys):
+    """``--version``: the version, and where the Google Photos client would come from."""
+    import castlib
+    from castlib import config
+    from castlib.auth import _builtin_client
+    monkeypatch.setattr(config, "_CONFIG", str(tmp_path / "config"))
+    monkeypatch.delenv("GOOGLE_CLIENT_JSON", raising=False)
+    monkeypatch.setattr(_builtin_client, "CLIENT_ID", None)
+    monkeypatch.setattr(_builtin_client, "CLIENT_SECRET", None)
+    assert cli.main_tv(["--version"]) == 0
+    assert capsys.readouterr().out.splitlines() == ["cast-tv " + castlib.__version__, "Google Photos client: none"]
+    monkeypatch.setattr(_builtin_client, "CLIENT_ID", "id")
+    monkeypatch.setattr(_builtin_client, "CLIENT_SECRET", "secret")
+    cli.main_tv(["--version"])
+    assert capsys.readouterr().out.splitlines()[1] == "Google Photos client: built in"
+    monkeypatch.setenv("GOOGLE_CLIENT_JSON", str(tmp_path / "mine.json"))
+    cli.main_tv(["--version"])
+    assert capsys.readouterr().out.splitlines()[1] == "Google Photos client: from " + str(tmp_path / "mine.json")
