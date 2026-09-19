@@ -180,6 +180,27 @@ Claude ran steps 1-2 on the laptop (Fedora release 44): `~/.config/cast-tv` move
   not found" - though in a shell test both still reached the browser. Not explained yet; the
   server was also started detached by Claude, not from the user's own terminal.
 
+## Phase 3.2: Linux, `v0.3.0-rc2` on Fedora 44 (2026-09-19, 23:20-23:29) - passed
+
+The tag `v0.3.0-rc2` was pushed after PR #27 merged; the release workflow published both
+binaries (`cast-tv-linux-x64`, 35 580 152 bytes, sha256
+`a94afcfb7c20bdf9d565e1d7a165161d9466c96570eefd38166b6fb2ecf953b6`). Claude moved
+`~/.config/cast-tv` aside again and fetched the file from the Release; the user ran it himself
+from a terminal in his editor, with **no `SSL_CERT_FILE` and no `SSL_CERT_DIR`**.
+
+- Without `chmod +x`: "Permission denied"; after it the binary starts and finds
+  `83" OLED (192.168.50.142)` at startup. No firewall command needed.
+- **23:23:09 Google Photos consent verified**, the picker session closed with 2 picks. Where rc1
+  died with CERTIFICATE_VERIFY_FAILED, rc2 signs in: `platform.use_system_ca_bundle()` does its
+  job in the shipped build.
+- The user, on the photo and the video picked from Google Photos: "oba zagrały" ("both played").
+- OneDrive signed in with the device code by 23:26; at **23:26:34** `IMG_HEIC_portrait_irot.HEIC`
+  was `playing`, `tv_state` PLAYING, 0 errors - the HEIC converts and shows.
+- **Connect opened the browser tab by itself** ("karta sama się otworzyła"). So the missing tab
+  of the rc1 run was an artefact of Claude starting the server detached, not the bundled
+  `LD_LIBRARY_PATH`; the MESA-LOADER noise it prints is harmless.
+- Ctrl+C in that terminal ended it at about 23:29; the port was free afterwards.
+
 ## Phase 3.4: weekly consent (pending)
 
 - The user, 2026-09-19: "ustawiłem teraz nowy consent 21:46 19/09" ("I've just given a new

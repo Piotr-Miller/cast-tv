@@ -152,7 +152,7 @@ adds a tester. The Cloud-project steps move under "Your own Google client (optio
       Connect → consent (Piotr's account, a test user) → pick a photo and a video → both play on
       the Samsung. OneDrive: device-code sign-in, a video plays. Share link: the video link plays.
       Closing the window stops the TV. — 2085903
-- [ ] **3.2 Linux**: the same file on Fedora, `chmod +x`, run; Google Photos Connect and a pick
+- [x] **3.2 Linux**: the same file on Fedora, `chmod +x`, run; Google Photos Connect and a pick
       cast; a HEIC photo from OneDrive or the picker converts and shows.
 - [x] **3.3 Not a tester**: a second Google account that is not a test user: Google shows
       "Access blocked"; the gate's line explains it; Cancel returns to the gate. — b28f9c9
