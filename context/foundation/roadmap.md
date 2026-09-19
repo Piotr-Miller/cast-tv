@@ -43,12 +43,16 @@ conversion and the cast supervisor. Delivered with `cloud-source-ui` (PR #1, 202
 | S-08 | standalone-install | download one file on a new PC and use every tab | S-06 | US-04; FR-030 | in progress |
 | S-09 | (not opened) | cast a photo or a motion photo's clip from a share link | S-05 | FR-012 | backlog |
 | S-10 | (not opened) | connect Google Photos with any Google account, without weekly re-consent | S-08 | US-04 | parked |
+| S-11 | (proposed) | watch a slideshow or a long film without the TV's screen saver cutting in | S-02 | US-03 | proposed |
+| S-12 | (proposed) | run cast-tv as a desktop window on Windows and Linux, not only a browser tab | S-08 | — | proposed |
+| S-13 | (proposed) | connect GoPro without copying a token by hand | S-03 | FR-010 | proposed |
+| S-14 | (proposed) | cast to Google TV and Chromecast devices, not only DLNA TVs | S-02 | — | proposed |
 
 ## Streams
 
-- **Casting core** (B-00, F-01, S-01, S-02): discovery, the server, the relay, photos, the supervisor.
-- **Sources** (S-03, S-04, S-05, S-09, S-10): one tab each, each behind its own connection.
-- **Platforms & install** (S-06, S-07, S-08): Fedora, Windows 11, the standalone release.
+- **Casting core** (B-00, F-01, S-01, S-02, S-11, S-14): discovery, the server, the relay, photos, the supervisor.
+- **Sources** (S-03, S-04, S-05, S-09, S-10, S-13): one tab each, each behind its own connection.
+- **Platforms & install** (S-06, S-07, S-08, S-12): Fedora, Windows 11, the standalone release.
 
 ## Baseline
 
@@ -85,6 +89,56 @@ and a LAN-exposure problem (`cloud-source-ui/research.md`).
   refresh-token expiry.
 - **Parked because:** verification needs an owned domain with a home page and privacy policy, a
   demo video and Google's review; the owner declined to buy a domain for now (2026-09-19).
+
+## Proposed
+
+Raised by the owner on 2026-09-19 (in Polish, quoted with an English gloss). Nothing here is
+planned or researched yet; each needs a `research.md` before a plan. The ideas under each are
+starting points, not findings.
+
+### S-11: No screen saver during a slideshow or a long film
+
+- **Phase:** phase:post-mvp
+- **Owner's words:** "Na TV pokazuje się wygaszacz w trakcie trwania slideshow, czy długiego
+  filmu - jak to obejść?" ("The TV shows its screen saver during a slideshow or a long film -
+  how do we get around it?")
+- **To find out:** when exactly the Samsung starts it (idle time, photos only or video too,
+  paused vs playing) and whether a TV setting alone avoids it.
+- **Ideas:** a periodic harmless key over Samsung's remote-control WebSocket API (ports
+  8001/8002, needs a one-time pairing on the TV); a slideshow sent as one video stream instead of
+  single photos, so the TV sees playback.
+
+### S-12: A desktop UI on Windows and Linux
+
+- **Phase:** phase:post-mvp
+- **Owner's words:** "Desktop UI (Win/Linux) zamiast WebUI" ("a desktop UI (Win/Linux) instead
+  of the web UI")
+- **To decide:** replace the web UI or wrap it. The phone flow (S-02, the north star) needs the
+  web UI, so a wrapper keeps one UI for both.
+- **Ideas:** the existing UI in a native window (e.g. pywebview) with the server inside the same
+  process; closing the window stops the TV, as the console window does now (#11); a tray icon.
+
+### S-13: GoPro without a hand-pasted token
+
+- **Phase:** phase:post-mvp
+- **Owner's words:** "Rozkminka jak uprościć dodawanie tokenu dla GoPro - ręczne wklejanie jest
+  jakieś nieprofesjonalne" ("figure out how to simplify adding the GoPro token - pasting it by
+  hand looks unprofessional")
+- **To find out:** whether GoPro offers any sign-in a third-party app may use; the cloud API
+  cast-tv calls is not public.
+- **Ideas:** a GoPro sign-in inside an app-owned browser window (pairs with S-12) that keeps the
+  resulting cookie; a browser extension or bookmarklet that hands the token to the local server.
+  Either way the token stays inside cast-tv and is never shown or logged.
+
+### S-14: Google TV and Chromecast as targets
+
+- **Phase:** phase:post-mvp
+- **Owner's words:** "Wyszukiwanie oprócz telewizorów, też Google TV, Chromecast, itd."
+  ("discovery of Google TV, Chromecast etc. as well as TVs")
+- **To find out:** which formats a Chromecast / Google TV plays straight from a URL (no
+  transcoding stays a rule) and how photos show there.
+- **Ideas:** mDNS discovery (`_googlecast._tcp`) next to SSDP; the Cast protocol with the
+  Default Media Receiver (e.g. `pychromecast`); a target list in the UI that mixes both kinds.
 
 ## Open Roadmap Questions
 
