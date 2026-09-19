@@ -153,7 +153,7 @@ adds a tester. The Cloud-project steps move under "Your own Google client (optio
       the Samsung. OneDrive: device-code sign-in, a video plays. Share link: the video link plays.
       Closing the window stops the TV. — 2085903
 - [x] **3.2 Linux**: the same file on Fedora, `chmod +x`, run; Google Photos Connect and a pick
-      cast; a HEIC photo from OneDrive or the picker converts and shows.
+      cast; a HEIC photo from OneDrive or the picker converts and shows. — ee48787
 - [x] **3.3 Not a tester**: a second Google account that is not a test user: Google shows
       "Access blocked"; the gate's line explains it; Cancel returns to the gate. — b28f9c9
 - [ ] **3.4 Weekly consent**: about 7 days after 3.1, the tab shows "The Google Photos consent
