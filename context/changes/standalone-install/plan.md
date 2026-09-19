@@ -137,11 +137,11 @@ adds a tester. The Cloud-project steps move under "Your own Google client (optio
 ### Success Criteria:
 
 #### Automated Verification:
-- [ ] The release workflow passes on a test tag (e.g. `v0.3.0-rc1`, a pre-release) on both OSes,
+- [x] The release workflow passes on a test tag (e.g. `v0.3.0-rc1`, a pre-release) on both OSes,
       smoke steps included.
 
 #### Manual Verification:
-- [ ] The workflow logs never print the secret (GitHub masks it; checked by reading the log).
+- [x] The workflow logs never print the secret (GitHub masks it; checked by reading the log).
 
 ## Phase 3: Clean machines
 
