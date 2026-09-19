@@ -165,7 +165,7 @@ Claude ran steps 1-2 on the laptop (Fedora release 44): `~/.config/cast-tv` move
   "jeden plik jest odwrocyny" ("one file is upside down") - the `orient6` fixture, whose pixels
   were rotated the wrong way when it was made (cloud-source-ui row 5.4 settles this: `irot` and
   EXIF agree, so every HEIF-spec viewer shows the same, and `IMG_HEIC_portrait_irot` is the
-  corrected one). Not an app fault. The screensaver is worth remembering: a still photo can look
+  corrected one; the user confirmed it was that file). Not an app fault. The screensaver is worth remembering: a still photo can look
   like a dead cast.
 - Row 3.2 counts only on `v0.3.0-rc2`, run as is.
 - **Connect opened no browser tab** (the user's word, 22:5x): the consent had to be reached
