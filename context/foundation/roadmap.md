@@ -1,0 +1,105 @@
+---
+project: cast-tv
+version: 1
+status: active
+created: 2026-09-19
+updated: 2026-09-19
+prd_version: 1
+main_goal: personal-use-then-share
+top_blocker: time
+---
+
+# Roadmap: cast-tv
+
+> Derived from `context/foundation/prd.md` (v1) and the change folders, 2026-09-19.
+> Edit-in-place; archive when superseded. The "At a glance" table is the index.
+> **Phase tag:** every slice carries `phase:mvp` (the UI change, `cloud-source-ui`) or
+> `phase:post-mvp` (what came after it). New slices must set it.
+
+## Vision recap
+
+Put anything from GoPro's cloud, OneDrive, Google Photos or a local disk on the Samsung TV,
+chosen from a phone, with no app on the TV and no transcoding. See `prd.md`.
+
+## North star
+
+**S-02: from the phone, a selection ticked across tabs plays on the TV as one slideshow.** It is
+the smallest flow that needs every part at once - the long-lived server, the sources, photo
+conversion and the cast supervisor. Delivered with `cloud-source-ui` (PR #1, 2026-09-18).
+
+## At a glance
+
+| ID | Change ID | Outcome (user can …) | Prerequisites | PRD refs | Status |
+| --- | --- | --- | --- | --- | --- |
+| B-00 | (baseline) | cast a local file, a stream, a GoPro item or a Google Photos share link from the command line | — | US-05 | done (2026-09-07) |
+| F-01 | cloud-source-ui, phase 1 | (foundation) castlib package, item registry, Host/Origin check, media-URL token | B-00 | Guardrails | done |
+| S-01 | cloud-source-ui, phase 2 | cast a photo; HEIC and rotated photos converted | F-01 | FR-021; US-02 | done |
+| S-02 | cloud-source-ui, phase 3 | open the UI on the phone, cast, run a slideshow (NORTH STAR) | F-01, S-01 | US-02, US-03; FR-022, FR-023 | done |
+| S-03 | cloud-source-ui, phase 4 | browse GoPro after a token paste | S-02 | FR-010 | done |
+| S-04 | cloud-source-ui, phase 5 | browse OneDrive by folder after a device-code sign-in | S-02 | FR-011 | done |
+| S-05 | cloud-source-ui, phase 6 | pick in Google Photos and cast the pick; share links | S-02 | FR-012 | done |
+| S-06 | cloud-source-ui, phase 7 | install with pipx on Fedora and Windows 11 | S-02 | NFR platforms | done |
+| S-07 | (follow-ups, PRs #10-#17) | close the window to stop the TV; see why a managed laptop cannot cast; paste a share link before any sign-in | S-06 | Guardrails; FR-012 | done |
+| S-08 | standalone-install | download one file on a new PC and use every tab | S-06 | US-04; FR-030 | in progress |
+| S-09 | (not opened) | cast a photo or a motion photo's clip from a share link | S-05 | FR-012 | backlog |
+| S-10 | (not opened) | connect Google Photos with any Google account, without weekly re-consent | S-08 | US-04 | parked |
+
+## Streams
+
+- **Casting core** (B-00, F-01, S-01, S-02): discovery, the server, the relay, photos, the supervisor.
+- **Sources** (S-03, S-04, S-05, S-09, S-10): one tab each, each behind its own connection.
+- **Platforms & install** (S-06, S-07, S-08): Fedora, Windows 11, the standalone release.
+
+## Baseline
+
+Before the UI (commits `cf2a839`..`36cf4c8`, 2026-09-07): four standard-library scripts, about
+1000 lines - `cast-tv` (local files and streams), `cast-gopro`, `cast-photos` (share links) and a
+shared `castcloud` - built for one item per process. Research found two live bugs in that model
+and a LAN-exposure problem (`cloud-source-ui/research.md`).
+
+## Slices
+
+### S-08: A new PC works after one download
+
+- **Phase:** phase:post-mvp
+- **Change:** `context/changes/standalone-install/`
+- **Outcome:** a Windows or Linux PC with no Python downloads one file from GitHub Releases and
+  every tab connects; Google Photos through a client built into the release.
+- **Status:** Phase 1 (built-in client, `--version`) merged as #20; Phase 2 (PyInstaller spec,
+  release workflow, smoke test) merged as #22; repository secrets set 2026-09-19. Next: the first
+  pre-release tag `v0.3.0-rc1` (the owner's go-ahead), then Phase 3 - clean Windows account,
+  Fedora, a non-tester Google account, the weekly re-consent.
+
+### S-09: Photos through share links
+
+- **Phase:** phase:post-mvp
+- **Change:** not opened; recorded in `cloud-source-ui/follow-ups/review-fixes.md`.
+- **Outcome:** a share link to a photo lists a photo tile; a motion photo's clip offers `=m37`
+  (H.264 1080p), since the Samsung refused its `=dv` HEVC 120 fps original.
+- **Open:** albums are untested; plan first.
+
+### S-10: Google Photos for any account
+
+- **Phase:** phase:post-mvp
+- **Outcome:** Google verification of the `cast-tv` app lifts the test-user list and the 7-day
+  refresh-token expiry.
+- **Parked because:** verification needs an owned domain with a home page and privacy policy, a
+  demo video and Google's review; the owner declined to buy a domain for now (2026-09-19).
+
+## Open Roadmap Questions
+
+- Archive `cloud-source-ui` to `context/archive/` now that every row and follow-up but S-09 is done?
+
+## Parked
+
+- Google verification (S-10), code signing for the `.exe`, installers (MSI, rpm, AppImage),
+  auto-update, macOS.
+- Audio casting from the UI; browsing local folders from the UI (exposure); a background service.
+
+## Done
+
+- **cloud-source-ui** (F-01, S-01..S-06): merged as PR #1 on 2026-09-18, every plan row ticked,
+  row 7.3 (Windows) last. PRs #2-#8 were a second implementation of the same UI built on `main`
+  in another session; PR #9 reverted it in favour of PR #1.
+- **Follow-ups** (S-07): #10 sleep control recorded, #11 console close stops the TV, #13 managed
+  firewall policy detected, #14 photo share links say so, #16 share link before sign-in.
