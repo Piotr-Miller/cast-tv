@@ -40,10 +40,10 @@ conversion and the cast supervisor. Delivered with `cloud-source-ui` (PR #1, 202
 | S-05 | cloud-source-ui, phase 6 | pick in Google Photos and cast the pick; share links | S-02 | FR-012 | done |
 | S-06 | cloud-source-ui, phase 7 | install with pipx on Fedora and Windows 11 | S-02 | NFR platforms | done |
 | S-07 | (follow-ups, PRs #10-#17) | close the window to stop the TV; see why a managed laptop cannot cast; paste a share link before any sign-in | S-06 | Guardrails; FR-012 | done |
-| S-08 | standalone-install | download one file on a new PC and use every tab | S-06 | US-04; FR-030 | in progress |
+| S-08 | standalone-install | download one file on a new PC and use every tab | S-06 | US-04; FR-030 | in progress (only row 3.4, from 2026-09-26) |
 | S-09 | (not opened) | cast a photo or a motion photo's clip from a share link | S-05 | FR-012 | backlog |
 | S-10 | (not opened) | connect Google Photos with any Google account, without weekly re-consent | S-08 | US-04 | parked |
-| S-11 | (proposed) | watch a slideshow or a long film without the TV's screen saver cutting in | S-02 | US-03 | proposed |
+| S-11 | (proposed) | watch a slideshow or a long film without the TV's screen saver cutting in | S-02 | US-03 | proposed (seen live 2026-09-19) |
 | S-12 | (proposed) | run cast-tv as a desktop window on Windows and Linux, not only a browser tab | S-08 | — | proposed |
 | S-13 | (proposed) | connect GoPro without copying a token by hand | S-03 | FR-010 | proposed |
 | S-14 | (proposed) | cast to Google TV and Chromecast devices, not only DLNA TVs | S-02 | — | proposed |
@@ -70,9 +70,19 @@ and a LAN-exposure problem (`cloud-source-ui/research.md`).
 - **Outcome:** a Windows or Linux PC with no Python downloads one file from GitHub Releases and
   every tab connects; Google Photos through a client built into the release.
 - **Status:** Phase 1 (built-in client, `--version`) merged as #20; Phase 2 (PyInstaller spec,
-  release workflow, smoke test) merged as #22; repository secrets set 2026-09-19. Next: the first
-  pre-release tag `v0.3.0-rc1` (the owner's go-ahead), then Phase 3 - clean Windows account,
-  Fedora, a non-tester Google account, the weekly re-consent.
+  release workflow, smoke test) merged as #22; repository secrets set 2026-09-19. Both
+  pre-releases are out: `v0.3.0-rc1` (2026-09-19) and `v0.3.0-rc2` (the same evening, after
+  #27). Phase 2's rows are ticked from the rc2 run - three green jobs, both smoke tests, and a
+  log where the secret appears only masked. Phase 3: **3.1 (clean Windows account), 3.2 (Fedora)
+  and 3.3 (a non-tester Google account) passed**; only **3.4, the weekly re-consent, is open,
+  and not before 2026-09-26 21:46** - seven days after the consent given on Windows, and any
+  earlier Connect restarts the week. After it: whether to cut `v0.3.0` without the `-rc`.
+- **What row 3.2 caught:** the Linux binary could verify no certificate at all. Built on
+  `ubuntu-latest`, it carries that runner's OpenSSL, which looks for CAs under `/usr/lib/ssl`;
+  Fedora has no such directory, so Google, OneDrive and GoPro were all unreachable from the
+  release on any Fedora machine. Fixed in #27 (`platform.use_system_ca_bundle`) and shipped in
+  rc2, where the same laptop signed in, picked and cast. A row done on the real artefact, not
+  from source, is what found it.
 
 ### S-09: Photos through share links
 
@@ -102,6 +112,10 @@ starting points, not findings.
 - **Owner's words:** "Na TV pokazuje się wygaszacz w trakcie trwania slideshow, czy długiego
   filmu - jak to obejść?" ("The TV shows its screen saver during a slideshow or a long film -
   how do we get around it?")
+- **Seen live, 2026-09-19 23:0x** (`standalone-install/research.md`, the rc1 run): a still HEIC
+  photo was on screen, the TV's screen saver came on and did not go away, while AVTransport
+  still answered PLAYING and cast-tv showed no error. So from our side a covered screen and a
+  playing one look identical - the gap is not only cosmetic.
 - **To find out:** when exactly the Samsung starts it (idle time, photos only or video too,
   paused vs playing) and whether a TV setting alone avoids it.
 - **Ideas:** a periodic harmless key over Samsung's remote-control WebSocket API (ports
