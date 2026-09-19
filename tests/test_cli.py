@@ -242,3 +242,9 @@ def test_version_names_the_client(monkeypatch, tmp_path, capsys):
     monkeypatch.setenv("GOOGLE_CLIENT_JSON", str(tmp_path / "mine.json"))
     cli.main_tv(["--version"])
     assert capsys.readouterr().out.splitlines()[1] == "Google Photos client: from " + str(tmp_path / "mine.json")
+
+
+def test_self_check_converts_a_heic(capsys):
+    """The release smoke test's probe: a HEIC made in memory comes out as a JPEG."""
+    assert cli.main_tv(["--self-check"]) == 0
+    assert capsys.readouterr().out.strip() == "self-check: HEIC -> image/jpeg 16x16 OK"
