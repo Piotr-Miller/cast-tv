@@ -322,7 +322,9 @@ def test_firewall_advice_names_the_rule_or_gives_the_command(monkeypatch):
 # what the bundled OpenSSL, built on Ubuntu, reports as its default paths
 UBUNTU_OPENSSL = types.SimpleNamespace(openssl_cafile="/usr/lib/ssl/cert.pem",
                                        openssl_capath="/usr/lib/ssl/certs")
-FEDORA_FILES = {"/etc/pki/tls/certs/ca-bundle.crt", "/etc/ssl/cert.pem"}
+# Fedora 44, where this was found: no ca-bundle.crt, the bundle is a link under /etc/ssl
+FEDORA_FILES = {"/etc/ssl/certs/ca-certificates.crt", "/etc/ssl/cert.pem", "/etc/pki/tls/certs"}
+RHEL_FILES = {"/etc/pki/tls/certs/ca-bundle.crt", "/etc/pki/tls/certs"}
 DEBIAN_FILES = {"/etc/ssl/certs/ca-certificates.crt"}
 
 
@@ -336,6 +338,14 @@ def test_ca_bundle_fedora_gets_its_own(monkeypatch):
     _binary(monkeypatch)
     env = {}
     assert platform.use_system_ca_bundle(env, FEDORA_FILES.__contains__) == \
+        "/etc/ssl/certs/ca-certificates.crt"
+    assert env == {"SSL_CERT_FILE": "/etc/ssl/certs/ca-certificates.crt"}
+
+
+def test_ca_bundle_older_fedora_and_rhel(monkeypatch):
+    _binary(monkeypatch)
+    env = {}
+    assert platform.use_system_ca_bundle(env, RHEL_FILES.__contains__) == \
         "/etc/pki/tls/certs/ca-bundle.crt"
     assert env == {"SSL_CERT_FILE": "/etc/pki/tls/certs/ca-bundle.crt"}
 
