@@ -149,6 +149,12 @@ Claude ran steps 1-2 on the laptop (Fedora release 44): `~/.config/cast-tv` move
   `/etc/pki/tls/certs`. `CA_BUNDLES` therefore starts with the `/etc/ssl` file and keeps
   `ca-bundle.crt` and the `/etc/pki/ca-trust` file behind it. rc1 was restarted at 22:56 with
   `SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt`.
+- **With the right bundle the flow works.** rc1 with
+  `SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt`: consent went through (`verified_at`
+  22:58:45), the picker session finished with 2 picks at 22:58:50, and at 22:59:57 a photo
+  (`PXL_20260916_161438453.MP.jpg`, `image/jpeg`) was `playing` on the Samsung with `tv_state`
+  PLAYING and 0 errors. The user: "Video and photo woorking". This is the diagnostic run, so it
+  proves the fix's mechanism, not the row.
 - Row 3.2 counts only on `v0.3.0-rc2`, run as is.
 - **Connect opened no browser tab** (the user's word, 22:5x): the consent had to be reached
   through Copy link. The binary runs with `LD_LIBRARY_PATH` set to its own `/tmp/_MEI…`
