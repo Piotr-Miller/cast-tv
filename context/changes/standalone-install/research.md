@@ -109,6 +109,41 @@ first names the account).
   `v0.3.0-rc1`: Connect → Google's tab closed without signing in → Cancel in the UI. The user's
   word: "Wraca" ("it goes back") - the gate showed "Connect Google Photos" with Connect again.
 
+## Phase 3.2: Linux, `v0.3.0-rc1` on Fedora 44 (2026-09-19, from 22:39) - failed
+
+Claude ran steps 1-2 on the laptop (Fedora release 44): `~/.config/cast-tv` moved to
+`cast-tv.bak`, `cast-tv-linux-x64` fetched with curl (35 578 344 bytes, sha256
+`7488d0478fbf082f7d89173e115e6f0df9925526e2c01ddfab91a8cd98fb5671`).
+
+- Without `chmod +x`: "Permission denied", as the plan expects; after it the binary starts and
+  reports version `0.3.0`. No port command was needed: the FedoraWorkstation zone already allows
+  1025-65535/tcp.
+- **The first TV search missed.** At 22:39 the startup M-SEARCH got 0 answers on `wlo1` although
+  the Samsung was on (ping answered, `:9197/dmr` gave 200); a `POST /api/tv/discover`, what the
+  UI's retry does, found `83" OLED` at once. The next start, 22:44, found it on the first try. A
+  lost datagram, most likely; with the old config the remembered TV (`settings.tv`) would have
+  hidden it. Not acted on.
+- **Every HTTPS request failed.** Connect on the Google Photos tab: "Could not reach Google's
+  sign-in service: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed:
+  unable to get local issuer certificate (_ssl.c:1010)>". The binary is built on
+  `ubuntu-latest` and PyInstaller bundles that runner's `libcrypto.so.3`; `strings` on the copy
+  unpacked in `/tmp/_MEI…` shows `OPENSSLDIR: "/usr/lib/ssl"`. Fedora has no `/usr/lib/ssl`
+  (its bundle is `/etc/pki/tls/certs/ca-bundle.crt`, its own Python reports
+  `openssl_cafile='/etc/pki/tls/cert.pem'`), and the build carries no `certifi`. OneDrive and
+  GoPro go through the same `urllib`, so they would fail alike. Windows is unaffected (Python
+  loads the system store there; row 3.1 passed), and so is the pipx install on Fedora (the
+  system's OpenSSL).
+- Fix, chosen by the user over bundling `certifi` ("Zachowuje systemowy trust store, wspiera
+  firmowe CA i nie zamraża certyfikatów w binarce" - "It keeps the system trust store, supports
+  company CAs and does not freeze certificates into the binary"):
+  `platform.use_system_ca_bundle()`, called first thing in `packaging/entry.py`. Only in the
+  frozen Linux build, only when neither `SSL_CERT_FILE` nor `SSL_CERT_DIR` is set and OpenSSL's
+  default file and directory are both missing, it sets `SSL_CERT_FILE` to the first existing
+  file of `CA_BUNDLES`. Tests cover the user's own setting, Fedora, a Debian layout, Ubuntu
+  (default present, nothing changes), no bundle found, and every build other than frozen Linux.
+- Row 3.2 counts only on `v0.3.0-rc2`, run as is. Meanwhile rc1 was restarted at 22:44 with
+  `SSL_CERT_FILE=/etc/pki/tls/certs/ca-bundle.crt` for a diagnostic run of the rest of the row.
+
 ## Phase 3.4: weekly consent (pending)
 
 - The user, 2026-09-19: "ustawiłem teraz nowy consent 21:46 19/09" ("I've just given a new
