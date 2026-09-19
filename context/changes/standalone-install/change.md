@@ -1,7 +1,7 @@
 ---
 change_id: standalone-install
 title: cast-tv runs on a new PC with nothing to install or copy first
-status: planned
+status: implementing
 created: 2026-09-19
 updated: 2026-09-19
 archived_at: null
@@ -40,6 +40,14 @@ Asked three questions after the research below:
 2. Ship the owner's Google client now, in Testing mode (people added by hand as test users,
    consent again about weekly): **"Yes"**.
 3. A new PC works without installing Python first (a Windows `.exe`, a Linux binary): **"Yes"**.
+
+## Progress
+
+- 2026-09-19: plan merged (PR #18); **Phase 1 done** (PR #20, `a16f542`, CI green on main,
+  run 35447819565): the client order, the built-in stub, `--version`, the test-user line.
+- 2026-09-19 14:07: owner step 1 done - Piotr set the repository secrets `GOOGLE_CLIENT_ID`
+  and `GOOGLE_CLIENT_SECRET` (`gh secret list` shows both names; the values were never seen here).
+- Next: Phase 2, the release build.
 
 ## What that means for "any user"
 
