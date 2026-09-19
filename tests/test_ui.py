@@ -67,6 +67,19 @@ def test_ui_has_the_gopro_gate_and_list():
     assert "'/api/sources/' + name + '/list'" in js and "x-html" not in html and "innerHTML" not in js
 
 
+def test_ui_offers_a_share_link_before_any_sign_in():
+    """The link field sits on the Google Photos gate too; a link lists without a sign-in."""
+    from castlib.server import UI_DIR
+    import os
+    with open(os.path.join(UI_DIR, "index.html"), encoding="utf-8") as fh:
+        html = fh.read()
+    gate = html[html.index('<section class="gate">'):html.index('<template x-if="listVisible(tab)">')]
+    assert 'addLink()' in gate and 'x-model="linkInput"' in gate and 'linkNote' in gate
+    assert '<template x-if="!connected(tab)">' in html and 'connected(tab) && !pickWaiting()' in html
+    with open(os.path.join(UI_DIR, "app.js"), encoding="utf-8") as fh:
+        js = fh.read()
+    assert "s.detail.picks > 0" in js and "this.linkNote = String" in js
+
 def open_ui_bytes():
     from castlib.server import UI_DIR
     import os

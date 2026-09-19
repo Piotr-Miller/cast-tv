@@ -379,6 +379,8 @@ class GPhotosSource:
                 "attempt": flow["attempt"], "note": ON_HOST_NOTE}}
         if not stored:
             detail: dict = {"stored": False}
+            if picks:                            # pasted links need no sign-in: the list shows them anyway
+                detail.update(picks=picks, picks_seq=seq)
             if flow_error:
                 detail["flow_error"] = flow_error
             return {"state": "disconnected", "detail": detail}

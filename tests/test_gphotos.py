@@ -1156,6 +1156,26 @@ def test_pick_and_link_over_api(fake, app, monkeypatch):
     assert isinstance(item, MediaItem) and item.kind == "photo"
 
 
+def test_share_link_needs_no_oauth_client(app, monkeypatch, tmp_path):
+    """No google-client.json, never connected: a pasted link still lists, and the status says so."""
+    monkeypatch.setenv("GOOGLE_CLIENT_JSON", str(tmp_path / "nope.json"))
+    src = app.sources["gphotos"]
+    d = src.status()
+    assert d == {"state": "disconnected", "detail": {"stored": False}}
+    monkeypatch.setattr(sharelink, "resolve", lambda link, cookies_path=None: "https://video-downloads.googleusercontent.com/v1")
+    c = http.client.HTTPConnection(app.base_url.split("://", 1)[1], timeout=5)
+    c.request("POST", "/api/sources/gphotos/link", body=json.dumps({"link": LINK}).encode(),
+              headers={"Content-Type": "application/json"})
+    r = c.getresponse()
+    assert r.status == 200 and json.loads(r.read())["item"]["id"] == "link-1"
+    status, _, body, _ = request(app.base_url, "GET", "/api/status")
+    g = json.loads(body)["sources"]["gphotos"]
+    assert g["state"] == "disconnected" and g["detail"]["picks"] == 1 and g["detail"]["picks_seq"] == 1
+    status, _, body, _ = request(app.base_url, "GET", "/api/sources/gphotos/list")
+    assert status == 200 and [e["id"] for e in json.loads(body)["items"]] == ["link-1"]
+    assert app.resolve("gphotos", "link-1").kind == "video"
+
+
 @pytest.mark.skipif(sys.platform == "win32", reason="Windows cannot deliver SIGINT/SIGTERM to a child's handler")
 def test_sigterm_closes_sources_like_ctrl_c(tmp_path):
     """A plain ``kill`` runs the Ctrl+C path: the sources are closed (picker sessions deleted) and the TV stopped."""
