@@ -290,6 +290,21 @@ def version_text() -> str:
     return "cast-tv %s\nGoogle Photos client: %s" % (castlib.__version__, where)
 
 
+def self_check() -> str:
+    """A HEIC made and decoded in memory through the photo pipeline: the bundled libheif works."""
+    import io
+    import types
+    from PIL import Image
+    from castlib import photos
+    buf = io.BytesIO()
+    Image.new("RGB", (16, 16), (200, 60, 30)).save(buf, format="HEIF")
+    item = types.SimpleNamespace(title="self-check", source="local", id="self-check", source_id="self-check")
+    data, mime, width, height = photos._convert(item, buf.getvalue())
+    if mime != "image/jpeg" or (width, height) != (16, 16):
+        raise SystemExit("self-check failed: %s %dx%d" % (mime, width, height))
+    return "self-check: HEIC -> %s %dx%d OK" % (mime, width, height)
+
+
 def main_tv(argv=None):
     platform.end_on_console_close()     # a closed window ends it like Ctrl+C
     ap = argparse.ArgumentParser(
@@ -318,10 +333,14 @@ def main_tv(argv=None):
                     help="Netscape cookie jar, for material behind a login")
     ap.add_argument("--version", action="store_true",
                     help="print the version and where the Google Photos client comes from")
+    ap.add_argument("--self-check", action="store_true", help=argparse.SUPPRESS)   # the release smoke test
     args = ap.parse_args(argv)
 
     if args.version:
         print(version_text())
+        return 0
+    if args.self_check:
+        print(self_check())
         return 0
 
     if args.list_devices:

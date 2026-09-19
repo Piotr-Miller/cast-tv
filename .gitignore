@@ -24,4 +24,5 @@ scripts/local/
 
 .venv/
 build/
+dist/
 *.egg-info/

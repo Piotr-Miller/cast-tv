@@ -1,0 +1,69 @@
+name: release
+
+# A tag v* builds the standalone binaries, smoke-tests them and publishes a GitHub
+# Release (a pre-release when the tag has a "-", e.g. v0.3.0-rc1). A pull request that
+# touches the build runs the same build and smoke test and publishes nothing.
+on:
+  push:
+    tags: ["v*"]
+  pull_request:
+    paths:
+      - "packaging/**"
+      - ".github/workflows/release.yml"
+
+jobs:
+  build:
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - os: windows-latest
+            asset: cast-tv-windows-x64.exe
+          - os: ubuntu-22.04          # an older glibc: the binary runs on newer distributions
+            asset: cast-tv-linux-x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install . pyinstaller
+      - name: Write the Google client into the build
+        run: python packaging/write_client.py
+        env:
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+      - run: python -m pip install --no-deps --force-reinstall .   # the installed castlib carries the client
+      - run: pyinstaller --noconfirm packaging/cast-tv.spec
+      - name: Name the binary
+        shell: bash
+        run: |
+          src=dist/cast-tv; [ -f dist/cast-tv.exe ] && src=dist/cast-tv.exe
+          mv "$src" "dist/${{ matrix.asset }}"
+      - name: Smoke test
+        run: python packaging/smoke.py dist/${{ matrix.asset }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: dist/${{ matrix.asset }}
+          if-no-files-found: error
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: assets
+          merge-multiple: true
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          pre=""; case "$TAG" in *-*) pre="--prerelease";; esac
+          gh release create "$TAG" assets/* --repo "$GITHUB_REPOSITORY" --title "cast-tv $TAG" \
+            --generate-notes $pre

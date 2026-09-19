@@ -23,8 +23,21 @@ laptop's disk (or through the laptop from the cloud), and the remote drives seek
 
 ## Install
 
-Python 3.10 or newer, then [pipx](https://pipx.pypa.io/), which puts `cast-tv`, `cast-gopro`
-and `cast-photos` on the path on both systems:
+**Download** (nothing else to install): the latest
+[release](https://github.com/Piotr-Miller/cast-tv/releases) has one file per system.
+
+- **Windows**: `cast-tv-windows-x64.exe`. The file is not signed, so the first start shows
+  "Windows protected your PC": click **More info → Run anyway**. Allow it on private networks
+  when the firewall asks.
+- **Linux** (x86-64, glibc 2.35 or newer, e.g. Fedora): `cast-tv-linux-x64`, then
+  `chmod +x cast-tv-linux-x64 && ./cast-tv-linux-x64`.
+
+The download is `cast-tv` only - the UI and the command line below; `cast-gopro` and
+`cast-photos` come with the pipx install. `cast-tv --version` says whether the Google Photos
+client is built in (it is, in a release).
+
+**From source**, with Python 3.10 or newer and [pipx](https://pipx.pypa.io/), which puts
+`cast-tv`, `cast-gopro` and `cast-photos` on the path on both systems:
 
 ```bash
 # Fedora
@@ -138,11 +151,20 @@ uses Google's **Picker API**: connect once, then "Pick in Google Photos" opens G
 picker - its link works on the phone too - and whatever is picked lands in the grid. Picks last
 for the session; the connection survives a restart.
 
-One-time setup: a Google Cloud project with the **Photos Picker API** enabled, an OAuth consent
-screen (Testing mode, with yourself as a test user, is enough), and an OAuth client of type
-**Desktop app**. Download its JSON and copy it to `google-client.json` in the config directory
-(below), or point `$GOOGLE_CLIENT_JSON` at it. The consent itself must be given in a browser on
-the machine running cast-tv: Google sends it back to `127.0.0.1`.
+The release carries cast-tv's own Google client, so Connect needs no setup. That client is in
+Google's **testing** mode until the app is verified: only Google accounts the author has added as
+**test users** can connect (anyone else sees Google's "Access blocked"; ask to be added), and
+Google asks for consent again about once a week. The consent itself must be given in a browser
+on the machine running cast-tv: Google sends it back to `127.0.0.1`.
+
+*The author adds a test user* in the Google Cloud console, project `cast-tv`: Google Auth
+Platform → Audience → Test users → Add users.
+
+*Your own client (optional; a source install needs one):* a Google Cloud project with the
+**Photos Picker API** enabled, an OAuth consent screen (Testing mode, with yourself as a test
+user), and an OAuth client of type **Desktop app**. Point `$GOOGLE_CLIENT_JSON` at its JSON, or
+save it as `google-client.json` in the config directory (below); either wins over the built-in
+client.
 
 A picked **video** is cast as its original by default, and the original is **downloaded before
 casting**: its host ignores range requests, and the TV gives up waiting for the end of the file.
