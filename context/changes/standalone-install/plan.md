@@ -97,8 +97,9 @@ CLIENT_SECRET = None
 ### Success Criteria:
 
 #### Automated Verification:
-- [ ] `python -m pyflakes castlib tests` and `python -m pytest` pass on ubuntu and windows CI.
-- [ ] `git grep GOCSPX` finds nothing.
+- [x] `python -m pyflakes castlib tests` and `python -m pytest` pass on ubuntu and windows CI.
+      **Done 2026-09-19, `a16f542`** (PR #20; main run 35447819565; 267 passed locally).
+- [x] `git grep GOCSPX` finds nothing but this line. **Done 2026-09-19, `a16f542`.**
 
 #### Manual Verification:
 - [ ] None in this phase; the client is exercised from the release in Phase 3.
@@ -160,7 +161,7 @@ adds a tester. The Cloud-project steps move under "Your own Google client (optio
 
 ## Owner steps (Piotr, before the first release)
 
-1. In the GitHub repo: Settings → Secrets and variables → Actions → New repository secret:
+1. **Done 2026-09-19 14:07 (Piotr; names checked with `gh secret list`).** In the GitHub repo: Settings → Secrets and variables → Actions → New repository secret:
    `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`, the two values from the `cast-tv` Desktop client
    JSON (`client_secret_26923464307-….json`). Claude never sees them.
 2. Google Auth Platform → Audience → Test users: every Google account that should use Photos.
