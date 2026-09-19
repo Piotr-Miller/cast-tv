@@ -1,9 +1,9 @@
 ---
 change_id: cloud-source-ui
 title: Pick media from GoPro, Google Photos and OneDrive in a UI, and cast it
-status: impl_reviewed
+status: implemented
 created: 2026-09-07
-updated: 2026-09-15
+updated: 2026-09-19
 archived_at: null
 ---
 
@@ -296,3 +296,15 @@ silently undo - `RelTime` is `0:00:00`, not `00:00:00`, chief among them.
   `<res resolution size>`) - untested; one evening with `--debug` and three JPEGs.
 - GoPro thumbnails: `/media/search` is not asked for them today; response shape unverified.
 - Google Photos stills via the scraper (`=d` vs `=w…-h…`) - only if the fallback path stays.
+
+## Closed
+
+Every row of `plan.md` is ticked, the last of them 7.3 (Windows) on 2026-09-19 (`27c8e5a`).
+PR #1 merged into `main` on 2026-09-18 (merge `26cf8a1`, head `b8ff218`), 250-odd tests green on
+Ubuntu and Windows. The manual rows that waited on the owner all passed: 4.6 (paste and cast
+from the phone), 5.5 (a real revoke in the Microsoft account), 7.1 (the CI matrix), 7.2 and 7.3
+(pipx on Fedora, the binary on Windows), 7.4 (no suspend during a 30-minute show) and 7.5 (an
+hour-long pause, then a seek). The evidence for each is in `research.md` under its row.
+
+What this change did not settle stays in **Open** above, and the release that puts the result on
+a new PC without Python is the separate `standalone-install` change.
