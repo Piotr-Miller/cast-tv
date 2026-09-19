@@ -316,3 +316,64 @@ def test_firewall_advice_names_the_rule_or_gives_the_command(monkeypatch):
     monkeypatch.setattr(platform, "sys", types.SimpleNamespace(platform="win32"))
     assert platform.firewall_advice(8895, wait=5) == (
         "Open the port, in PowerShell as administrator:  " + platform.firewall_hint(8895))
+
+
+# ------------------------------------------------ the release binary's CA bundle
+# what the bundled OpenSSL, built on Ubuntu, reports as its default paths
+UBUNTU_OPENSSL = types.SimpleNamespace(openssl_cafile="/usr/lib/ssl/cert.pem",
+                                       openssl_capath="/usr/lib/ssl/certs")
+FEDORA_FILES = {"/etc/pki/tls/certs/ca-bundle.crt", "/etc/ssl/cert.pem"}
+DEBIAN_FILES = {"/etc/ssl/certs/ca-certificates.crt"}
+
+
+def _binary(monkeypatch, plat="linux", frozen=True):
+    monkeypatch.setattr(platform, "sys", types.SimpleNamespace(platform=plat, frozen=frozen))
+    monkeypatch.setattr(platform, "ssl", types.SimpleNamespace(
+        get_default_verify_paths=lambda: UBUNTU_OPENSSL))
+
+
+def test_ca_bundle_fedora_gets_its_own(monkeypatch):
+    _binary(monkeypatch)
+    env = {}
+    assert platform.use_system_ca_bundle(env, FEDORA_FILES.__contains__) == \
+        "/etc/pki/tls/certs/ca-bundle.crt"
+    assert env == {"SSL_CERT_FILE": "/etc/pki/tls/certs/ca-bundle.crt"}
+
+
+def test_ca_bundle_debian_layout_without_openssl_default(monkeypatch):
+    _binary(monkeypatch)
+    env = {}
+    assert platform.use_system_ca_bundle(env, DEBIAN_FILES.__contains__) == \
+        "/etc/ssl/certs/ca-certificates.crt"
+    assert env["SSL_CERT_FILE"] == "/etc/ssl/certs/ca-certificates.crt"
+
+
+def test_ca_bundle_ubuntu_keeps_openssl_default(monkeypatch):
+    _binary(monkeypatch)
+    env = {}
+    ubuntu = DEBIAN_FILES | {"/usr/lib/ssl/certs"}
+    assert platform.use_system_ca_bundle(env, ubuntu.__contains__) is None
+    assert env == {}
+
+
+def test_ca_bundle_user_setting_wins(monkeypatch):
+    _binary(monkeypatch)
+    for key in ("SSL_CERT_FILE", "SSL_CERT_DIR"):
+        env = {key: "/home/me/corp-ca.pem"}
+        assert platform.use_system_ca_bundle(env, FEDORA_FILES.__contains__) is None
+        assert env == {key: "/home/me/corp-ca.pem"}
+
+
+def test_ca_bundle_none_found_changes_nothing(monkeypatch):
+    _binary(monkeypatch)
+    env = {}
+    assert platform.use_system_ca_bundle(env, lambda path: False) is None
+    assert env == {}
+
+
+def test_ca_bundle_only_in_the_frozen_linux_build(monkeypatch):
+    for plat, frozen in (("linux", False), ("win32", True), ("darwin", True)):
+        _binary(monkeypatch, plat, frozen)
+        env = {}
+        assert platform.use_system_ca_bundle(env, FEDORA_FILES.__contains__) is None
+        assert env == {}

@@ -8,11 +8,17 @@ fails, staying awake is best effort and never stops a cast.
 
 ``end_on_console_close`` makes closing the console window on Windows end
 cast-tv the way Ctrl+C does, instead of the process simply being ended.
+
+``use_system_ca_bundle`` points the Linux release binary at this machine's
+CA certificates: it carries the OpenSSL of the distribution it was built on,
+which looks for them where that distribution keeps them.
 """
 from __future__ import annotations
 
 import _thread
+import os
 import shutil
+import ssl
 import subprocess
 import sys
 import threading
@@ -346,3 +352,36 @@ def end_on_console_close() -> bool:
         return False
     _console_close = handler
     return True
+
+
+# Where Linux distributions keep the CA bundle: Fedora and RHEL, Debian, Ubuntu and Arch, then
+# Alpine and openSUSE, which keep it at the path OpenSSL itself falls back to.
+CA_BUNDLES = (
+    "/etc/pki/tls/certs/ca-bundle.crt",
+    "/etc/ssl/certs/ca-certificates.crt",
+    "/etc/ssl/cert.pem",
+    "/etc/ssl/ca-bundle.pem",
+)
+
+
+def use_system_ca_bundle(environ=None, exists=os.path.exists) -> str | None:
+    """Set ``SSL_CERT_FILE`` to this machine's CA bundle in the Linux release binary; the file chosen, or None.
+
+    The binary is built on Ubuntu and carries its OpenSSL, which looks under ``/usr/lib/ssl``;
+    Fedora has no such directory, so every HTTPS request failed with CERTIFICATE_VERIFY_FAILED.
+    Nothing changes when the user already set ``SSL_CERT_FILE`` or ``SSL_CERT_DIR``, outside
+    the frozen Linux build, or when OpenSSL's own default path exists.
+    """
+    environ = os.environ if environ is None else environ
+    if not sys.platform.startswith("linux") or not getattr(sys, "frozen", False):
+        return None
+    if environ.get("SSL_CERT_FILE") or environ.get("SSL_CERT_DIR"):
+        return None
+    paths = ssl.get_default_verify_paths()
+    if exists(paths.openssl_cafile) or exists(paths.openssl_capath):
+        return None
+    for bundle in CA_BUNDLES:
+        if exists(bundle):
+            environ["SSL_CERT_FILE"] = bundle
+            return bundle
+    return None
