@@ -545,6 +545,52 @@ def test_no_client_file_is_a_config_error(fake, monkeypatch, tmp_path):
         == {"client_id": "a", "client_secret": "b"}                # a flat file works too
 
 
+def test_client_order(monkeypatch, tmp_path):
+    """GOOGLE_CLIENT_JSON, then the config file, then the client a release carries."""
+    from castlib.auth import _builtin_client
+    monkeypatch.setattr(config, "_CONFIG", str(tmp_path / "config"))
+    monkeypatch.delenv("GOOGLE_CLIENT_JSON", raising=False)
+    monkeypatch.setattr(_builtin_client, "CLIENT_ID", None)
+    monkeypatch.setattr(_builtin_client, "CLIENT_SECRET", None)
+    assert loopback.client_source() is None
+    with pytest.raises(ConfigError) as err:
+        loopback.load_client()
+    assert err.value.code == "no_google_client" and "GitHub Releases" in err.value.hint
+    monkeypatch.setattr(_builtin_client, "CLIENT_ID", "built-id")
+    assert loopback.client_source() is None                      # half filled counts as none
+    monkeypatch.setattr(_builtin_client, "CLIENT_SECRET", "built-secret")
+    assert loopback.client_source() == "built-in"
+    assert loopback.load_client() == {"client_id": "built-id", "client_secret": "built-secret"}
+    os.makedirs(config.config_dir(), exist_ok=True)
+    own = os.path.join(config.config_dir(), loopback.CLIENT_FILE)
+    with open(own, "w", encoding="utf-8") as fh:
+        json.dump({"installed": {"client_id": "file-id", "client_secret": "file-secret"}}, fh)
+    assert loopback.client_source() == own
+    assert loopback.load_client()["client_id"] == "file-id"
+    env = _write_client(tmp_path, {"client_id": "env-id", "client_secret": "env-secret"})
+    monkeypatch.setenv("GOOGLE_CLIENT_JSON", str(env))
+    assert loopback.client_source() == str(env) and loopback.load_client()["client_id"] == "env-id"
+
+
+def test_bad_override_is_an_error(monkeypatch, tmp_path):
+    """An override that is missing or unreadable never falls back to the built-in client."""
+    from castlib.auth import _builtin_client
+    monkeypatch.setattr(config, "_CONFIG", str(tmp_path / "config"))
+    monkeypatch.setattr(_builtin_client, "CLIENT_ID", "built-id")
+    monkeypatch.setattr(_builtin_client, "CLIENT_SECRET", "built-secret")
+    monkeypatch.setenv("GOOGLE_CLIENT_JSON", str(tmp_path / "nope.json"))
+    with pytest.raises(ConfigError) as err:
+        loopback.load_client()
+    assert err.value.code == "no_google_client"
+    monkeypatch.delenv("GOOGLE_CLIENT_JSON")
+    os.makedirs(config.config_dir(), exist_ok=True)
+    with open(os.path.join(config.config_dir(), loopback.CLIENT_FILE), "w", encoding="utf-8") as fh:
+        fh.write("not json")
+    with pytest.raises(ConfigError) as err:
+        loopback.load_client()
+    assert err.value.code == "bad_google_client"
+
+
 def _write_client(tmp_path, data):
     p = tmp_path / "flat.json"
     p.write_text(json.dumps(data), encoding="utf-8")

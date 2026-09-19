@@ -16,7 +16,9 @@ import urllib.parse
 import urllib.request
 import webbrowser
 
+import castlib
 from castlib import net, platform
+from castlib.auth import loopback
 from castlib.app import AlreadyRunning, App
 from castlib.diagnostics import check_codecs
 from castlib.discovery import control_urls, discover
@@ -281,6 +283,13 @@ def ui(port=DEFAULT_PORT, tv=None, debug=False, browser=True):
         return 0
 
 
+def version_text() -> str:
+    """``cast-tv <version>`` and the Google Photos client's origin: built in, a file, or none."""
+    source = loopback.client_source()
+    where = {"built-in": "built in", None: "none"}.get(source, "from " + str(source))
+    return "cast-tv %s\nGoogle Photos client: %s" % (castlib.__version__, where)
+
+
 def main_tv(argv=None):
     platform.end_on_console_close()     # a closed window ends it like Ctrl+C
     ap = argparse.ArgumentParser(
@@ -307,7 +316,13 @@ def main_tv(argv=None):
                     help="do not open the UI in a browser")
     ap.add_argument("-c", "--cookies", metavar="FILE",
                     help="Netscape cookie jar, for material behind a login")
+    ap.add_argument("--version", action="store_true",
+                    help="print the version and where the Google Photos client comes from")
     args = ap.parse_args(argv)
+
+    if args.version:
+        print(version_text())
+        return 0
 
     if args.list_devices:
         for ip, url, name in discover():
