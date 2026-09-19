@@ -151,11 +151,11 @@ adds a tester. The Cloud-project steps move under "Your own Google client (optio
       Release in Edge, run it (SmartScreen noted), allow the firewall if asked. Google Photos:
       Connect → consent (Piotr's account, a test user) → pick a photo and a video → both play on
       the Samsung. OneDrive: device-code sign-in, a video plays. Share link: the video link plays.
-      Closing the window stops the TV. — 86abd21
+      Closing the window stops the TV. — 2085903
 - [ ] **3.2 Linux**: the same file on Fedora, `chmod +x`, run; Google Photos Connect and a pick
       cast; a HEIC photo from OneDrive or the picker converts and shows.
 - [x] **3.3 Not a tester**: a second Google account that is not a test user: Google shows
-      "Access blocked"; the gate's line explains it; Cancel returns to the gate. — 81a7733
+      "Access blocked"; the gate's line explains it; Cancel returns to the gate. — b28f9c9
 - [ ] **3.4 Weekly consent**: about 7 days after 3.1, the tab shows "The Google Photos consent
       expired"; Connect again restores it (recorded when it happens, not waited for).
 
