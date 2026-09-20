@@ -3,7 +3,7 @@ project: cast-tv
 version: 1
 status: active
 created: 2026-09-19
-updated: 2026-09-19
+updated: 2026-09-20
 prd_version: 1
 main_goal: personal-use-then-share
 top_blocker: time
@@ -168,6 +168,8 @@ starting points, not findings.
 
 - **cloud-source-ui** (F-01, S-01..S-06): merged as PR #1 on 2026-09-18, every plan row ticked,
   row 7.3 (Windows) last. PRs #2-#8 were a second implementation of the same UI built on `main`
-  in another session; PR #9 reverted it in favour of PR #1.
+  in another session; PR #9 reverted it in favour of PR #1. Archived 2026-09-20 (#32) →
+  `context/archive/2026-09-07-cloud-source-ui/`, where its plan, research and reviews stay
+  readable.
 - **Follow-ups** (S-07): #10 sleep control recorded, #11 console close stops the TV, #13 managed
   firewall policy detected, #14 photo share links say so, #16 share link before sign-in.
