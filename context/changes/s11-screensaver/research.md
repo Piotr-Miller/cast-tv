@@ -486,9 +486,12 @@ only `GetMute,SetMute`. The Samsung extensions are advertised in the SCPD and no
    screen, each with whatever the TV shows for that key. That is the honest cost; whether it is worth
    paying is Piotr's call, and the alternative is a README line saying a slideshow needs a nudge of
    the remote every two minutes.
-4. **Not yet explained**: Piotr's original report included a long film. Everything measured today says
-   a playing film is safe. The likely reconciliation is a paused film, or a different source (a dark,
-   near-static scene), and it should be settled before anything is built.
+4. **The film half of the report stays unconfirmed.** Asked whether that film had been paused, Piotr
+   answered "Nie pamiętam" - he does not remember, and nothing is gained by inventing a reason. So the
+   scope rests on what was measured today, **photos and paused casts**, and the film report is carried
+   as unreproduced: a playing film survived six minutes here. No session should be spent chasing it;
+   if the saver ever appears over a normally playing film, that observation gets written here and the
+   scope is revisited.
 
 ### Corrections made during the run
 
