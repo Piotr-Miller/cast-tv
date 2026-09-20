@@ -121,7 +121,7 @@ starting points, not findings.
 - **Ideas:** a periodic harmless key over Samsung's remote-control WebSocket API (ports
   8001/8002, needs a one-time pairing on the TV); a slideshow sent as one video stream instead of
   single photos, so the TV sees playback.
-- **Closed 2026-09-20, documented rather than built** (`context/changes/s11-screensaver/`). Measured
+- **Closed 2026-09-20, documented rather than built** (`context/archive/2026-09-20-s11-screensaver/`). Measured
   on the TV: a still photo goes dark 124 s after a remote key press, a slideshow at 8 s goes dark
   inside the same window, a moving film survives six minutes - so the trigger is a motionless
   picture, counted from the last remote key. No TV setting is left to change, and no DLNA call
