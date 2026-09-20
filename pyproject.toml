@@ -31,3 +31,7 @@ castlib = ["ui/*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+# The suite runs servers in threads, so a hung test hangs the whole run - CI once sat ten
+# minutes on a green commit. After this many seconds without a test finishing, faulthandler
+# dumps every thread's stack, which names the test; the run still goes to the job's timeout.
+faulthandler_timeout = 120
