@@ -1,10 +1,10 @@
 ---
 change_id: s11-screensaver
 title: Watch a slideshow or a long film without the TV's screen saver cutting in
-status: implemented
+status: archived
 created: 2026-09-20
 updated: 2026-09-20
-archived_at: null
+archived_at: 2026-09-20T17:55:00Z
 ---
 
 ## Notes
