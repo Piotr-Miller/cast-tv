@@ -53,5 +53,11 @@ The outcome is a paragraph in README's Limitations, naming the two-minute timer,
 does not reset it, that a paused film counts as a still picture, and that a nudge of the remote
 brings the picture back without re-casting. `research.md` keeps the evidence.
 
+**Settled afterwards by the manual** (`research.md`, the 2026-09-20 evening follow-up): on the
+S8\*F/S9\*F series the saver starts after 2 minutes and **cannot be disabled, to protect the
+pixels**, where other models use a two-hour threshold. There is nothing to switch off, and the one
+avenue that addresses the cause - a Tizen app calling `setScreenSaver` - is a different project
+from cast-tv.
+
 **Revisit only if** the two-minute blanking turns out to block ordinary use - in which case the
 first step is the prototype above, not a full feature.

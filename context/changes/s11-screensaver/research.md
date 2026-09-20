@@ -499,3 +499,35 @@ Two claims of Claude's were wrong and were withdrawn on the spot: that the slide
 behind the saver from 16:07 (it had never started), and that the timer counts only remote input
 regardless of content (run C shows video holds the screen). Both are recorded here so the numbers above
 are read with the right history.
+
+## Follow-up: the model's own manual settles it, 2026-09-20 evening
+
+Piotr asked the obvious question - can the saver simply be switched off for photos? Claude
+suggested the "Auto Protection Time" setting might be hiding in Panel Care. **That suggestion was
+unfounded**, and the Polish manual for this model settles the matter without another trip to the TV.
+
+- **Page 174**, under Energy Saving → Screen Saver, gives the general rule and then the exception
+  for this series verbatim: "Jeśli telewizor wyświetla nieruchomy obraz przez dwie godziny lub
+  dłużej, może zostać uaktywniony wygaszacz ekranu. … Jeśli telewizor wyświetla ten sam obraz przez
+  2 minuty, Wygaszacz ekranu jest aktywowany automatycznie. **Wygaszacz ekranu nie można wyłączyć,
+  aby zapewnić ochronę pikseli. (S8\*F/S9\*F)**" - if the TV shows a still image for two hours or
+  more the saver may start; on S8\*F/S9\*F it starts after **2 minutes** and **cannot be disabled,
+  to protect the pixels**.
+- So this series has a threshold sixty times shorter than other models, and is the one that cannot
+  turn it off. Our measurement - 124 s from a remote key - is that documented behaviour, not a fault.
+- **Page 164**, Panel Care, lists exactly three items: Pixel Shift, Auto Logo Brightness, Pixel
+  Refresh. **There is no screen-saver switch there.**
+- "Auto Protection Time", which Samsung documents as switchable, belongs to other sets - The Frame
+  among them - not to this series. Nothing needed photographing; the manual answers it.
+
+This confirms the README sentence written before the check, which is now backed by the manual
+rather than by inference from support pages.
+
+### The one avenue this leaves, for the record
+
+Samsung's `setScreenSaver(SCREEN_SAVER_OFF)` is offered to **apps running on the TV**, and Samsung
+recommends it for photo slideshows specifically. A Tizen app of our own could call it. That is a
+different project from cast-tv - a TV application, published or side-loaded, rather than a laptop
+serving DLNA - and it would have to be verified on an S85F, since the manual's "cannot be disabled"
+may or may not bind an app using that API. Recorded because it is the only path that addresses the
+cause rather than dismissing the symptom; not proposed.

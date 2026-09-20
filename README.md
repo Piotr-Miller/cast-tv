@@ -269,8 +269,10 @@ last press of the TV's remote, not from anything cast-tv does. Measured on a 202
 slideshow changing every 8 s went dark inside the same window, while a moving film was still
 playing after six minutes. **A paused film is a still picture too.** Nudge the remote to bring
 the picture back - the cast keeps running behind the saver, so the photo returns by itself and
-nothing needs re-casting. Samsung documents this protection as one that cannot be switched off,
-no setting on the TV avoids it, and nothing in DLNA can suppress it; suppressing it is an
+nothing needs re-casting. Samsung's own manual for this series is explicit - "Wygaszacz
+ekranu nie można wyłączyć, aby zapewnić ochronę pikseli. (S8*F/S9*F)", the screen saver cannot
+be switched off, to protect the pixels - and the Panel Care menu offers only pixel shift, logo
+brightness and pixel refresh. Nothing in DLNA can suppress it either; suppressing it is an
 opt-in call available only to apps running on the TV itself. The measurements are in
 `context/archive/`, under the `s11-screensaver` change.
 
