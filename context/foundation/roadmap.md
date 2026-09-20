@@ -43,7 +43,7 @@ conversion and the cast supervisor. Delivered with `cloud-source-ui` (PR #1, 202
 | S-08 | standalone-install | download one file on a new PC and use every tab | S-06 | US-04; FR-030 | in progress (only row 3.4, from 2026-09-26) |
 | S-09 | (not opened) | cast a photo or a motion photo's clip from a share link | S-05 | FR-012 | backlog |
 | S-10 | (not opened) | connect Google Photos with any Google account, without weekly re-consent | S-08 | US-04 | parked |
-| S-11 | (proposed) | watch a slideshow or a long film without the TV's screen saver cutting in | S-02 | US-03 | proposed (seen live 2026-09-19) |
+| S-11 | s11-screensaver | watch a slideshow or a long film without the TV's screen saver cutting in | S-02 | US-03 | closed 2026-09-20: documented, not built |
 | S-12 | (proposed) | run cast-tv as a desktop window on Windows and Linux, not only a browser tab | S-08 | — | proposed |
 | S-13 | (proposed) | connect GoPro without copying a token by hand | S-03 | FR-010 | proposed |
 | S-14 | (proposed) | cast to Google TV and Chromecast devices, not only DLNA TVs | S-02 | — | proposed |
@@ -121,6 +121,14 @@ starting points, not findings.
 - **Ideas:** a periodic harmless key over Samsung's remote-control WebSocket API (ports
   8001/8002, needs a one-time pairing on the TV); a slideshow sent as one video stream instead of
   single photos, so the TV sees playback.
+- **Closed 2026-09-20, documented rather than built** (`context/changes/s11-screensaver/`). Measured
+  on the TV: a still photo goes dark 124 s after a remote key press, a slideshow at 8 s goes dark
+  inside the same window, a moving film survives six minutes - so the trigger is a motionless
+  picture, counted from the last remote key. No TV setting is left to change, and no DLNA call
+  suppresses it: on this set a fresh `SetAVTransportURI` + `Play` every 8 s did not. The owner
+  declined the remote-key workaround (a visible key press every ~100 s) and the encode-as-video one
+  (it breaks the no-transcoding boundary, and the evidence that had ruled it out is gone). The
+  behaviour is now a paragraph in README's Limitations.
 
 ### S-12: A desktop UI on Windows and Linux
 
