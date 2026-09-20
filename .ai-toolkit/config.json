@@ -1,11 +1,11 @@
 {
   "$comment": "A record, not a control file. Nothing in @piotr-miller/ai-toolkit reads this file; it exists so a human, or an agent onboarding into this repository, can see which package, tools and exact version own the authoring skills here, without a private dependency and without tracked installation state. The CLI's own state lives in .ai-toolkit/manifest.json, which is gitignored. This repository takes the managed channel only (sync): the recovery channel and Millrune are course-licensed and never installed into a public repository - see README.md, Repository tooling.",
   "package": "@piotr-miller/ai-toolkit",
-  "version": "1.4.0",
+  "version": "1.5.1",
   "profile": "cast-tv",
   "channels": ["managed"],
   "tools": ["claude", "codex"],
-  "install": "npm exec --yes --package=@piotr-miller/ai-toolkit@1.4.0 -- ai-toolkit sync",
+  "install": "npm exec --yes --package=@piotr-miller/ai-toolkit@1.5.1 -- ai-toolkit sync",
   "registry": "https://npm.pkg.github.com",
   "auth": "user-level npm credential, read:packages - see the package's docs/bootstrap-auth.md"
 }
