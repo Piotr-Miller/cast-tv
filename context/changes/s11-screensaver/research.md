@@ -9,6 +9,7 @@ tags: [research, s11-screensaver, samsung, tizen, dlna, upnp, screensaver]
 status: complete
 last_updated: 2026-09-20
 last_updated_by: Claude (Opus 5)
+last_updated_note: "Added the measurement run of 2026-09-20 15:52-16:35 CEST"
 ---
 
 # Research: the screen saver over a playing cast
@@ -401,3 +402,97 @@ Polish and English menu path, and close S-11 without code. Measure that first, b
 7. **What does `X_PlayerAppHint` accept, and does the TV honour it?** Unknown to every source; cheap to
    try.
 8. **Token durability** — undocumented; only a paired token left dormant for days would show it.
+
+## Follow-up: the measurement, 2026-09-20 15:52-16:35 CEST
+
+Run by Piotr at the TV with Claude driving the laptop; every cast came from a **local file**
+through the CLI, so no cloud source and no Google consent was touched (row 3.4 of
+`standalone-install` is unaffected). `watch-tv.py` logged the network side once a second
+throughout. Times below are wall clock on the laptop; where a number depends on Piotr noticing
+something, that is said.
+
+### The TV's settings, read off the screen (photographs, not committed)
+
+- **Firmware `T-PTMFDEUC-0090-1301.0`** (`E2592200, BT - S`), model `QE83S85FAEXXH`, name `83" OLED`.
+  This is the current firmware for the model.
+- **Power and Energy Saving** ("Oszczędzanie energii"): Energy Saving Solution **off**, Brightness
+  Optimisation **off**, Minimum brightness 20, Dynamic brightness **off**, **Auto Power Saving off**,
+  Auto Power Off **4 h**, no-signal Auto power off **disabled**.
+
+**So every configurable energy feature is already off.** That removes the second candidate from the
+research above - the presence-based screen-off cannot be what fires - and it kills the cheapest
+possible outcome: **there is no setting left to change**. What remains is the OLED protective Screen
+Saver, which Samsung documents as non-disableable.
+
+### What the network sees: nothing
+
+While the screen was covered **during an active cast**, every field stayed exactly as it was with the
+picture visible: `CurrentTransportState PLAYING`, `RelTime 0:00:00`, `PowerState on`, mute `0`,
+volume `0`, and no field of the port-8001 device dictionary changed. The same held with nothing
+casting at 15:52. **cast-tv cannot detect the screen saver over the network**, so the UI must never
+claim to know whether the picture is visible. Open question 3 of this document is answered: no.
+
+### Run A - one still photo
+
+- 16:00:08 cast started, 16:00:35 `PLAYING`. First blackout reported 16:03:50, but Piotr had been in
+  the TV's menus just before, so that interval is not clean.
+- **Clean measurement: a remote key at 16:04:27, dark again 124 s later.** Allowing for the seconds
+  it takes to type, that is Samsung's documented **2 minutes**, counted from the key press.
+- The key press **dismissed** the saver and **re-armed** it, exactly as the external sources said.
+- **The cast survived intact**: Piotr's words, "wróciło zdjęcie" - the photo came back by itself, no
+  re-cast needed. The saver covers the picture; it does not end the DLNA session.
+
+### Run B - a slideshow, 20 photos at 8 s
+
+First attempt did not run at all (`python -m castlib` from another directory: "No module named
+castlib"); what was on screen then was still run A's photo, held by the TV after its server had gone.
+The corrected run cast 100 slides.
+
+- Key press 16:21:38. At 16:24:17, **159 s later and 18 slide changes later, the screen was dark**.
+- Each slide is a fresh `SetAVTransportURI` + `Play`; the log shows the `TRANSITIONING` → `PLAYING`
+  pair every 8 s throughout.
+
+**This is the periodic-`Play` experiment, run at an 8-second interval, and it failed.** No DLNA
+keepalive can work if a new URI and a new `Play` every 8 s do not hold the screen. The **NONE** verdict
+in `frame.md` now rests on our own evidence, not only on the standard's silence.
+
+### Run C - a moving film, 13 minutes
+
+- Key press 16:28:23 with the film already playing.
+- **16:31:02, 159 s later: the picture was there** ("Film"). **16:34:10, 347 s later - nearly six
+  minutes - still there**, position advancing 9:11 / 12:57.
+
+**A moving picture defeats the timer; a still one does not.** This overturns the reading this document
+started from. The clause that fires on this set is Samsung's **"the same still image"**, not "no input
+signal", and a slideshow counts as a succession of still images - eight seconds of a motionless frame
+is evidently as still as eight minutes of one.
+
+### The vendor extension, closed
+
+`X_PlayerAppHint` was called with four combinations of `UpnpClass` and `PlayerHint`
+(`object.item.imageItem.photo` / `object.item.videoItem` × `video` / `1` / `VideoPlayer`): **every one
+answered `402 Invalid Args`**. Consistent with `X_GetServiceCapabilities` on RenderingControl naming
+only `GetMute,SetMute`. The Samsung extensions are advertised in the SCPD and not usable. Lead closed.
+
+### What this means for the change
+
+1. **The problem is photos, not playback in general.** A film is safe; a slideshow is not; and a
+   **paused** film is a still image, which explains the one long-playback row the archive has
+   (row 7.5 held `PAUSED_PLAYBACK` for 65 minutes). That narrows any feature to "while a photo is on
+   screen, or while a cast is paused".
+2. **No setting, no DLNA path.** Both cheap outcomes are gone, on our own evidence.
+3. **The only lever left is the remote channel**, and the measurement sets its terms: a key press
+   buys **2 minutes**, so a keepalive means a real key every ~100 s for as long as photos are on
+   screen, each with whatever the TV shows for that key. That is the honest cost; whether it is worth
+   paying is Piotr's call, and the alternative is a README line saying a slideshow needs a nudge of
+   the remote every two minutes.
+4. **Not yet explained**: Piotr's original report included a long film. Everything measured today says
+   a playing film is safe. The likely reconciliation is a paused film, or a different source (a dark,
+   near-static scene), and it should be settled before anything is built.
+
+### Corrections made during the run
+
+Two claims of Claude's were wrong and were withdrawn on the spot: that the slideshow had been running
+behind the saver from 16:07 (it had never started), and that the timer counts only remote input
+regardless of content (run C shows video holds the screen). Both are recorded here so the numbers above
+are read with the right history.
