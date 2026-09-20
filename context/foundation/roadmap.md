@@ -43,7 +43,7 @@ conversion and the cast supervisor. Delivered with `cloud-source-ui` (PR #1, 202
 | S-08 | standalone-install | download one file on a new PC and use every tab | S-06 | US-04; FR-030 | in progress (only row 3.4, from 2026-09-26) |
 | S-09 | (not opened) | cast a photo or a motion photo's clip from a share link | S-05 | FR-012 | backlog |
 | S-10 | (not opened) | connect Google Photos with any Google account, without weekly re-consent | S-08 | US-04 | parked |
-| S-11 | s11-screensaver | watch a slideshow or a long film without the TV's screen saver cutting in | S-02 | US-03 | closed 2026-09-20: documented, not built |
+| S-11 | s11-screensaver | watch a slideshow or a long film without the TV's screen saver cutting in | S-02 | US-03 | done |
 | S-12 | (proposed) | run cast-tv as a desktop window on Windows and Linux, not only a browser tab | S-08 | — | proposed |
 | S-13 | (proposed) | connect GoPro without copying a token by hand | S-03 | FR-010 | proposed |
 | S-14 | (proposed) | cast to Google TV and Chromecast devices, not only DLNA TVs | S-02 | — | proposed |
@@ -181,3 +181,8 @@ starting points, not findings.
   readable.
 - **Follow-ups** (S-07): #10 sleep control recorded, #11 console close stops the TV, #13 managed
   firewall policy detected, #14 photo share links say so, #16 share link before sign-in.
+- **S-11: watch a slideshow without the TV's screen saver cutting in** - Archived 2026-09-20 →
+  `context/archive/2026-09-20-s11-screensaver/`. Closed as documented, not built: on this S85F the
+  saver starts after 2 minutes on a motionless picture and the manual says it cannot be switched
+  off; a moving film is unaffected. Lesson: measure the device before planning a workaround - the
+  measurement killed two of the three candidate fixes and rewrote the third's rationale.
