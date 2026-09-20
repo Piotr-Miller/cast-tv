@@ -262,6 +262,18 @@ into an MKV work on their own.
 **Photos** are decoded on the laptop; a 20-megapixel HEIC from OneDrive took about 6 s from
 the click to the TV fetching it. A slideshow prepares the next two photos ahead.
 
+**The TV's own screen saver covers a photo after two minutes**, and a slideshow does not stop
+it: the panel protection on a Samsung OLED reacts to a motionless picture and counts from the
+last press of the TV's remote, not from anything cast-tv does. Measured on a 2025 S85F
+(firmware `T-PTMFDEUC-0090-1301.0`): a still photo went dark 124 s after a key press, a
+slideshow changing every 8 s went dark inside the same window, while a moving film was still
+playing after six minutes. **A paused film is a still picture too.** Nudge the remote to bring
+the picture back - the cast keeps running behind the saver, so the photo returns by itself and
+nothing needs re-casting. Samsung documents this protection as one that cannot be switched off,
+no setting on the TV avoids it, and nothing in DLNA can suppress it; suppressing it is an
+opt-in call available only to apps running on the TV itself. The measurements are in
+`context/archive/`, under the `s11-screensaver` change.
+
 **Google Photos** picks are not kept across restarts, and the one-time consent must happen on
 the host. **GoPro** tokens last hours, not days.
 
