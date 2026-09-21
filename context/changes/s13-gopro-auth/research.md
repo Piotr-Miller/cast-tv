@@ -163,3 +163,100 @@ third-party route with public source borrows GoPro's embedded web credentials fo
 grant, which no GoPro page permits. Whatever replaces the paste either reuses a real browser
 session (the cookie) or goes through the gated Cloud API application; there is no third road on
 today's evidence.
+
+## Spike: an app-owned Chrome window, read over CDP from the standard library (2026-09-21, 20:03)
+
+Against the Chrome installed on the Fedora workstation, headless, with a throwaway profile in the
+session scratchpad. No GoPro page was opened and no credential was used: the cookie read here was
+one the spike set itself. Run for `/10x-plan` to prove the plumbing of the mechanism before
+recommending it; the real gopro.com sign-in in such a window is Phase 5 of the plan.
+
+**What the previous source said.** `frame.md:62-65` - only devtools, an extension with the cookies
+permission, or a browser the app owns can read the HttpOnly cookie. Nothing in the folder said how
+an app-owned browser would hand the cookie over.
+
+**Documentary half** (all read 2026-09-21).
+
+- **The DevTools port file** - once the port is bound Chrome writes `"<port>\n/devtools/browser/<uuid>"`
+  to `DevToolsActivePort` in the user data dir "so Telemetry, ChromeDriver, etc. can pick it up"
+  (https://chromium.googlesource.com/chromium/src/+/main/content/browser/devtools/devtools_http_handler.cc;
+  the reader side in `chrome/browser/devtools/remote_debugging_server.cc`). Puppeteer defaults to
+  `--remote-debugging-port=0` (commit `26145e9`).
+- **The port needs a non-default profile** - since Chrome 136 `--remote-debugging-port` and
+  `--remote-debugging-pipe` are ignored on the default data directory and "must now be accompanied
+  by the `--user-data-dir` switch to point to a non-standard directory"
+  (https://developer.chrome.com/blog/remote-debugging-port, 2025-03-17). The same post names cookie
+  extraction over remote debugging as the abuse the change targets - which is what this design does
+  with the person's own consent, in a profile the app owns.
+- **The `Origin` check** - the WebSocket endpoint answers 403 only when the request *carries* an
+  `Origin` header outside `--remote-allow-origins` (`devtools_http_handler.cc`, `OnWebSocketRequest`);
+  a client with no `Origin` connects (Selenium issue #11750, 2023-03-08, Chrome 111).
+- **What a cookie looks like** - `Network.Cookie` has `name`, `value`, `domain`, `path`, `expires`
+  ("seconds since the UNIX epoch … -1 if the expiry date is not set"), `size`, `httpOnly`, `secure`,
+  `session`, `sameSite`, … ; `Storage.getCookies` "Returns all browser cookies" at the browser
+  endpoint (https://raw.githubusercontent.com/ChromeDevTools/devtools-protocol/master/json/browser_protocol.json).
+- **One process per data directory** - `ProcessSingleton` "is named according to the user data
+  directory", so a fresh directory always starts a new browser even while the person's own Chrome
+  runs (https://chromium.googlesource.com/chromium/src/+/main/chrome/browser/process_singleton.h;
+  https://chromium.googlesource.com/chromium/src/+/main/docs/user_data_dir.md).
+- **Edge** takes the same switches and "matches the APIs of the Chrome DevTools Protocol"
+  (https://learn.microsoft.com/en-us/microsoft-edge/devtools-protocol-chromium, updated 2025-11-26);
+  the enterprise policy `RemoteDebuggingAllowed` can block it
+  (https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies/remotedebuggingallowed).
+  `--app=<url>` is Chromium's application-mode switch (https://peter.sh/experiments/chromium-command-line-switches/).
+- **Firefox** disabled CDP by default in 129 (2024-05-28 announcement) and removed it in 141
+  (2025-07-22; https://developer.mozilla.org/en-US/docs/Mozilla/Firefox/Releases/141,
+  https://fxdx.dev/cdp-retirement-in-firefox/). Firefox is not a candidate.
+- **Where Windows keeps them** - Chrome's installer registers
+  `Software\Microsoft\Windows\CurrentVersion\App Paths\chrome.exe` (https://www.chromium.org/developers/installer/);
+  Playwright probes `%LOCALAPPDATA%`, `%PROGRAMFILES%`, `%PROGRAMFILES(X86)%` +
+  `Google\Chrome\Application\chrome.exe` / `Microsoft\Edge\Application\msedge.exe` without the registry
+  (https://github.com/microsoft/playwright/blob/main/packages/playwright-core/src/server/registry/index.ts).
+  No Microsoft document states Edge's install path or an `App Paths\msedge.exe` key; the plan probes
+  both and treats either as a hint, not a guarantee.
+
+**Empirical half.**
+
+```
+google-chrome --version                       # Google Chrome 153.0.8010.47
+google-chrome --headless=new --user-data-dir=<scratch>/cdp-profile --remote-debugging-port=0 \
+              --no-first-run --no-default-browser-check about:blank
+cat <scratch>/cdp-profile/DevToolsActivePort  # 44041 / /devtools/browser/d6257305-…
+curl -s http://127.0.0.1:44041/json/version   # {"Browser":"Chrome/153.0.8010.47", …, "webSocketDebuggerUrl":"ws://127.0.0.1:44041/devtools/browser/…"}
+python3 cdp_spike.py                          # a socket-only WebSocket client; the script is in the session scratchpad, not in the repository
+```
+
+- The port file appeared **0.3 s** after launch on the second run (first run: within the 10 s wait).
+- The handshake without an `Origin` header answered 101; `Target.getTargets` listed `page`,
+  `browser_ui`, `browser_ui`, `background_page`.
+- `Storage.setCookies` planted two cookies for `gopro.com`, one with `httpOnly: true` and an expiry
+  an hour ahead, one plain; `Storage.getCookies` returned both, the first as
+  `{'name': 'gp_access_token', 'httpOnly': True, 'secure': True, 'expires': 1790017486.3, 'session': False}`,
+  the second with `'expires': -1, 'session': True`.
+- `Browser.close` ended the process; `wait()` returned **0**.
+- The browsers on this machine: `google-chrome`, `google-chrome-stable` and `firefox` on `PATH`; no
+  Chromium, Brave, Edge or Flatpak browser.
+
+**Not yet checked:** a real gopro.com sign-in inside an `--app` window of a fresh profile (bot
+gating, social-login popups, 2FA); whether `gp_access_token` as GoPro sets it is a session cookie or
+persistent (the `session` / `expires` fields will say, Phase 5); whether the `Preferences` pre-seed
+switches the password manager off in Chrome and in Edge; Edge on the Windows laptop; a keyring
+prompt on Linux without `--password-store=basic`.
+
+**What this settles:** the hand-off can be built on the standard library alone against a
+Chromium-family browser the host already has - the port file, the WebSocket without `Origin`, the
+HttpOnly read and the graceful close all behave as documented on today's Chrome - and Firefox is
+out. What it does not settle is GoPro's side of the window; that stays a manual row.
+
+## Measurements
+
+To be filled by the owner from Phase 5 of the plan; values only, never a token.
+
+| Field | Observation | Date |
+| --- | --- | --- |
+| `cookie.session` / `cookie.expires` at capture | | |
+| Sign-in method and seconds to the list (Fedora, Chrome) | | |
+| Sign-in method and seconds to the list (Windows, Edge, the artifact) | | |
+| Worked for at least (last successful call after capture) | | |
+| First refusal (first 401 after capture) | | |
+| "Open gopro.com again" after the refusal: closed without typing, or asked to sign in | | |
