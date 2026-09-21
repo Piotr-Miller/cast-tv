@@ -127,8 +127,8 @@ the plan's. The plan must not assume a token lasts hours until someone measures 
   `castlib/ui/index.html:210,273`, `castlib/sources/onedrive.py:39`,
   `castlib/auth/loopback.py:14-19`
 - Related research: `context/changes/s13-gopro-auth/research.md` (two spikes, 2026-09-20);
-  a correction is owed to its lines 20-26 (Request Access → `/connect`, not the
-  enterprise-application form)
+  the correction to its lines 20-26 (Request Access → `/connect`, not the
+  enterprise-application form) was applied 2026-09-21, confirmed from the page's HTML
 - Prior decisions: `context/archive/2026-09-07-cloud-source-ui/change.md:179-189`,
   `context/foundation/lessons.md:27-32`, commit `90da614`
 - External (all read 2026-09-20): https://gopro.com/en/us/info/developer-tools;
@@ -138,3 +138,35 @@ the plan's. The plan must not assume a token lasts hours until someone measures 
   https://github.com/JeroenMinnaert/gopro-media-downloader
 - Investigation tasks: no task-list tool in this session; two read-only sub-agents
   (hand-off; standing with GoPro), 2026-09-20, no GoPro credential used or seen
+
+## Addendum (2026-09-21): the narrowing round, re-run after a `/clear`
+
+The session that wrote this brief stopped at its closing question (plan, verify, discuss or
+stop); its Step 4 answers are in the hypothesis table above. The decision was taken in a fresh
+session on 2026-09-21, after one more narrowing round on the same observation and map. Owner's
+answers, each a signal for the decision this brief leaves to the owner:
+
+- **Tradeoff** — "if the devtools trip disappeared and the token were still a session borrowed
+  from my own browser, that would be enough": the standing problem is a comment, not a
+  blocker; the hand-off alone satisfies the stated observation.
+- **Character of the "hack"** — technical and terms-related at once, not separated ("obie
+  naraz"): the standing problem stays a stated limitation in whatever is planned.
+- **Since the archived decision** (2026-09-08, "revisit only if pasting a token proves
+  genuinely painful in use") — "nothing; I use it the same way": the revisit condition is unmet
+  by the owner's own account; the work is sized for a craft judgment by the tab's only user,
+  not for measured pain.
+- **Cross-check** — an Explore agent given only the observation landed on the hand-off
+  dimension independently, and added a constraint the map above lacks: the devtools step
+  already cannot finish on a phone, and both remaining mechanisms (an app-owned browser, an
+  extension) are desktop-only, against US-03 "sign-ins that finish on the phone"
+  (`context/foundation/prd.md:100-104`); the archived note already says the webview "gives up
+  phone access" (`context/archive/2026-09-07-cloud-source-ui/change.md:187-188`). The app
+  already has one host-only connection step, though: Google's consent "must be given in a
+  browser on the machine running cast-tv" (`README.md:157-158`, `castlib/ui/app.js:38`,
+  `castlib/auth/loopback.py:4-11`), and US-03 names Google's *picker*, not its consent, among
+  the steps that finish on the phone. The constraint is real; it is not a new kind of
+  exception (added 2026-09-21 in the review of this addendum).
+- **FR-010** writes the paste into the requirement (`prd.md:129-130`); if the paste goes, the
+  PRD sentence goes with it. The "no public sign-in" sentence is undated in `app.js:16`,
+  `README.md:125`, archived `research.md:259` and `standalone-install/research.md:42`; it holds
+  only narrowly now and needs a dated source whatever else happens.

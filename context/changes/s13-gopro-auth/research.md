@@ -22,9 +22,15 @@ a link or a read date.
   Access >" (https://gopro.com/en/us/info/developer-tools, which
   https://gopro.com/en/us/info/open-gopro redirects to; read 2026-09-20). The page's lead says
   "Apply to create a developer account, download our SDKs, or use our other tools that we offer
-  under open source licenses." Both "Request Access" and "APPLY TO ACCESS SDKS" link to
-  `https://gopro.com/account?target=enterprise-application`.
-- **The application sits behind a GoPro sign-in** — opened without a session, that URL lands on
+  under open source licenses." "APPLY TO ACCESS SDKS" links to
+  `https://gopro.com/account?target=enterprise-application`; the Cloud API's "Request Access"
+  links to `https://gopro.com/en/us/connect` — *corrected 2026-09-21*: the 2026-09-20 read
+  recorded both buttons as the enterprise-application URL; the page's HTML (curl, browser UA,
+  2026-09-21) puts "Request Access" under the `/connect` href in both of its copies. `/connect`,
+  read by the owner in a browser on 2026-09-20, is a sales and partnership intake (tabs Bulk
+  Purchasing / Business Partnerships / Reseller Opportunities / Public Relations; Company
+  required) — see `frame.md`, hypothesis 2.
+- **The SDK application sits behind a GoPro sign-in** — opened without a session, that URL lands on
   `https://gopro.com/login?redirect_uri=https%3A%2F%2Fgopro.com%2Faccount%3Ftarget%3Denterprise-application`,
   "Sign in to continue to GoPro." (read 2026-09-20 in Chrome). What the form asks and who is
   eligible was not read.
@@ -71,8 +77,9 @@ curl -sS "https://api.gopro.com/media/search?per_page=1" -H "Accept: application
 - `GET /media/search` without a token answers **406**, 0 bytes (the app sends
   `Accept: application/vnd.gopro.jk.media+json; version=2.0.0`, `castlib/sources/gopro.py:27`;
   without a token the API does not negotiate at all).
-- **The developer application: pending a GoPro account sign-in.** The form is behind
-  `gopro.com/login`; signing in is the owner's action, not the agent's.
+- **The SDK application: pending a GoPro account sign-in.** The form is behind
+  `gopro.com/login`; signing in is the owner's action, not the agent's. (The Cloud API's own
+  route, `/connect`, is a business intake that asks for a company — corrected 2026-09-21, above.)
 
 **Not yet checked:** what the enterprise-application form asks and whether an individual
 developer is eligible; whether the Cloud API beta issues an OAuth client or another kind of
@@ -83,7 +90,8 @@ announcement page (https://gopro.com/en/us/news/open-gopro-announce, 403 to non-
 **What this settles:** the prior sentence stands in its narrow reading and falls in its broad
 one — there is still no self-serve, documented sign-in for third-party applications, but GoPro
 now advertises a gated "Cloud API (BETA)" for exactly the upload/download/playback the app
-needs, behind an application form the owner can open; and the Terms of Use, read today, permit
+needs, behind a business intake form (`/connect`, corrected 2026-09-21; the 2026-09-20 text
+said "an application form the owner can open"); and the Terms of Use, read today, permit
 access only through GoPro's own software or a general web browser. That is the fact set a frame
 has to weigh before anything is planned.
 
