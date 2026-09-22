@@ -12,7 +12,7 @@ from castlib import config
 from castlib.auth import browser, cdp
 from castlib.errors import AuthError
 from tests.conftest import wait_for
-from tests.fakes_cdp import FakeBrowser, cookie
+from tests.fakes_cdp import FakeBrowser, Refuse, cookie
 
 
 @pytest.fixture
@@ -233,6 +233,41 @@ def test_process_exit_is_browser_closed(engine, monkeypatch):
     assert err.value.code == "browser_closed"
     assert err.value.message == "The gopro.com window was closed before a session appeared."
     assert fake.closed == 0 and fake.terminated == 0 and fake.killed == 0   # nothing to close, nothing touched
+
+
+def test_cdp_failure_with_a_live_browser_is_browser_failed(engine, monkeypatch):
+    """Phase 1 review F1: a browser still running when DevTools fails is a failed hand-off, not a closed window."""
+    fake = engine()
+    _use(monkeypatch, fake)
+    h = browser.Handoff().start(lambda value: True)
+    wait_for(lambda: fake.polls >= 1)
+    fake.drop_connections()                                         # the socket dies; the window stays open
+    with pytest.raises(AuthError) as err:
+        h.wait()
+    assert err.value.code == "browser_failed" and "DevTools" in err.value.message
+    assert "it was closed" in err.value.message
+    assert fake.closed == 0 and fake.terminated == 1 and fake.process.poll() == -15   # closed by us, the hard way
+    # the browser answers the command with an error and keeps running: the same failure, closed gracefully
+    refusing = engine()
+
+    def refuse(params):
+        raise Refuse("Storage domain is not available")
+    refusing.handlers["Storage.getCookies"] = refuse
+    _use(monkeypatch, refusing)
+    h = browser.Handoff().start(lambda value: True)
+    with pytest.raises(AuthError) as err:
+        h.wait()
+    assert err.value.code == "browser_failed" and "not available" in err.value.message
+    assert refusing.closed == 1 and refusing.process.poll() == 0 and refusing.terminated == 0
+    # and a socket that dies because the process left is still the person closing the window
+    gone = engine()
+    _use(monkeypatch, gone)
+    h = browser.Handoff().start(lambda value: True)
+    wait_for(lambda: gone.polls >= 1)
+    gone.close_window()
+    with pytest.raises(AuthError) as err:
+        h.wait()
+    assert err.value.code == "browser_closed"
 
 
 def test_timeout_closes_the_browser(engine, monkeypatch):

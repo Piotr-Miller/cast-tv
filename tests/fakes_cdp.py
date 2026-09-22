@@ -26,6 +26,10 @@ import uuid
 GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
 
+class Refuse(Exception):
+    """Raised by a handler in ``handlers``: the endpoint answers a protocol error with this message."""
+
+
 def cookie(value, domain=".gopro.com", name="gp_access_token", session=False, expires=1790000000.0):
     """A ``Network.Cookie`` as ``Storage.getCookies`` returns one (fields observed 2026-09-21)."""
     return {"name": name, "value": value, "domain": domain, "path": "/", "expires": -1 if session else expires,
@@ -293,7 +297,10 @@ class FakeBrowser:
         if self.stall:
             return None
         if method in self.handlers:
-            result = self.handlers[method](params)
+            try:
+                result = self.handlers[method](params)
+            except Refuse as e:
+                return {"id": msg.get("id"), "error": {"code": -32000, "message": str(e)}}
         elif method == "Storage.getCookies":
             self.polls += 1
             result = {"cookies": [dict(c) for c in self.cookies]}
