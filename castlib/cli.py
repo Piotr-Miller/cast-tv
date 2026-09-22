@@ -18,7 +18,7 @@ import webbrowser
 
 import castlib
 from castlib import net, platform
-from castlib.auth import loopback
+from castlib.auth import browser, loopback
 from castlib.app import AlreadyRunning, App
 from castlib.diagnostics import check_codecs
 from castlib.discovery import control_urls, discover
@@ -284,10 +284,19 @@ def ui(port=DEFAULT_PORT, tv=None, debug=False, browser=True):
 
 
 def version_text() -> str:
-    """``cast-tv <version>`` and the Google Photos client's origin: built in, a file, or none."""
+    """``cast-tv <version>``, the Google Photos client's origin, and the browser the GoPro window would use.
+
+    Three lines, so a support question is answered from one command. Nothing
+    is launched: the third line is the first candidate ``browser.candidates()``
+    would try, or ``CAST_TV_BROWSER`` when set (with ``(not found)`` when the
+    file is missing), or ``none found (token paste only)``.
+    """
     source = loopback.client_source()
     where = {"built-in": "built in", None: "none"}.get(source, "from " + str(source))
-    return "cast-tv %s\nGoogle Photos client: %s" % (castlib.__version__, where)
+    window = browser.describe()
+    if window == "none found":
+        window += " (token paste only)"
+    return "cast-tv %s\nGoogle Photos client: %s\nGoPro window: %s" % (castlib.__version__, where, window)
 
 
 def self_check() -> str:
@@ -332,7 +341,8 @@ def main_tv(argv=None):
     ap.add_argument("-c", "--cookies", metavar="FILE",
                     help="Netscape cookie jar, for material behind a login")
     ap.add_argument("--version", action="store_true",
-                    help="print the version and where the Google Photos client comes from")
+                    help="print the version, where the Google Photos client comes from, "
+                         "and which browser would open the gopro.com window")
     ap.add_argument("--self-check", action="store_true", help=argparse.SUPPRESS)   # the release smoke test
     args = ap.parse_args(argv)
 

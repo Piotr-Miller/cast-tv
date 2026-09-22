@@ -225,7 +225,7 @@ def test_ctrl_c_before_run_forever_takes_over(monkeypatch):
 
 
 def test_version_names_the_client(monkeypatch, tmp_path, capsys):
-    """``--version``: the version, and where the Google Photos client would come from."""
+    """``--version``: the version, where the Google Photos client would come from, the GoPro window's browser."""
     import castlib
     from castlib import config
     from castlib.auth import _builtin_client
@@ -233,8 +233,12 @@ def test_version_names_the_client(monkeypatch, tmp_path, capsys):
     monkeypatch.delenv("GOOGLE_CLIENT_JSON", raising=False)
     monkeypatch.setattr(_builtin_client, "CLIENT_ID", None)
     monkeypatch.setattr(_builtin_client, "CLIENT_SECRET", None)
+    exe = tmp_path / "chrome"
+    exe.write_text("", encoding="utf-8")
+    monkeypatch.setenv("CAST_TV_BROWSER", str(exe))
     assert cli.main_tv(["--version"]) == 0
-    assert capsys.readouterr().out.splitlines() == ["cast-tv " + castlib.__version__, "Google Photos client: none"]
+    assert capsys.readouterr().out.splitlines() == ["cast-tv " + castlib.__version__, "Google Photos client: none",
+                                                    "GoPro window: CAST_TV_BROWSER=" + str(exe)]
     monkeypatch.setattr(_builtin_client, "CLIENT_ID", "id")
     monkeypatch.setattr(_builtin_client, "CLIENT_SECRET", "secret")
     cli.main_tv(["--version"])
@@ -242,6 +246,24 @@ def test_version_names_the_client(monkeypatch, tmp_path, capsys):
     monkeypatch.setenv("GOOGLE_CLIENT_JSON", str(tmp_path / "mine.json"))
     cli.main_tv(["--version"])
     assert capsys.readouterr().out.splitlines()[1] == "Google Photos client: from " + str(tmp_path / "mine.json")
+
+
+def test_version_names_the_gopro_window(monkeypatch, tmp_path, capsys):
+    """The third line comes from ``browser.describe()``; nothing is launched."""
+    from castlib.auth import browser
+    launched = []
+    monkeypatch.setattr(browser, "launch", lambda *a, **kw: launched.append(a))
+    monkeypatch.setenv("CAST_TV_BROWSER", "/nonexistent")
+    assert cli.main_tv(["--version"]) == 0
+    assert capsys.readouterr().out.splitlines()[2] == "GoPro window: CAST_TV_BROWSER=/nonexistent (not found)"
+    monkeypatch.delenv("CAST_TV_BROWSER")
+    monkeypatch.setattr(browser, "candidates", lambda **kw: ["/usr/bin/google-chrome", "/usr/bin/chromium"])
+    cli.main_tv(["--version"])
+    assert capsys.readouterr().out.splitlines()[2] == "GoPro window: /usr/bin/google-chrome"
+    monkeypatch.setattr(browser, "candidates", lambda **kw: [])
+    cli.main_tv(["--version"])
+    assert capsys.readouterr().out.splitlines()[2] == "GoPro window: none found (token paste only)"
+    assert launched == []
 
 
 def test_self_check_converts_a_heic(capsys):

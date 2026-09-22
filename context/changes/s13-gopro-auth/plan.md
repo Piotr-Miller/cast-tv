@@ -802,13 +802,13 @@ profile directory and `gopro-session.json` behind, harmless and removable by han
 #### Automated
 
 - [ ] 1.1 Unit tests pass on both systems: `python -m pytest tests/test_cdp.py tests/test_browser.py tests/test_cli.py`
-- [ ] 1.2 Lint passes: `python -m pyflakes castlib tests`
+- [x] 1.2 Lint passes: `python -m pyflakes castlib tests`
 - [ ] 1.3 The PR's release-build job is green on both runners and its smoke step prints a `GoPro window:` line naming a browser
 - [ ] 1.4 The artifact `cast-tv-windows-x64.exe` is downloadable from the run
 
 #### Manual
 
-- [ ] 1.5 On Fedora, `.venv/bin/cast-tv --version` prints three lines and the third names `/usr/bin/google-chrome`
+- [x] 1.5 On Fedora, `.venv/bin/cast-tv --version` prints three lines and the third names `/usr/bin/google-chrome`
 
 ### Phase 2: The source and the API
 
