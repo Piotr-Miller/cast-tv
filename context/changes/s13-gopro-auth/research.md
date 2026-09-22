@@ -248,6 +248,21 @@ Chromium-family browser the host already has - the port file, the WebSocket with
 HttpOnly read and the graceful close all behave as documented on today's Chrome - and Firefox is
 out. What it does not settle is GoPro's side of the window; that stays a manual row.
 
+## Phase observations
+
+One entry per ticked manual row (`lessons.md:5-10`): the row, the date, the machine, what was seen.
+
+### Phase 1
+
+- **Row 1.5** (2026-09-22, the Fedora workstation, from the checkout). `--version` printed three
+  lines; the third read `GoPro window: /usr/bin/google-chrome` (Google Chrome 153.0.8010.47 at that
+  path). The owner confirmed the three lines. The venv carries no `cast-tv` script (the package is
+  not installed in it), so the module form `.venv/bin/python -m castlib --version` is the same
+  command; the agent's own run of it printed `cast-tv 0.3.0`, `Google Photos client: from
+  ~/.config/cast-tv/google-client.json`, `GoPro window: /usr/bin/google-chrome`. With
+  `CAST_TV_BROWSER=/nonexistent` the third line read
+  `GoPro window: CAST_TV_BROWSER=/nonexistent (not found)`. Nothing was launched.
+
 ## Measurements
 
 To be filled by the owner from Phase 5 of the plan; values only, never a token.
