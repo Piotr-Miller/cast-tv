@@ -262,6 +262,12 @@ One entry per ticked manual row (`lessons.md:5-10`): the row, the date, the mach
   ~/.config/cast-tv/google-client.json`, `GoPro window: /usr/bin/google-chrome`. With
   `CAST_TV_BROWSER=/nonexistent` the third line read
   `GoPro window: CAST_TV_BROWSER=/nonexistent (not found)`. Nothing was launched.
+- **Rows 1.1, 1.3, 1.4** (2026-09-22, commit `bec95a4`, PR #40). The test workflow (run 35772205093)
+  passed on `ubuntu-latest` and `windows-latest`. The release build (run 35772205088) was green on
+  `ubuntu-22.04` and `windows-latest`; its smoke step printed `GoPro window: /usr/bin/google-chrome`
+  on Ubuntu and `GoPro window: C:\Program Files\Google\Chrome\Application\chrome.exe` on Windows
+  (discovery only; nothing launched). Artifacts: `cast-tv-windows-x64.exe` (22 584 564 bytes) and
+  `cast-tv-linux-x64` (35 341 932 bytes); the `.exe` was downloaded from the run to check the row.
 
 ## Measurements
 

@@ -215,9 +215,12 @@ class Handoff:
     ``wait()`` blocks for its outcome: the result ``{"token", "captured_at",
     "cookie": {"session", "expires"}}``, or ``AuthError`` with the code
     ``no_browser`` (no candidate at all), ``browser_failed`` (every candidate
-    failed to yield a DevTools port; the reason attached), ``browser_closed``
-    (the window went away before a value verified), ``browser_timeout`` (the
-    deadline passed; the window was closed) or ``cancelled``. ``cancel()``
+    failed to yield a DevTools port, or the running browser refused the
+    command or lost the connection; the reason attached, no retry),
+    ``browser_closed`` (the process ended before a value verified),
+    ``browser_timeout`` (the deadline passed; the window was closed) or
+    ``cancelled``. Only ``no_browser`` and ``browser_failed`` are failures of
+    the mechanism; the source offers the token paste for those alone. ``cancel()``
     closes the browser this object launched - ``Browser.close`` first, so the
     profile's cookies are flushed, then ``terminate``, then ``kill`` - and
     never any other process.
@@ -365,10 +368,15 @@ class Handoff:
                 raise self._closed_error()
             try:
                 answer = session.call("Storage.getCookies")
-            except cdp.CdpError:
-                if proc is not None:
-                    _wait(proc, CLOSE_GRACE)     # the window went: let the process leave before reporting
-                raise self._closed_error()
+            except cdp.CdpError as e:
+                if self._cancelled:
+                    raise self._cancelled_error()
+                # the window went, and the process with it (given the grace): closed by the person;
+                # a browser still running that refused the command or lost the socket: the mechanism failed
+                if proc is not None and (proc.poll() is not None or _wait(proc, CLOSE_GRACE)):
+                    raise self._closed_error()
+                raise AuthError("browser_failed", "The gopro.com window stopped answering over DevTools (%s); "
+                                "it was closed." % e.message, source="gopro")
             for cookie in answer.get("cookies") or []:
                 if not isinstance(cookie, dict) or cookie.get("name") != COOKIE_NAME:
                     continue
