@@ -132,6 +132,61 @@ def test_gopro_steps_are_not_duplicated_in_the_ui():
     assert "fallback(tab).steps" in html and "fallbackText(tab)" in html
 
 
+def drive_ui(steps):
+    """Run the page's component in node against scripted answers (tests/ui_driver.js); skipped without node."""
+    import json
+    import os
+    import shutil
+    import subprocess
+    import pytest
+    from castlib.server import UI_DIR
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node is not installed")
+    driver = os.path.join(os.path.dirname(__file__), "ui_driver.js")
+    done = subprocess.run([node, driver, os.path.join(UI_DIR, "app.js")], input=json.dumps({"steps": steps}),
+                          capture_output=True, text=True, encoding="utf-8", timeout=30)
+    assert done.returncode == 0, done.stderr
+    return json.loads(done.stdout)
+
+
+def _status(gopro):
+    return {"tv": None, "tvs": [], "interfaces": [], "cast": None, "show": None, "sources": {"gopro": gopro},
+            "session": [], "errors": 0, "settings": {"interval": 8}}
+
+
+def test_gopro_expired_list_survives_a_failed_reconnect():
+    """S-13 review F1: a round from the expired banner that ends without a session keeps the last list
+    under the banner; the list is fetched again only once the source is connected again."""
+    connected = {"state": "connected", "detail": {"stored": True, "age": "session captured just now"}}
+    expired = {"state": "expired", "detail": {"stored": True, "age": "session captured 9 h ago",
+                                              "error": {"code": "token_rejected", "message": "GoPro rejected the token (401)"}}}
+    connecting = {"state": "connecting", "detail": {"stored": True, "step": "browser", "expires_in": 299, "note": "n"}}
+    out = drive_ui([
+        {"answer": {"path": "/api/sources/gopro/list", "body": {"items": [{"source": "gopro", "id": "a", "name": "A.MP4", "kind": "video"}]}}},
+        {"status": _status(connected)}, {"call": "refresh"},
+        {"read": "listVisible", "args": ["gopro"]},                       # the list is on screen
+        {"status": _status(expired)}, {"call": "refresh"},
+        {"read": "listVisible", "args": ["gopro"]},                       # expired: the banner sits over that list
+        {"answer": {"path": "/api/sources/gopro/connect", "body": dict(connecting, step="browser")}},
+        {"status": _status(connecting)},
+        {"call": "openWindow", "args": ["gopro"]},                        # "Open gopro.com again"
+        {"read": "listVisible", "args": ["gopro"]},                       # the gate shows the waiting block
+        {"status": _status(expired)}, {"call": "refresh"},                # the window was closed, cancelled or timed out
+        {"read": "listVisible", "args": ["gopro"]},                       # the banner over the last list again
+        {"read": "items", "args": ["gopro"]},
+        {"status": _status(connected)}, {"call": "refresh"},              # a session was captured
+        {"read": "listVisible", "args": ["gopro"]},
+    ])
+    on_screen, over_list, gate, kept, items, again = out["reads"]
+    assert on_screen is True and over_list is True and gate is False
+    assert kept is True, "a failed reconnect must not drop the list the banner sits over"
+    assert [it["id"] for it in items] == ["a"]
+    assert again is True
+    assert "POST /api/sources/gopro/connect" in out["requests"]
+    assert out["requests"].count("GET /api/sources/gopro/list") == 2      # once connected, once reconnected
+
+
 def open_ui_bytes():
     from castlib.server import UI_DIR
     import os
