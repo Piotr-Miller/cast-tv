@@ -300,6 +300,11 @@ One entry per ticked manual row (`lessons.md:5-10`): the row, the date, the mach
   `stopped`, no show) and was ended with SIGTERM before the row was rerun. And the migration case of
   the plan ("a token file from before this change keeps working ... `captured_by` reads `unknown`") was
   observed for real, not only in `test_a_replaced_token_file_drops_the_metadata`.
+- **Row 2.1, the CI half** (2026-09-23, commit `ed8f964`, PR #40). The test workflow (run 35906449051)
+  passed on `ubuntu-latest` and `windows-latest` (the whole suite, `test_gopro.py` and `test_api.py`
+  included). The release build (run 35906449032) was green on `ubuntu-22.04` and `windows-latest`; its
+  smoke step printed `GoPro window: /usr/bin/google-chrome` and `GoPro window: C:\Program
+  Files\Google\Chrome\Application\chrome.exe`, so the `.exe` of this commit exists for Phase 5.
 
 ## Measurements
 

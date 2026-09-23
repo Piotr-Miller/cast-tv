@@ -646,12 +646,8 @@ class GoProSource:
         except OSError:
             pass
 
-    def _adopt(self, tok: str, from_env: bool, meta: dict | None = None) -> None:
-        """A verified credential becomes the session's: new generation, connected."""
-        with self._lock:
-            self._adopt_locked(tok, from_env, meta)
-
     def _adopt_locked(self, tok: str, from_env: bool, meta: dict | None) -> None:
+        """A verified credential becomes the session's: new generation, connected (caller holds ``_lock``)."""
         self._token, self._from_env, self._loaded = tok, from_env, True
         self._gen += 1
         self._verified_at, self._expired_at, self._error = time.time(), None, None
@@ -809,8 +805,10 @@ class GoProSource:
 
         ``{"token": ...}`` is the paste, verified *before* it is saved, so a
         bad paste leaves the stored token (and the source's state) exactly as
-        they were. ``{}`` with a stored, unexpired token verifies it without a
-        window; with nothing stored, or after ``expired``, or with
+        they were; a disconnect, a newer paste or ``close()`` landing during
+        the verification wins, and the paste is dropped. ``{}`` with a
+        stored, unexpired token verifies it without a window (under the same
+        rule); with nothing stored, or after ``expired``, or with
         ``{"fresh": true}``, it starts a round and answers ``{step:
         "browser", ...}``; while a round runs, ``{}`` answers that round.
         ``{"cancel": true}`` ends a running round.
@@ -821,21 +819,30 @@ class GoProSource:
             if not isinstance(pasted, str) or not pasted.strip():
                 raise ConfigError("bad_token", "Paste the token first.", source="gopro")
             tok, _ = fold_double_paste(pasted)
+            with self._lock:
+                self._check_open()
+                gen = self._gen
             search(tok, 1)                         # a 401 propagates; nothing changes here
             meta = session_meta("paste", time.time())
-            save_token(pasted, meta)
-            self._adopt(tok, from_env=False, meta=meta)   # from now on every request uses the paste
-            self._cancel_flow()                    # a window still open has nothing left to hand over
+            record = None
+            with self._lock:
+                self._check_open()                 # closed meanwhile: nothing is adopted after close()
+                if self._gen == gen:               # else disconnected or replaced meanwhile: the later action stands
+                    save_token(pasted, meta)
+                    self._adopt_locked(tok, False, meta)   # from now on every request uses the paste
+                    record, self._flow = self._flow, None  # a window still open has nothing left to hand over
+            if record is not None:
+                record["handoff"].cancel()
             return self.status()
         if params.get("cancel"):
             self._cancel_flow()
             return self.status()
+        tok, gen = self._credential()
         with self._lock:
             self._check_open()
             running, expired = self._flow is not None, self._expired_at is not None
         if running:
             return dict(self.status(), step="browser")   # the same round, not a second window
-        tok, gen = self._credential()
         if tok is not None and not expired and not params.get("fresh"):
             try:
                 search(tok, 1)                     # the stored token, proven without a window
@@ -843,8 +850,8 @@ class GoProSource:
                 self._refused(e, gen)
                 raise
             with self._lock:
-                from_env = self._from_env
-            self._adopt(tok, from_env)
+                if self._gen == gen:               # else disconnected or replaced meanwhile: the later action stands
+                    self._adopt_locked(tok, self._from_env, None)
             return self.status()
         return self._start_flow()
 
@@ -863,9 +870,9 @@ class GoProSource:
             self._flow_error = self._fallback = None
             self._meta, self._meta_written = session_meta(None), None
             self._raw.clear()
+            forget_token()                       # under the lock: a paste adopted after this cannot lose its file
         if record is not None:
             record["handoff"].cancel()
-        forget_token()
         browser.remove_profile()
 
     def close(self) -> None:
