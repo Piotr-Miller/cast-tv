@@ -815,12 +815,12 @@ profile directory and `gopro-session.json` behind, harmless and removable by han
 #### Automated
 
 - [ ] 2.1 `python -m pytest tests/test_gopro.py tests/test_api.py` passes on both CI systems
-- [ ] 2.2 The full suite passes: `python -m pytest`
-- [ ] 2.3 Lint passes: `python -m pyflakes castlib tests`
+- [x] 2.2 The full suite passes: `python -m pytest`
+- [x] 2.3 Lint passes: `python -m pyflakes castlib tests`
 
 #### Manual
 
-- [ ] 2.4 On Fedora, `POST /api/sources/gopro/connect {"fresh": true}` opens a gopro.com window; status shows `connecting/browser`; closing the window by hand yields `flow_error.code == "browser_closed"` and no `fallback`
+- [x] 2.4 On Fedora, `POST /api/sources/gopro/connect {"fresh": true}` opens a gopro.com window; status shows `connecting/browser`; closing the window by hand yields `flow_error.code == "browser_closed"` and no `fallback`
 
 ### Phase 3: The UI gate
 

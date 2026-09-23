@@ -7,17 +7,29 @@ functions stay as the CLI's building blocks and the source's own.
 The token is a five-segment JWE whose expiry cannot be read locally: the only
 expiry signal is a 401 from the API, so the source keeps *when it last worked*
 and flips to ``expired`` on the first 401 from any call.
+
+Since S-13 the usual way in is the hand-off (``castlib.auth.browser``): a
+gopro.com window cast-tv opens on the host, whose session cookie is verified
+against the API and stored exactly as a paste is. The source runs it as a
+round in the shape of the Google Photos consent - ``connecting`` with
+``step: "browser"``, one round at a time, a late result dropped when the
+generation moved on. Next to the token, ``gopro-session.json`` keeps what is
+known about the session (when and how it was captured, when it last worked,
+when it was first refused, the cookie's expiry) and never the token; the first
+refusal reports that observed period to Diagnostics through ``report``.
 """
 from __future__ import annotations
 
 import json
 import os
 import re
+import textwrap
 import threading
 import time
 import urllib.parse
 
 from castlib import config, net
+from castlib.auth import browser
 from castlib.errors import AuthError, ConfigError, NotMedia, UpstreamError
 from castlib.items import MediaItem, Upstream
 from castlib.media import kind_from_facets, note_hidden_kind, probe_media
@@ -34,21 +46,39 @@ LIST_FIELDS = ("id,filename,captured_at,content_title,file_size,type,width,heigh
 THUMB_LABEL = "large"         # /media/{id}/download?labels=large: a JPEG still of a video
 PAGE_SIZE = 100               # entries per /media/search page
 HEAVY_MBIT = 60.0             # above this average bitrate the TV is likely to refuse the source
-HOW_TO_GET_A_TOKEN = """
-The token comes from a logged-in browser and lasts a few hours:
+SESSION_NAME = "gopro-session"   # + .json: the session's timing fields next to the token, never the token
+META_WRITE_EVERY = 60.0       # seconds between sidecar writes for last_success_at (thumbs would rewrite it per request)
+META_KEYS = ("captured_at", "captured_by", "cookie", "last_success_at", "first_401_at")
+ON_HOST_NOTE = ("The gopro.com window opens on the computer running cast-tv, not on the device "
+                "showing this page.")
+STANDING_NOTE = ("GoPro publishes no sign-in for other applications (checked 2026-09-20; "
+                 "see README, Limitations).")
+# The devtools route, the one source of the steps: the CLI prints them below, the UI's fallback
+# block lists them when no gopro.com window can be opened on the host.
+TOKEN_STEPS = (
+    "open https://gopro.com/media-library/ and sign in",
+    "F12 -> Application -> Storage -> Cookies -> https://gopro.com",
+    "copy the value of gp_access_token (it starts with eyJ); or: F12 -> Network -> any "
+    "api.gopro.com request -> Request Headers -> the part of \"authorization\" after \"Bearer \"",
+)
 
-  1. open https://gopro.com/media-library/ and sign in
-  2. F12 -> Application -> Storage -> Cookies -> https://gopro.com
-  3. copy the value of gp_access_token (it starts with eyJ)
-     or: F12 -> Network -> any api.gopro.com request -> Request Headers ->
-         the part of "authorization" after "Bearer "
-  4. cast-gopro --token eyJhbGc...
-"""
+
+def _numbered(steps) -> str:
+    return "\n".join(textwrap.fill(step, width=78, initial_indent="  %d. " % n, subsequent_indent="     ")
+                     for n, step in enumerate(steps, 1))
+
+
+HOW_TO_GET_A_TOKEN = ("\nRun cast-tv, open the GoPro tab and press Open gopro.com. Or, from a signed-in browser:\n\n"
+                      + _numbered(TOKEN_STEPS + ("cast-gopro --token eyJhbGc...",)) + "\n\n" + STANDING_NOTE + "\n")
 
 
 # ---------------------------------------------------------------- the token
 def token_file() -> str:
     return os.path.join(config.config_dir(), TOKEN_NAME)
+
+
+def session_file() -> str:
+    return os.path.join(config.config_dir(), SESSION_NAME + ".json")
 
 
 def token(explicit=None) -> str:
@@ -73,46 +103,152 @@ def fold_double_paste(value: str) -> tuple[str, bool]:
     return value, False
 
 
-def save_token(value: str) -> str:
-    """Store the token (mode 0600); returns the path. A double paste is folded to one copy."""
-    value, doubled = fold_double_paste(value)
-    if not value:
-        raise ConfigError("bad_token", "Paste the token first.", source="gopro")
-    if doubled:
-        print("The token was pasted twice - storing one copy.")
-    config.write_private(token_file(), value)
-    return token_file()
+def session_meta(captured_by: str | None, captured_at: float | None = None, cookie: dict | None = None) -> dict:
+    """The session's timing fields, every key present: how and when the token was captured, the cookie's
+    ``session``/``expires`` (a window capture only), when it last worked, when it was first refused."""
+    if isinstance(cookie, dict):
+        cookie = {"session": bool(cookie.get("session")), "expires": cookie.get("expires")}
+    else:
+        cookie = None
+    return {"captured_at": captured_at, "captured_by": captured_by, "cookie": cookie,
+            "last_success_at": None, "first_401_at": None}
 
 
-def forget_token() -> None:
-    try:
-        os.unlink(token_file())
-    except FileNotFoundError:
-        pass
-
-
-def stored_at() -> float | None:
-    """When the token file was written, or ``None`` (no file, or the token comes from the environment)."""
-    if os.environ.get("GOPRO_TOKEN"):
-        return None
+def _token_mtime() -> float | None:
     try:
         return os.path.getmtime(token_file())
     except OSError:
         return None
 
 
-def age_text(since: float | None, now: float | None = None) -> str | None:
-    """``"token stored 3 h ago"`` for the header line; ``None`` when there is no time to show."""
+def write_session(meta: dict) -> None:
+    """Persist ``meta`` next to the token (mode 0600, atomic), stamped with the token file's mtime.
+
+    The stamp is what ties the sidecar to *this* token: a token file replaced
+    outside cast-tv has another mtime, and ``read_session`` then ignores the
+    sidecar rather than describe a session it knows nothing about. Nothing
+    here is secret; the token never enters the file.
+    """
+    data = {k: meta.get(k) for k in META_KEYS}
+    data["token_mtime"] = _token_mtime()
+    config.write_private(session_file(), json.dumps(data))
+
+
+def read_session() -> dict | None:
+    """The sidecar's fields, or ``None`` when there is none or it belongs to another token file."""
+    try:
+        with open(session_file(), encoding="utf-8") as fh:
+            data = json.load(fh)
+    except (OSError, ValueError):
+        return None
+    mtime = _token_mtime()
+    if not isinstance(data, dict) or mtime is None or data.get("token_mtime") != mtime:
+        return None
+    meta = session_meta(data.get("captured_by"), data.get("captured_at"), data.get("cookie"))
+    meta["last_success_at"], meta["first_401_at"] = data.get("last_success_at"), data.get("first_401_at")
+    return meta
+
+
+def store_token(value: str, meta: dict | None = None) -> str:
+    """Write the token (mode 0600) and its session metadata; returns the path. ``meta`` defaults to a paste made now."""
+    config.write_private(token_file(), value)
+    write_session(meta if meta is not None else session_meta("paste", time.time()))
+    return token_file()
+
+
+def save_token(value: str, meta: dict | None = None) -> str:
+    """Store a pasted token (mode 0600); returns the path. A double paste is folded to one copy."""
+    value, doubled = fold_double_paste(value)
+    if not value:
+        raise ConfigError("bad_token", "Paste the token first.", source="gopro")
+    if doubled:
+        print("The token was pasted twice - storing one copy.")
+    return store_token(value, meta)
+
+
+def forget_token() -> None:
+    """Remove the token file and its sidecar; nothing to do when they are absent."""
+    for path in (token_file(), session_file()):
+        try:
+            os.unlink(path)
+        except FileNotFoundError:
+            pass
+
+
+def stored_at() -> float | None:
+    """When the token file was written, or ``None`` (no file, or the token comes from the environment)."""
+    if os.environ.get("GOPRO_TOKEN"):
+        return None
+    return _token_mtime()
+
+
+def age_text(since: float | None, now: float | None = None, what: str = "token stored") -> str | None:
+    """``"token stored 3 h ago"`` / ``"session captured 3 h ago"`` for the header line; ``None`` with no time to show."""
     if since is None:
         return None
     seconds = max(0.0, (now or time.time()) - since)
     if seconds < 90:
-        return "token stored just now"
+        return "%s just now" % what
     if seconds < 3600:
-        return "token stored %d min ago" % round(seconds / 60)
+        return "%s %d min ago" % (what, round(seconds / 60))
     if seconds < 48 * 3600:
-        return "token stored %d h ago" % round(seconds / 3600)
-    return "token stored %d days ago" % round(seconds / 86400)
+        return "%s %d h ago" % (what, round(seconds / 3600))
+    return "%s %d days ago" % (what, round(seconds / 86400))
+
+
+def _stamp(t: float) -> str:
+    return time.strftime("%Y-%m-%d %H:%M", time.localtime(t))
+
+
+def _span(seconds: float) -> str:
+    seconds = max(0, int(round(seconds)))
+    days, rest = divmod(seconds, 86400)
+    hours, rest = divmod(rest, 3600)
+    minutes = rest // 60
+    if days:
+        return "%d day%s %d h" % (days, "" if days == 1 else "s", hours)
+    if hours:
+        return "%d h %d min" % (hours, minutes)
+    if minutes:
+        return "%d min" % minutes
+    return "%d s" % seconds
+
+
+def observed_period(meta: dict, stored_at: float | None = None, now: float | None = None) -> str:
+    """The first refusal's Diagnostics text: what was observed, never a lifetime.
+
+    "Session captured 2026-09-21 20:10. Worked for at least 6 h 12 min (last
+    successful call). First refusal 9 h 40 min after capture. Cookie expires:
+    2026-10-21 12:00 (persistent)." A token with no success on record says so;
+    a session cookie says so; a paste says "Token pasted"; a token file with no
+    sidecar dates itself by its mtime.
+    """
+    now = now or time.time()
+    by = meta.get("captured_by") or "unknown"
+    captured = meta.get("captured_at") or (stored_at if by == "unknown" else None)
+    lead = {"window": "Session captured", "paste": "Token pasted",
+            "env": "Token from GOPRO_TOKEN since"}.get(by, "Token stored")
+    parts = ["%s %s." % (lead, _stamp(captured)) if captured else "Capture time unknown."]
+    last = meta.get("last_success_at")
+    if last and captured:
+        parts.append("Worked for at least %s (last successful call)." % _span(last - captured))
+    elif last:
+        parts.append("Last successful call %s." % _stamp(last))
+    else:
+        parts.append("No successful call recorded.")
+    first = meta.get("first_401_at") or now
+    if captured:
+        parts.append("First refusal %s after capture." % _span(first - captured))
+    else:
+        parts.append("First refusal %s." % _stamp(first))
+    cookie = meta.get("cookie")
+    if isinstance(cookie, dict):
+        expires = cookie.get("expires")
+        if cookie.get("session"):
+            parts.append("Session cookie (no expiry set).")
+        elif isinstance(expires, (int, float)) and not isinstance(expires, bool) and expires > 0:
+            parts.append("Cookie expires: %s (persistent)." % _stamp(expires))
+    return " ".join(parts)
 
 
 # ------------------------------------------------------------------ the API
@@ -375,6 +511,23 @@ class GoProSource:
     touches the state only while its generation is still current. A 401 sets
     ``expired``; a plain list/thumb/resolve success never restores
     ``connected`` - only a successful verification does (p4 review F1, F2).
+
+    The hand-off is a **round** (``_flow``): ``connect()`` starts one when
+    nothing is stored, after ``expired``, or on ``{"fresh": true}``; a second
+    ``connect({})`` meanwhile answers the same round, ``{"cancel": true}`` ends
+    it. The round's ``Handoff`` verifies each cookie value through ``_verify``
+    (``search(tok, 1)``; a 401 is a stale value, not an expiry of the session),
+    and its result is adopted under the lock only while the generation it
+    started with is current - a disconnect, a paste or ``close()`` in between
+    drops it, the window being closed already. ``no_browser`` and
+    ``browser_failed`` set ``_fallback`` (the paste's cue for the UI); a closed
+    window, a timeout or a cancel only end the round.
+
+    The session's timing fields (``_meta``) mirror ``gopro-session.json``: a
+    success moves ``last_success_at`` (written at most once a minute), the
+    first 401 stamps ``first_401_at``, writes at once and reports the observed
+    period through ``report`` - once per transition to ``expired``, never per
+    thumbnail. ``GOPRO_TOKEN`` keeps them in memory only.
     """
 
     name = "gopro"
@@ -389,10 +542,18 @@ class GoProSource:
         self._verified_at: float | None = None   # when the session credential was last verified
         self._expired_at: float | None = None    # the first 401 on it, until a new one is verified
         self._error: dict | None = None
+        self._flow: dict | None = None           # the round in progress: {started_at, expires_at, handoff, gen}
+        self._flow_error: dict | None = None     # how the last round ended, until the next one starts
+        self._fallback: dict | None = None       # {reason, steps}: no window can open here; the paste applies
+        self._meta: dict = session_meta(None)    # the session's timing fields (see session_meta)
+        self._meta_written: float | None = None  # monotonic time of the last throttled sidecar write
+        self._started = time.time()              # what GOPRO_TOKEN's "captured_at" reads
+        self._closed = False                     # close() is final: no round starts after it
+        self.report = None                       # set by the App to errors.push: the first refusal lands in Diagnostics
 
     # ---------------------------------------------------------- bookkeeping
     def _credential(self) -> tuple[str | None, int]:
-        """``(token, generation)`` of the session; the first call reads the environment or the file."""
+        """``(token, generation)`` of the session; the first call reads the environment or the file, and the sidecar."""
         with self._lock:
             if not self._loaded:
                 self._loaded = True
@@ -401,36 +562,175 @@ class GoProSource:
                     self._token = token()
                 except AuthError:
                     self._token = None
+                self._meta = self._load_meta()
             return self._token, self._gen
+
+    def _load_meta(self) -> dict:
+        """The timing fields for the credential just read (caller holds ``_lock``)."""
+        if self._token is None:
+            return session_meta(None)
+        if self._from_env:
+            return session_meta("env", self._started)
+        return read_session() or session_meta("unknown")   # no sidecar, or one of another token file
+
+    def _stored_at(self) -> float | None:
+        return None if self._from_env else _token_mtime()
 
     def _no_token(self) -> AuthError:
         return AuthError("no_token", "No GoPro token stored." + HOW_TO_GET_A_TOKEN, source="gopro")
+
+    def _check_open(self) -> None:
+        """Raise once ``close()`` has run (caller holds ``_lock``): a closed source starts nothing new."""
+        if self._closed:
+            raise ConfigError("source_closed", "GoPro is shutting down.", source="gopro")
 
     def _call(self, fn):
         """Run ``fn(token)`` with the session credential.
 
         A 401 marks the source ``expired`` - but only if no verified connection
         or disconnect happened since the request captured its credential, so a
-        stale answer cannot undo a recovery. A success changes no state.
+        stale answer cannot undo a recovery. A success moves
+        ``last_success_at`` under the same rule and restores nothing else.
         """
         tok, gen = self._credential()
         if tok is None:
             raise self._no_token()
         try:
-            return fn(tok)
+            result = fn(tok)
         except AuthError as e:
-            with self._lock:
-                if gen == self._gen:
-                    self._expired_at = time.time()
-                    self._error = e.as_dict()
+            self._refused(e, gen)
             raise
+        self._succeeded(gen)
+        return result
 
-    def _adopt(self, tok: str, from_env: bool) -> None:
+    def _succeeded(self, gen: int) -> None:
+        with self._lock:
+            if gen != self._gen:
+                return
+            self._meta["last_success_at"] = time.time()
+            if self._from_env:
+                return
+            mono = time.monotonic()
+            if self._meta_written is None or mono - self._meta_written >= META_WRITE_EVERY:
+                self._meta_written = mono
+                self._write_meta()
+
+    def _refused(self, e: AuthError, gen: int) -> None:
+        """A 401 on the session credential: ``expired``, the observed period as the error's hint, one report."""
+        report = None
+        with self._lock:
+            if gen != self._gen:
+                return
+            now = time.time()
+            first = self._expired_at is None
+            self._expired_at = now
+            if self._meta.get("first_401_at") is None:
+                self._meta["first_401_at"] = now
+            e.hint = observed_period(self._meta, self._stored_at(), now)
+            self._error = e.as_dict()
+            if first:
+                if not self._from_env:
+                    self._meta_written = time.monotonic()
+                    self._write_meta()
+                report = self.report
+        if report is not None:
+            try:
+                report(e)
+            except Exception:
+                pass
+
+    def _write_meta(self) -> None:
+        """The sidecar (caller holds ``_lock``); a read-only config dir loses nothing but the record."""
+        try:
+            write_session(self._meta)
+        except OSError:
+            pass
+
+    def _adopt(self, tok: str, from_env: bool, meta: dict | None = None) -> None:
         """A verified credential becomes the session's: new generation, connected."""
         with self._lock:
-            self._token, self._from_env, self._loaded = tok, from_env, True
-            self._gen += 1
-            self._verified_at, self._expired_at, self._error = time.time(), None, None
+            self._adopt_locked(tok, from_env, meta)
+
+    def _adopt_locked(self, tok: str, from_env: bool, meta: dict | None) -> None:
+        self._token, self._from_env, self._loaded = tok, from_env, True
+        self._gen += 1
+        self._verified_at, self._expired_at, self._error = time.time(), None, None
+        self._flow_error = self._fallback = None
+        if meta is not None:                     # a new capture; a re-verified token keeps its history
+            self._meta, self._meta_written = meta, None
+
+    # ----------------------------------------------------------- the round
+    def _start_flow(self) -> dict:
+        with self._lock:
+            self._check_open()
+            if self._flow is None:
+                handoff = browser.Handoff()
+                now = time.time()
+                record = {"started_at": now, "expires_at": now + browser.HANDOFF_TIMEOUT,
+                          "handoff": handoff, "gen": self._gen}
+                self._flow, self._flow_error = record, None
+                handoff.start(self._verify, timeout=browser.HANDOFF_TIMEOUT)   # returns at once; its own thread
+                threading.Thread(target=self._finish_flow, args=(record,),
+                                 name="gopro-handoff", daemon=True).start()
+        return dict(self.status(), step="browser")
+
+    def _verify(self, tok: str) -> bool:
+        """The hand-off's proof: ``search(tok, 1)`` answers 200.
+
+        A 401 is ``False`` (a stale value in the profile; the engine waits for
+        the next one). Anything else propagates, and the engine tries the value
+        again on its next poll. Nothing here touches the session's state.
+        """
+        try:
+            search(tok, 1)
+        except AuthError:
+            return False
+        return True
+
+    def _finish_flow(self, record: dict) -> None:
+        handoff, gen = record["handoff"], record["gen"]
+        try:
+            result = handoff.wait()
+        except AuthError as e:
+            self._end_flow(record, e)
+            return
+        except Exception as e:                   # the thread must not die with the gate still waiting
+            self._end_flow(record, AuthError("browser_failed", "The gopro.com window failed: %s" % e,
+                                             source="gopro"))
+            return
+        value = result.get("token") if isinstance(result, dict) else None
+        if not isinstance(value, str) or not value:
+            self._end_flow(record, AuthError("browser_failed", "The gopro.com window yielded no session.",
+                                             source="gopro"))
+            return
+        meta = session_meta("window", result.get("captured_at") or time.time(), result.get("cookie"))
+        with self._lock:
+            if self._gen != gen or self._flow is not record:
+                return                           # disconnected or replaced meanwhile: dropped; the window is closed
+            try:
+                store_token(value, meta)
+            except OSError as e:
+                self._flow = None
+                self._flow_error = ConfigError("token_unwritable", "Could not store the GoPro session: %s" % e,
+                                               source="gopro").as_dict()
+                return
+            self._flow = None
+            self._adopt_locked(value, False, meta)
+
+    def _end_flow(self, record: dict, err: AuthError) -> None:
+        with self._lock:
+            if self._flow is not record:
+                return                           # cancelled, disconnected or closed: already detached
+            self._flow = None
+            self._flow_error = err.as_dict()
+            if err.code in ("no_browser", "browser_failed"):
+                self._fallback = {"reason": err.message, "steps": list(TOKEN_STEPS)}
+
+    def _cancel_flow(self) -> None:
+        with self._lock:
+            record, self._flow = self._flow, None
+        if record is not None:
+            record["handoff"].cancel()           # closes the window; a no-op when the round already ended
 
     def _raw_of(self, media_id: str) -> dict | None:
         """The listing entry behind an id: this process's listing, the CLI's cached one, else ``/media/{id}``."""
@@ -458,65 +758,126 @@ class GoProSource:
     # ------------------------------------------------------------ contract
     def status(self) -> dict:
         tok, _ = self._credential()
-        if tok is None:
-            return {"state": "disconnected", "detail": {"stored": False}}
         with self._lock:
+            flow, flow_error, fallback = self._flow, self._flow_error, self._fallback
             expired, verified, error, from_env = (self._expired_at, self._verified_at,
                                                   self._error, self._from_env)
-        since = None
-        if not from_env:
-            try:
-                since = os.path.getmtime(token_file())
-            except OSError:
-                since = None
+            meta = dict(self._meta)
+        if flow is not None:
+            return {"state": "connecting", "detail": {
+                "stored": tok is not None, "step": "browser",
+                "expires_in": max(0, int(flow["expires_at"] - time.time())), "note": ON_HOST_NOTE}}
+        if tok is None:
+            detail: dict = {"stored": False}
+            if flow_error:
+                detail["flow_error"] = flow_error
+            if fallback:
+                detail["fallback"] = fallback
+            return {"state": "disconnected", "detail": detail}
+        since = None if from_env else _token_mtime()
         if expired is not None:
             state = "expired"
         elif verified is not None:
             state = "connected"
         else:
             state = "disconnected"                 # stored but not yet verified this session
-        return {"state": state,
-                "detail": {"stored": True, "stored_at": since, "verified_at": verified,
-                           "age": age_text(since), "error": error}}
+        detail = {"stored": True, "stored_at": since, "verified_at": verified,
+                  "age": self._age(meta, since), "error": error,
+                  "captured_at": meta["captured_at"], "captured_by": meta["captured_by"],
+                  "last_success_at": meta["last_success_at"], "first_401_at": meta["first_401_at"],
+                  "cookie": meta["cookie"]}
+        if flow_error:
+            detail["flow_error"] = flow_error
+        if fallback:
+            detail["fallback"] = fallback
+        return {"state": state, "detail": detail}
+
+    @staticmethod
+    def _age(meta: dict, since: float | None) -> str | None:
+        """The header line: "session captured N ago" for a window capture, "token stored N ago" otherwise."""
+        by = meta.get("captured_by")
+        if by == "window":
+            return age_text(meta.get("captured_at"), what="session captured")
+        if by == "env":
+            return None
+        if by == "paste":
+            return age_text(meta.get("captured_at") or since)
+        return age_text(since)
 
     def connect(self, params: dict) -> dict:
-        """Verify a pasted token and save it, or verify the stored one.
+        """Verify a pasted token and save it, verify the stored one, or run the hand-off.
 
-        A paste is verified *before* it is saved, so a bad paste leaves the
-        stored token (and the source's state) exactly as they were.
+        ``{"token": ...}`` is the paste, verified *before* it is saved, so a
+        bad paste leaves the stored token (and the source's state) exactly as
+        they were. ``{}`` with a stored, unexpired token verifies it without a
+        window; with nothing stored, or after ``expired``, or with
+        ``{"fresh": true}``, it starts a round and answers ``{step:
+        "browser", ...}``; while a round runs, ``{}`` answers that round.
+        ``{"cancel": true}`` ends a running round.
         """
-        pasted = params.get("token") if isinstance(params, dict) else None
+        params = params if isinstance(params, dict) else {}
+        pasted = params.get("token")
         if pasted is not None:
             if not isinstance(pasted, str) or not pasted.strip():
                 raise ConfigError("bad_token", "Paste the token first.", source="gopro")
             tok, _ = fold_double_paste(pasted)
             search(tok, 1)                         # a 401 propagates; nothing changes here
-            save_token(pasted)
-            self._adopt(tok, from_env=False)       # from now on every request uses the paste
+            meta = session_meta("paste", time.time())
+            save_token(pasted, meta)
+            self._adopt(tok, from_env=False, meta=meta)   # from now on every request uses the paste
+            self._cancel_flow()                    # a window still open has nothing left to hand over
             return self.status()
-        tok, gen = self._credential()
-        if tok is None:
-            raise self._no_token()
-        try:
-            search(tok, 1)
-        except AuthError as e:
-            with self._lock:
-                if gen == self._gen:
-                    self._expired_at, self._error = time.time(), e.as_dict()
-            raise
+        if params.get("cancel"):
+            self._cancel_flow()
+            return self.status()
         with self._lock:
-            from_env = self._from_env
-        self._adopt(tok, from_env)
-        return self.status()
+            self._check_open()
+            running, expired = self._flow is not None, self._expired_at is not None
+        if running:
+            return dict(self.status(), step="browser")   # the same round, not a second window
+        tok, gen = self._credential()
+        if tok is not None and not expired and not params.get("fresh"):
+            try:
+                search(tok, 1)                     # the stored token, proven without a window
+            except AuthError as e:
+                self._refused(e, gen)
+                raise
+            with self._lock:
+                from_env = self._from_env
+            self._adopt(tok, from_env)
+            return self.status()
+        return self._start_flow()
 
     def disconnect(self) -> None:
-        """Forget the session credential and the file; this process never reads GOPRO_TOKEN again."""
-        forget_token()
+        """Forget the session: the credential, the file and its sidecar, the browser profile, any round in progress.
+
+        This process never reads GOPRO_TOKEN again. The round is cancelled
+        (its window closed) before the profile is removed, so the browser is
+        never writing into a directory that is going away.
+        """
         with self._lock:
+            record, self._flow = self._flow, None
             self._token, self._from_env, self._loaded = None, False, True
             self._gen += 1
             self._verified_at = self._expired_at = self._error = None
+            self._flow_error = self._fallback = None
+            self._meta, self._meta_written = session_meta(None), None
             self._raw.clear()
+        if record is not None:
+            record["handoff"].cancel()
+        forget_token()
+        browser.remove_profile()
+
+    def close(self) -> None:
+        """Process exit: a round in progress is cancelled, so Ctrl+C closes the window it opened. Final."""
+        with self._lock:
+            if self._closed:
+                return
+            self._closed = True
+            record, self._flow = self._flow, None
+            self._gen += 1                       # a capture landing after this is dropped
+        if record is not None:
+            record["handoff"].cancel()
 
     def list(self, path=None, page=None) -> Listing:
         if page is None or page == "":

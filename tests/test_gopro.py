@@ -1,18 +1,104 @@
-"""The GoPro source on the ``Source`` contract, against a scripted api.gopro.com."""
+"""The GoPro source on the ``Source`` contract, against a scripted api.gopro.com and a scripted hand-off."""
 import json
 import os
 import re
+import stat
 import threading
+import time
 import urllib.parse
 
 import pytest
 
 from castlib import config, net
-from castlib.errors import AuthError, NotMedia
+from castlib.auth import browser
+from castlib.errors import AuthError, ConfigError, NotMedia
 from castlib.sources import gopro
 from castlib.sources.gopro import GoProSource
+from tests.conftest import wait_for
 
 FIX = os.path.join(os.path.dirname(__file__), "fixtures", "gopro")
+
+
+class FakeHandoff:
+    """``browser.Handoff`` stand-in: the test decides what the gopro.com window yields.
+
+    ``start(verify, timeout)`` records the verifier and returns at once, as the
+    engine does; the source's thread then blocks in ``wait()``. The test drives
+    the outcome from its own thread the way the engine's poll would:
+    ``offer(value)`` hands a cookie value to the verifier once (an ``AuthError``
+    is a refusal, remembered so the value is never offered again; a ``True``
+    fills ``result`` and ends the round), ``close_window()``, ``fail()`` and
+    ``time_out()`` end it with the engine's own errors. ``cancel()`` is what
+    the source calls; a verification in flight still decides the round, as in
+    the engine, which is how a late capture is produced.
+    """
+
+    def __init__(self):
+        self.verify = None
+        self.timeout = None
+        self.verified = []                       # every value handed to the verifier, in order
+        self.cancelled = 0
+        self.result = None
+        self.error = None
+        self.tried = set()
+        self._verifying = False
+        self._done = threading.Event()
+
+    def start(self, verify, timeout=browser.HANDOFF_TIMEOUT):
+        if self.verify is not None:
+            raise RuntimeError("a hand-off starts once")
+        self.verify, self.timeout = verify, timeout
+        return self
+
+    def wait(self):
+        self._done.wait()
+        if self.error is not None:
+            raise self.error
+        return self.result or {}
+
+    def cancel(self):
+        self.cancelled += 1
+        if self._done.is_set() or self._verifying:
+            return
+        self._end(AuthError("cancelled", "The gopro.com window was cancelled.", source="gopro"))
+
+    # ------------------------------------------------------ the test's side
+    def offer(self, value, session=False, expires=1790000000.0):
+        """A ``gp_access_token`` value appeared in the window: verified once; ``True`` when it was adopted."""
+        assert self.verify is not None, "the round has not started"
+        if value in self.tried or self._done.is_set():
+            return False
+        self.tried.add(value)
+        self.verified.append(value)
+        self._verifying = True
+        try:
+            try:
+                good = bool(self.verify(value))
+            except AuthError:
+                good = False
+        finally:
+            self._verifying = False
+        if good:
+            self.result = {"token": value, "captured_at": time.time(),
+                           "cookie": {"session": session, "expires": -1 if session else expires}}
+            self._done.set()
+        return good
+
+    def close_window(self):
+        self._end(AuthError("browser_closed", "The gopro.com window was closed before a session appeared.",
+                            source="gopro"))
+
+    def fail(self, code, message):
+        self._end(AuthError(code, message, source="gopro"))
+
+    def time_out(self):
+        self._end(AuthError("browser_timeout", "No gopro.com session appeared within 5 minutes; the window was closed.",
+                            source="gopro"))
+
+    def _end(self, err):
+        if not self._done.is_set():
+            self.error = err
+            self._done.set()
 
 
 def _fixture(name):
@@ -100,6 +186,17 @@ class FakeGoPro:
         return None
 
 
+def use_fake_handoffs(monkeypatch, fake):
+    """Every ``browser.Handoff()`` the source creates is a ``FakeHandoff``, collected in ``fake.handoffs``."""
+    fake.handoffs = []
+
+    def make():
+        h = FakeHandoff()
+        fake.handoffs.append(h)
+        return h
+    monkeypatch.setattr(browser, "Handoff", make)
+
+
 @pytest.fixture
 def fake(monkeypatch, tmp_path):
     f = FakeGoPro()
@@ -108,7 +205,20 @@ def fake(monkeypatch, tmp_path):
     monkeypatch.setattr(config, "_CONFIG", str(tmp_path / "config"))
     monkeypatch.setattr(config, "_CACHE", str(tmp_path / "cache"))
     monkeypatch.delenv("GOPRO_TOKEN", raising=False)
+    use_fake_handoffs(monkeypatch, f)
     return f
+
+
+def _round(src, fake, params=None):
+    """Start a round and return its ``FakeHandoff``."""
+    d = src.connect({"fresh": True} if params is None else params)
+    assert d["step"] == "browser" and d["state"] == "connecting"
+    return fake.handoffs[-1]
+
+
+def _sidecar():
+    with open(gopro.session_file(), encoding="utf-8") as fh:
+        return json.load(fh)
 
 
 # ---------------------------------------------------------------- the gate
@@ -116,7 +226,7 @@ def test_status_before_and_after_connect(fake):
     src = GoProSource()
     assert src.status() == {"state": "disconnected", "detail": {"stored": False}}
     with pytest.raises(AuthError) as err:
-        src.connect({})
+        src.list()                                            # nothing stored: no call can be made
     assert err.value.code == "no_token"
     src.connect({"token": " " + fake.good + "\n"})            # pasted with whitespace
     s = src.status()
@@ -237,7 +347,7 @@ def test_older_success_cannot_clear_a_newer_expiry(fake):
     t.join(5)
     assert src.status()["state"] == "expired"                 # the older success did not restore it
     fake.good = "eyJgood"
-    src.connect({})                                           # only a verification does
+    src.connect({"token": fake.good})                         # only a verification does
     assert src.status()["state"] == "connected"
 
 
@@ -252,7 +362,7 @@ def test_401_flips_to_expired(fake):
     assert s["state"] == "expired" and s["detail"]["error"]["code"] == "token_rejected"
     assert s["detail"]["stored"]                              # the old token stays until replaced
     with pytest.raises(AuthError):
-        src.connect({})                                       # re-verifying the same token: still 401
+        src.connect({"token": "eyJgood"})                     # the same token pasted again: still 401
     assert src.status()["state"] == "expired"
     src.connect({"token": fake.good})                         # a new paste restores it
     assert src.status()["state"] == "connected"
@@ -306,6 +416,361 @@ def test_double_paste_deduplicated(fake, capsys):
         assert fh.read() == tok
     assert "pasted twice" in capsys.readouterr().out
     assert src.status()["state"] == "connected"
+
+
+# ------------------------------------------------------------ the hand-off
+def test_handoff_connects_after_verification(fake):
+    """The round: disconnected → connecting/browser → connected, the value verified once, stored as a paste is."""
+    src = GoProSource()
+    h = _round(src, fake, {})                                 # nothing stored: {} starts the round
+    s = src.status()
+    assert s["state"] == "connecting" and s["detail"]["step"] == "browser" and s["detail"]["stored"] is False
+    assert 0 < s["detail"]["expires_in"] <= 300
+    assert h.timeout == 300.0 and fake.calls == []            # nothing verified before a value appears
+    assert h.offer(fake.good) is True
+    wait_for(lambda: src.status()["state"] == "connected")
+    assert h.verified == [fake.good]
+    assert [c for c in fake.calls if "per_page=1&" in c] and fake.tokens == [fake.good]   # the verifier's one call
+    d = src.status()["detail"]
+    assert d["stored"] and d["captured_by"] == "window" and abs(d["captured_at"] - time.time()) < 5
+    assert d["cookie"] == {"session": False, "expires": 1790000000.0}
+    assert d["age"] == "session captured just now" and d["verified_at"] and d["error"] is None
+    assert "flow_error" not in d and "fallback" not in d
+    with open(gopro.token_file(), encoding="utf-8") as fh:
+        assert fh.read() == fake.good
+    assert os.name != "posix" or stat.S_IMODE(os.stat(gopro.token_file()).st_mode) == 0o600
+    assert src.list().items                                   # and the listing works on the captured session
+    assert fake.tokens[-1] == fake.good
+
+
+def test_status_carries_the_on_host_note(fake):
+    src = GoProSource()
+    _round(src, fake)
+    d = src.status()["detail"]
+    assert d["note"] == gopro.ON_HOST_NOTE
+    assert "computer running cast-tv" in d["note"] and "not on the device showing this page" in d["note"]
+    assert set(d) == {"stored", "step", "expires_in", "note"}   # nothing else while the window is open
+
+
+def test_second_connect_joins_the_round(fake):
+    src = GoProSource()
+    h = _round(src, fake)
+    for params in ({"fresh": True}, {}, {"fresh": True}):
+        d = src.connect(params)
+        assert d["step"] == "browser" and d["state"] == "connecting"
+    assert len(fake.handoffs) == 1                            # one window, however many devices pressed
+    h.offer(fake.good)
+    wait_for(lambda: src.status()["state"] == "connected")
+    assert len(fake.handoffs) == 1
+
+
+def test_cancel_ends_the_round_with_no_fallback(fake):
+    src = GoProSource()
+    h = _round(src, fake)
+    d = src.connect({"cancel": True})
+    assert h.cancelled == 1
+    assert d == {"state": "disconnected", "detail": {"stored": False}}   # the button again; no note, no field
+    wait_for(lambda: src._flow is None)
+    time.sleep(0.05)
+    assert src.status() == {"state": "disconnected", "detail": {"stored": False}}
+    assert src.connect({"cancel": True}) == {"state": "disconnected", "detail": {"stored": False}}   # nothing runs: no-op
+    assert h.cancelled == 1
+    # a timeout is not a fallback either: the note, and the button
+    h2 = _round(src, fake)
+    h2.time_out()
+    wait_for(lambda: "flow_error" in src.status()["detail"])
+    d = src.status()["detail"]
+    assert d["flow_error"]["code"] == "browser_timeout" and "fallback" not in d
+    # the next round clears the note
+    _round(src, fake)
+    assert "flow_error" not in src.connect({"cancel": True})["detail"]
+
+
+def test_closed_window_is_not_a_fallback(fake):
+    src = GoProSource()
+    h = _round(src, fake)
+    h.close_window()
+    wait_for(lambda: src.status()["state"] == "disconnected")
+    d = src.status()["detail"]
+    assert d["stored"] is False and d["flow_error"]["code"] == "browser_closed"
+    assert d["flow_error"]["message"] == "The gopro.com window was closed before a session appeared."
+    assert "fallback" not in d
+
+
+def test_no_browser_sets_the_fallback(fake):
+    src = GoProSource()
+    h = _round(src, fake)
+    h.fail("no_browser", "No Chrome, Chromium, Edge or Brave was found on this computer.")
+    wait_for(lambda: "fallback" in src.status()["detail"])
+    d = src.status()["detail"]
+    assert d["flow_error"]["code"] == "no_browser"
+    assert d["fallback"]["reason"] == "No Chrome, Chromium, Edge or Brave was found on this computer."
+    steps = d["fallback"]["steps"]
+    assert steps == list(gopro.TOKEN_STEPS) and len(steps) == 3
+    for n, step in enumerate(steps, 1):                       # one source of truth: the CLI prints the same lines
+        assert step.split(" ")[0] in gopro.HOW_TO_GET_A_TOKEN and ("  %d. " % n) in gopro.HOW_TO_GET_A_TOKEN
+    assert "F12" in steps[1] and "gp_access_token" in steps[2]
+    assert "lasts a few hours" not in gopro.HOW_TO_GET_A_TOKEN
+    assert gopro.HOW_TO_GET_A_TOKEN.lstrip().startswith("Run cast-tv, open the GoPro tab and press Open gopro.com.")
+    assert "checked 2026-09-20" in gopro.HOW_TO_GET_A_TOKEN
+    # a failed launch is the other fallback; the fallback outlives a cancelled retry
+    h2 = _round(src, fake)
+    assert "fallback" not in src.status()["detail"]           # the step is on screen, not the paste
+    h2.fail("browser_failed", "No gopro.com window could be opened. /nonexistent: No such file or directory")
+    wait_for(lambda: src.status()["detail"].get("flow_error", {}).get("code") == "browser_failed")
+    assert src.status()["detail"]["fallback"]["reason"].startswith("No gopro.com window could be opened.")
+    # a paste then clears it
+    src.connect({"token": fake.good})
+    d = src.status()["detail"]
+    assert src.status()["state"] == "connected" and "fallback" not in d and "flow_error" not in d
+
+
+def test_stored_token_verifies_without_a_window(fake):
+    GoProSource().connect({"token": fake.good})
+    src = GoProSource()                                       # a new process: stored, not yet verified
+    assert src.status()["state"] == "disconnected" and src.status()["detail"]["stored"]
+    d = src.connect({})
+    assert d["state"] == "connected" and "step" not in d
+    assert fake.handoffs == []                                # no window
+    assert src.status()["detail"]["captured_by"] == "paste"  # the history is kept
+
+
+def test_expired_then_fresh_starts_the_round(fake):
+    src = GoProSource()
+    src.connect({"token": fake.good})
+    fake.good = "eyJrotated"
+    with pytest.raises(AuthError):
+        src.list()
+    assert src.status()["state"] == "expired"
+    h = _round(src, fake)                                     # {"fresh": true} after expired
+    assert src.status()["detail"]["stored"] is True           # the old token is still stored meanwhile
+    assert h.offer("eyJold-from-profile") is False            # the profile's stale value: refused, the window stays
+    assert src._flow is not None
+    assert h.offer(fake.good) is True
+    wait_for(lambda: src.status()["state"] == "connected")
+    d = src.status()["detail"]
+    assert d["captured_by"] == "window" and d["error"] is None and d["first_401_at"] is None
+    assert h.verified == ["eyJold-from-profile", fake.good]
+    # {} after expired starts a round as well, as the other sources do
+    fake.good = "eyJrotated2"
+    with pytest.raises(AuthError):
+        src.list()
+    assert src.connect({})["step"] == "browser" and len(fake.handoffs) == 2
+
+
+def test_disconnect_removes_the_profile(fake):
+    src = GoProSource()
+    src.connect({"token": fake.good})
+    profile, cache = browser.prepare_profile()
+    assert os.path.isdir(profile) and os.path.isdir(cache) and os.path.exists(gopro.session_file())
+    src.disconnect()
+    assert not os.path.exists(profile) and not os.path.exists(cache)
+    assert not os.path.exists(gopro.token_file()) and not os.path.exists(gopro.session_file())
+    assert src.status() == {"state": "disconnected", "detail": {"stored": False}}
+    # and it cancels a running round, closing the window first
+    h = _round(src, fake)
+    browser.prepare_profile()
+    src.disconnect()
+    assert h.cancelled == 1 and src._flow is None and not os.path.exists(profile)
+    time.sleep(0.05)
+    assert src.status() == {"state": "disconnected", "detail": {"stored": False}}   # no note either
+
+
+def test_close_cancels_the_round(fake):
+    src = GoProSource()
+    h = _round(src, fake)
+    src.close()
+    assert h.cancelled == 1 and src._flow is None
+    src.close()                                               # final, and a second close is a no-op
+    assert h.cancelled == 1
+    with pytest.raises(ConfigError) as err:
+        src.connect({"fresh": True})
+    assert err.value.code == "source_closed"
+    idle = GoProSource()
+    idle.close()                                              # nothing to close
+
+
+def test_a_late_capture_after_disconnect_is_dropped(fake):
+    src = GoProSource()
+    h = _round(src, fake)
+    seen = []
+
+    def disconnect_mid_verify(url, status, bearer):
+        if "per_page=1&" in url and not seen:                 # the verifier's call is in flight
+            seen.append(url)
+            src.disconnect()
+    fake.before_answer = disconnect_mid_verify
+    assert h.offer(fake.good) is True                         # the engine's verify returned True after the cancel
+    assert h.cancelled == 1 and h.result["token"] == fake.good
+    time.sleep(0.1)
+    assert src.status() == {"state": "disconnected", "detail": {"stored": False}}
+    assert not os.path.exists(gopro.token_file()) and not os.path.exists(gopro.session_file())
+
+
+def test_last_success_at_moves_on_list(fake):
+    src = GoProSource()
+    src.connect({"token": fake.good})
+    assert src.status()["detail"]["last_success_at"] is None  # the paste's own check is not a call
+    src.list()
+    first = src.status()["detail"]["last_success_at"]
+    assert first and abs(first - time.time()) < 5
+    time.sleep(0.01)
+    src.thumb("vid-heavy")
+    assert src.status()["detail"]["last_success_at"] > first
+
+
+def test_401_hint_carries_the_observed_period(fake):
+    src = GoProSource()
+    src.connect({"token": fake.good})
+    src.list()
+    fake.good = "eyJrotated"
+    with pytest.raises(AuthError) as err:
+        src.list()
+    hint = err.value.hint
+    assert hint.startswith("Token pasted 20") and "Worked for at least" in hint
+    assert "(last successful call)" in hint and "First refusal" in hint and "after capture" in hint
+    assert "Cookie" not in hint                               # a paste carries no cookie
+    d = src.status()["detail"]
+    assert d["error"]["hint"] == hint and d["first_401_at"] and abs(d["first_401_at"] - time.time()) < 5
+    assert _sidecar()["first_401_at"] == d["first_401_at"]   # written at once
+    # no success on record
+    fake.good = "eyJgood"
+    src2 = GoProSource()
+    src2.connect({"token": fake.good})
+    fake.good = "eyJrotated"
+    with pytest.raises(AuthError) as err:
+        src2.thumb("vid-heavy")
+    assert "No successful call recorded" in err.value.hint
+    # a window capture names the cookie
+    fake.good = "eyJgood"
+    src3 = GoProSource()
+    h = _round(src3, fake)
+    h.offer(fake.good, session=True)
+    wait_for(lambda: src3.status()["state"] == "connected")
+    fake.good = "eyJrotated"
+    with pytest.raises(AuthError) as err:
+        src3.list()
+    assert err.value.hint.startswith("Session captured") and "Session cookie" in err.value.hint
+    assert gopro.observed_period(gopro.session_meta("window", 1000.0, {"session": False, "expires": 1790000000.0}),
+                                 now=1300.0).endswith("(persistent).")
+
+
+def test_paste_still_works_and_is_marked_paste(fake):
+    src = GoProSource()
+    src.connect({"token": fake.good})
+    d = src.status()["detail"]
+    assert d["captured_by"] == "paste" and abs(d["captured_at"] - time.time()) < 5
+    assert d["cookie"] is None and d["last_success_at"] is None and d["first_401_at"] is None
+    assert d["age"] == "token stored just now"
+    assert os.name != "posix" or stat.S_IMODE(os.stat(gopro.session_file()).st_mode) == 0o600
+    side = _sidecar()
+    assert side["captured_by"] == "paste" and side["token_mtime"] == os.path.getmtime(gopro.token_file())
+    assert fake.good not in json.dumps(side) and "eyJ" not in json.dumps(side)
+    # cast-gopro --token goes through the same path
+    from castlib import cli
+    assert cli.main_gopro(["--token", "eyJcli"]) == 0
+    assert _sidecar()["captured_by"] == "paste" and "eyJcli" not in json.dumps(_sidecar())
+
+
+def test_session_metadata_survives_a_restart(fake):
+    src = GoProSource()
+    h = _round(src, fake)
+    h.offer(fake.good, session=False, expires=1790000000.0)
+    wait_for(lambda: src.status()["state"] == "connected")
+    before = src.status()["detail"]
+    with open(gopro.session_file(), encoding="utf-8") as fh:
+        text = fh.read()
+    assert fake.good not in text and "eyJ" not in text and "token_mtime" in text
+    again = GoProSource()                                     # a second process over the same config dir
+    d = again.status()["detail"]
+    assert again.status()["state"] == "disconnected" and d["stored"]
+    assert d["captured_by"] == "window" and d["captured_at"] == before["captured_at"]
+    assert d["cookie"] == {"session": False, "expires": 1790000000.0}
+    assert d["age"] == "session captured just now"
+    again.connect({})
+    assert again.status()["state"] == "connected" and again.status()["detail"]["captured_by"] == "window"
+
+
+def test_a_replaced_token_file_drops_the_metadata(fake):
+    src = GoProSource()
+    h = _round(src, fake)
+    h.offer(fake.good)
+    wait_for(lambda: src.status()["state"] == "connected")
+    config.write_private(gopro.token_file(), fake.good)       # replaced by hand
+    then = time.time() - 3 * 3600
+    os.utime(gopro.token_file(), (then, then))
+    d = GoProSource().status()["detail"]
+    assert d["captured_by"] == "unknown" and d["captured_at"] is None and d["cookie"] is None
+    assert d["age"] == "token stored 3 h ago" and d["stored_at"] == os.path.getmtime(gopro.token_file())
+    assert gopro.read_session() is None                       # the sidecar belongs to another file
+    # a token file from before this change: no sidecar at all
+    os.unlink(gopro.session_file())
+    d = GoProSource().status()["detail"]
+    assert d["captured_by"] == "unknown" and d["age"] == "token stored 3 h ago"
+
+
+def test_env_token_keeps_metadata_in_memory(fake, monkeypatch):
+    monkeypatch.setenv("GOPRO_TOKEN", fake.good)
+    src = GoProSource()
+    d = src.status()["detail"]
+    assert d["stored"] and d["captured_by"] == "env" and abs(d["captured_at"] - time.time()) < 5
+    assert d["age"] is None and d["stored_at"] is None
+    src.connect({})
+    src.list()
+    assert src.status()["detail"]["last_success_at"]
+    fake.good = "eyJrotated"
+    with pytest.raises(AuthError) as err:
+        src.list()
+    assert err.value.hint.startswith("Token from GOPRO_TOKEN since")
+    assert not os.path.exists(gopro.session_file()) and not os.path.exists(gopro.token_file())   # nothing written
+
+
+def test_last_success_write_is_throttled(fake, monkeypatch):
+    writes = []
+    real = gopro.write_session
+    monkeypatch.setattr(gopro, "write_session", lambda meta: writes.append(dict(meta)) or real(meta))
+    src = GoProSource()
+    src.connect({"token": fake.good})
+    assert len(writes) == 1                                   # the paste
+    src.list()
+    src.list()
+    src.thumb("vid-heavy")
+    assert len(writes) == 2                                   # the first success; the next ones within a minute do not
+    assert writes[1]["last_success_at"] and _sidecar()["last_success_at"] == writes[1]["last_success_at"]
+    monkeypatch.setattr(gopro, "META_WRITE_EVERY", 0.0)
+    src.list()
+    assert len(writes) == 3                                   # past the interval: written again
+    monkeypatch.setattr(gopro, "META_WRITE_EVERY", 60.0)
+    fake.good = "eyJrotated"
+    with pytest.raises(AuthError):
+        src.list()
+    assert len(writes) == 4 and writes[-1]["first_401_at"]   # the first 401 writes at once
+    with pytest.raises(AuthError):
+        src.list()
+    assert len(writes) == 4                                   # the second does not
+
+
+def test_first_401_reports_once(fake):
+    src = GoProSource()
+    reported = []
+    src.report = reported.append
+    src.connect({"token": fake.good})
+    src.list()
+    fake.good = "eyJrotated"
+    for call in (src.list, src.list, lambda: src.thumb("vid-heavy")):
+        with pytest.raises(AuthError):
+            call()
+    assert len(reported) == 1
+    err = reported[0]
+    assert err.code == "token_rejected" and err.source == "gopro"
+    assert err.hint.startswith("Token pasted") and "Worked for at least" in err.hint
+    # a new session, refused again: one more card
+    fake.good = "eyJgood"
+    src.connect({"token": fake.good})
+    fake.good = "eyJrotated"
+    with pytest.raises(AuthError):
+        src.connect({})                                       # the verification path reports too
+    assert len(reported) == 2 and "No successful call recorded" in reported[1].hint
 
 
 # ------------------------------------------------------------- the listing
