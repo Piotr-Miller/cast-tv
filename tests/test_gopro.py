@@ -607,6 +607,101 @@ def test_a_late_capture_after_disconnect_is_dropped(fake):
     assert not os.path.exists(gopro.token_file()) and not os.path.exists(gopro.session_file())
 
 
+def test_a_paste_verified_across_a_disconnect_is_dropped(fake):
+    """p2 review F1: Disconnect lands while the paste is being verified; the later action stands."""
+    src = GoProSource()
+    seen = []
+
+    def disconnect_mid_verify(url, status, bearer):
+        if "per_page=1&" in url and not seen:                 # the paste's verification is in flight
+            seen.append(url)
+            src.disconnect()
+    fake.before_answer = disconnect_mid_verify
+    assert src.connect({"token": fake.good}) == {"state": "disconnected", "detail": {"stored": False}}
+    assert not os.path.exists(gopro.token_file()) and not os.path.exists(gopro.session_file())
+    with pytest.raises(AuthError) as err:
+        src.list()
+    assert err.value.code == "no_token"                       # the paste never reached memory either
+    fake.before_answer = None
+    assert src.connect({"token": fake.good})["state"] == "connected"   # pasting again works
+
+
+def test_a_paste_verified_across_a_newer_paste_is_dropped(fake):
+    """p2 review F1: a newer paste completes while an older one is being verified; the newer one stays."""
+    src = GoProSource()
+    older, newer = fake.good, "eyJnewer"
+    seen = []
+
+    def paste_newer_mid_verify(url, status, bearer):
+        if "per_page=1&" in url and not seen:                 # the older paste's verification is in flight
+            seen.append(url)
+            fake.good = newer
+            src.connect({"token": newer})                     # verified and adopted first
+    fake.before_answer = paste_newer_mid_verify
+    assert src.connect({"token": older})["state"] == "connected"
+    with open(gopro.token_file(), encoding="utf-8") as fh:
+        assert fh.read() == newer                             # the older paste overwrote nothing
+    fake.before_answer = None
+    src.list()
+    assert fake.tokens[-1] == newer                           # and every request uses the newer one
+
+
+def test_a_paste_verified_across_close_is_refused(fake):
+    """p2 review F1: close() lands while the paste is being verified; a closed source adopts nothing."""
+    src = GoProSource()
+    seen = []
+
+    def close_mid_verify(url, status, bearer):
+        if "per_page=1&" in url and not seen:
+            seen.append(url)
+            src.close()
+    fake.before_answer = close_mid_verify
+    with pytest.raises(ConfigError) as err:
+        src.connect({"token": fake.good})
+    assert err.value.code == "source_closed"
+    assert not os.path.exists(gopro.token_file()) and not os.path.exists(gopro.session_file())
+    with pytest.raises(ConfigError) as err:
+        src.connect({"token": fake.good})                     # and so is a paste after close()
+    assert err.value.code == "source_closed"
+
+
+def test_a_stored_token_verified_across_a_disconnect_is_not_restored(fake):
+    """p2 review F1: Disconnect lands while the stored token is being re-verified; it stays forgotten."""
+    src = GoProSource()
+    src.connect({"token": fake.good})
+    seen = []
+
+    def disconnect_mid_verify(url, status, bearer):
+        if "per_page=1&" in url and not seen:                 # the re-verification is in flight
+            seen.append(url)
+            src.disconnect()
+    fake.before_answer = disconnect_mid_verify
+    assert src.connect({}) == {"state": "disconnected", "detail": {"stored": False}}
+    with pytest.raises(AuthError) as err:
+        src.list()
+    assert err.value.code == "no_token"
+
+
+def test_a_stored_token_verified_across_a_newer_paste_is_not_restored(fake):
+    """p2 review F1: a paste completes while the stored token is being re-verified; the paste stays."""
+    src = GoProSource()
+    src.connect({"token": fake.good})
+    older, newer = fake.good, "eyJnewer"
+    seen = []
+
+    def paste_newer_mid_verify(url, status, bearer):
+        if "per_page=1&" in url and bearer == older and not seen:
+            seen.append(url)
+            fake.good = newer
+            src.connect({"token": newer})                     # verified and adopted first
+    fake.before_answer = paste_newer_mid_verify
+    assert src.connect({})["state"] == "connected"
+    fake.before_answer = None
+    src.list()
+    assert fake.tokens[-1] == newer                           # the older token did not come back
+    assert src.status()["state"] == "connected"
+
+
 def test_last_success_at_moves_on_list(fake):
     src = GoProSource()
     src.connect({"token": fake.good})
