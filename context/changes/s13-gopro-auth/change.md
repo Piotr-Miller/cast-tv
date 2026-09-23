@@ -1,7 +1,7 @@
 ---
 change_id: s13-gopro-auth
 title: GoPro without a hand-pasted token
-status: impl_reviewed
+status: implementing
 created: 2026-09-20
 updated: 2026-09-23
 archived_at: null
