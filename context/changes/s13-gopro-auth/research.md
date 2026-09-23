@@ -269,6 +269,38 @@ One entry per ticked manual row (`lessons.md:5-10`): the row, the date, the mach
   (discovery only; nothing launched). Artifacts: `cast-tv-windows-x64.exe` (22 584 564 bytes) and
   `cast-tv-linux-x64` (35 341 932 bytes); the `.exe` was downloaded from the run to check the row.
 
+### Phase 2
+
+- **Rows 2.1 (local half), 2.2, 2.3** (2026-09-22, the Fedora workstation, from the checkout).
+  `.venv/bin/python -m pytest tests/test_gopro.py tests/test_api.py`: 53 passed (20 new tests of
+  the round, the sidecar and the report seam in `test_gopro.py`, 2 in `test_api.py`), stable over
+  three consecutive runs. `.venv/bin/python -m pytest`: 328 passed, 1 skipped, 29.7 s.
+  `.venv/bin/python -m pyflakes castlib tests`: no output. No browser process was started by the
+  suite (`pgrep -af gopro-browser` empty afterwards). Row 2.1's CI half is checked on the phase
+  commit's workflow run. Noted while running the old suite against the new source: the first run
+  of `test_status_before_and_after_connect` (its `connect({})` with nothing stored now starts a
+  round) launched a real Chrome from a pytest tmp profile before the fake `Handoff` was wired in;
+  the profile and the process were removed by hand, and `tests/conftest.py` now refuses
+  `browser.launch` for the whole suite so that cannot recur.
+- **Row 2.4** (2026-09-23, the Fedora workstation, `.venv/bin/python -m castlib --no-browser` from the
+  checkout, the old UI in place; the browser the engine picked is the first candidate of row 1.5,
+  `/usr/bin/google-chrome`, Google Chrome 153.0.8010.47 as read on 2026-09-22). The owner ran
+  `curl -s -H 'Host: localhost:8895' -X POST http://localhost:8895/api/sources/gopro/connect -d '{"fresh": true}'`;
+  the answer was `{"state": "connecting", "detail": {"stored": true, "step": "browser", "expires_in": 299,
+  "note": "The gopro.com window opens on the computer running cast-tv, not on the device showing this
+  page."}, "step": "browser"}` and a gopro.com window opened on this machine. No sign-in was performed;
+  the owner closed the window with its own close control. `curl -s http://localhost:8895/api/sources/gopro`
+  then answered `state: disconnected`, `detail.stored: true`, `captured_by: "unknown"` (the token file
+  is the one pasted 9 days earlier, before this change, so it has no sidecar), `age: "token stored 9
+  days ago"`, `captured_at`/`cookie`/`last_success_at`/`first_401_at` null, and `flow_error` `{"code":
+  "browser_closed", "message": "The gopro.com window was closed before a session appeared."}`; no
+  `fallback` key. Two things learned on the way: the first attempt hit a cast-tv started 26 hours
+  earlier (`.venv/bin/cast-tv`, pid 697736, holding port 8895), which answered the old 401 text with
+  "lasts a few hours" because a running process keeps the code it started with; it was idle (cast
+  `stopped`, no show) and was ended with SIGTERM before the row was rerun. And the migration case of
+  the plan ("a token file from before this change keeps working ... `captured_by` reads `unknown`") was
+  observed for real, not only in `test_a_replaced_token_file_drops_the_metadata`.
+
 ## Measurements
 
 To be filled by the owner from Phase 5 of the plan; values only, never a token.

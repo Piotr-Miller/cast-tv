@@ -144,6 +144,9 @@ class App:
         self.local = LocalSource()
         self.sources: dict = {"gopro": GoProSource(), "onedrive": OneDriveSource(),
                               "gphotos": GPhotosSource()}   # name -> Source
+        for src in self.sources.values():
+            if hasattr(src, "report"):          # a source's own refusal lands in Diagnostics (GoPro's first 401)
+                src.report = self.errors.push
         self.stay_awake = StayAwake()
         self.addresses: list[str] = []
         self.started_at = time.time()
