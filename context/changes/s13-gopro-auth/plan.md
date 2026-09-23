@@ -826,14 +826,14 @@ profile directory and `gopro-session.json` behind, harmless and removable by han
 
 #### Automated
 
-- [x] 3.1 `python -m pytest tests/test_ui.py` passes
-- [x] 3.2 The full suite passes on both CI systems: `python -m pytest`
-- [x] 3.3 Lint passes: `python -m pyflakes castlib tests`
+- [x] 3.1 `python -m pytest tests/test_ui.py` passes — 2ab06e3
+- [x] 3.2 The full suite passes on both CI systems: `python -m pytest` — 2ab06e3
+- [x] 3.3 Lint passes: `python -m pyflakes castlib tests` — 2ab06e3
 
 #### Manual
 
-- [x] 3.4 On Fedora, the GoPro tab shows one button and no token field; the button opens a window; Cancel closes it and the button returns with no field
-- [x] 3.5 On Fedora with `CAST_TV_BROWSER=/nonexistent`, the button shows the fallback block with the reason, the steps and a working token field
+- [x] 3.4 On Fedora, the GoPro tab shows one button and no token field; the button opens a window; Cancel closes it and the button returns with no field — 2ab06e3
+- [x] 3.5 On Fedora with `CAST_TV_BROWSER=/nonexistent`, the button shows the fallback block with the reason, the steps and a working token field — 2ab06e3
 
 ### Phase 4: Docs, PRD, roadmap, CLI
 

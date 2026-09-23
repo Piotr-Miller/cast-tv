@@ -353,6 +353,12 @@ One entry per ticked manual row (`lessons.md:5-10`): the row, the date, the mach
   steps, the token field and "Save token". A junk value (`eyJtest`) and "Save token" put "GoPro
   rejected the token (401) - expired or incomplete." under the note; the block stayed. Confirmed by
   the owner as above. The paste of a real token is row 5.6, not run here.
+- **Row 3.2, the CI half** (2026-09-23, commit `2ab06e3`, PR #40). The test workflow (run 35916371410)
+  passed on `ubuntu-latest` and `windows-latest` (the whole suite, `test_ui.py` included). The release
+  build (run 35916371620) was green on `ubuntu-22.04` and `windows-latest`; its smoke step printed
+  `GoPro window: /usr/bin/google-chrome` and `GoPro window: C:\Program
+  Files\Google\Chrome\Application\chrome.exe`; artifacts `cast-tv-windows-x64.exe` (22 569 701 bytes)
+  and `cast-tv-linux-x64` (35 352 062 bytes).
 
 ## Measurements
 

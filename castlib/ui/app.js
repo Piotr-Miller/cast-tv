@@ -116,6 +116,7 @@ function castTv() {
       this._refreshing = true;
       try {
         const s = await api('GET', '/api/status', undefined, { timeout: POLL_TIMEOUT_MS });
+        this.watchSources(s);
         this.status = s;
         this.offline = false;
         if (s.settings && typeof s.settings.interval === 'number') this.interval = s.settings.interval;
@@ -180,6 +181,16 @@ function castTv() {
 
     // ------------------------------------------------------------ sources
     source(name) { return (this.status.sources && this.status.sources[name]) || null; },
+    // a source that has just become connected holds a new credential: its list is fetched again.
+    // A round that ended without one (cancelled, closed, timed out, failed to open) keeps the last
+    // list, so an expired banner still sits over it. Called with the new status before it lands.
+    watchSources(s) {
+      for (const src of SOURCES) {
+        const before = this.source(src.name), after = s.sources && s.sources[src.name];
+        const fresh = !!after && after.state === 'connected' && !(before && before.state === 'connected');
+        if (fresh && this.lists[src.name]) this.lists[src.name].loaded = false;
+      }
+    },
     connected(name) {
       const s = this.source(name);
       return !!s && s.state === 'connected';
@@ -269,8 +280,7 @@ function castTv() {
         await api('POST', '/api/sources/' + name + '/connect', params || {});
         this.gateNote[name] = '';
         this.tokenInput = '';
-        if (this.lists[name]) this.lists[name].loaded = false;   // a new token: list again
-        await this.refresh();
+        await this.refresh();                                    // a new credential: watchSources lists again
         this.ensureList(name);
       } catch (e) {
         this.gateNote[name] = e.code === 'unknown_source'
