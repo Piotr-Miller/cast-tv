@@ -306,6 +306,54 @@ One entry per ticked manual row (`lessons.md:5-10`): the row, the date, the mach
   smoke step printed `GoPro window: /usr/bin/google-chrome` and `GoPro window: C:\Program
   Files\Google\Chrome\Application\chrome.exe`, so the `.exe` of this commit exists for Phase 5.
 
+### Phase 3
+
+- **Rows 3.1, 3.2 (local half), 3.3** (2026-09-23, the Fedora workstation, from the checkout).
+  `.venv/bin/python -m pytest tests/test_ui.py`: 9 passed (3 new: the window block first with the
+  paste form only inside a fallback block, the decided texts with no "GoPro sign-in" and no "lasts a
+  few hours", the devtools steps absent from `app.js`). `.venv/bin/python -m pytest`: 336 passed,
+  1 skipped, 28.5 s. `.venv/bin/python -m pyflakes castlib tests`: no output. `node --check
+  castlib/ui/app.js`: no output. Row 3.2's CI half is checked on the phase commit's workflow run.
+- **A rendering pre-check before the manual rows** (2026-09-23, the agent, same machine; not a
+  substitute for rows 3.4 and 3.5, which the owner runs against the real gopro.com window). A
+  throwaway cast-tv (`XDG_CONFIG_HOME` and `XDG_CACHE_HOME` in the session scratchpad, so the
+  owner's token and profile were untouched; `CAST_TV_BROWSER=/nonexistent`; `--no-browser -p 8896`)
+  was driven in the owner's Chrome through the extension. The idle gate showed the heading, the
+  decided body, one button "Open gopro.com", the note and no token field. Pressing the button
+  showed, within a second, the fallback block: "cast-tv could not open a gopro.com window here: No
+  gopro.com window could be opened. /nonexistent: [Errno 2] No such file or directory:
+  '/nonexistent'. A token pasted from a signed-in browser works instead:", the three numbered steps
+  from `TOKEN_STEPS`, the field and "Save token"; no separate `flowError` line (the fallback carries
+  the reason). A paste of `eyJnot-a-real-token` showed "GoPro rejected the token (401) - expired or
+  incomplete." under the note (`gateNote`); the block stayed. No JavaScript console error; the
+  Diagnostics count stayed 0 (a failed launch is status-only, as designed). Two things learned: the
+  extension's own navigation carries `Sec-Fetch-Site: cross-site`, which `server.py`'s
+  `_check_origin` refuses by design (curl without that header got 200), so the page was reached with
+  a same-origin `location.href = '/ui/'` from the refused page; and the `browser_failed` reason
+  repeats the fallback line's idea ("could not open ... : No gopro.com window could be opened. ..."),
+  which is truthful but reads twice - left as is, a wording trim is a Phase 4 question.
+- **Row 3.4** (2026-09-23, the Fedora workstation, `.venv/bin/python -m castlib` from the checkout,
+  the cast-tv tab in Chrome; the window's browser is the first candidate of row 1.5,
+  `/usr/bin/google-chrome`, Google Chrome 153.0.8010.47 as read on 2026-09-22). The token pasted 9
+  days earlier was first forgotten with `curl -s -H 'Host: localhost:8895' -X POST
+  http://localhost:8895/api/sources/gopro/disconnect` (which also removed the sidecar and the
+  `gopro-browser` profile of row 2.4), so the tab showed the plain gate: "Connect GoPro", the body,
+  one button "Open gopro.com", the note, no token field and no numbered steps. Pressing the button:
+  "Opening…" for a moment, then the waiting block ("A gopro.com window is open on the computer
+  running cast-tv. Sign in in that window; this page continues by itself.", "waiting for the
+  sign-in… valid 5 min", the on-host note, "Cancel"), the tab hint "gopro.com window open…", and a
+  gopro.com window opened on this machine; no sign-in was performed. "Cancel" on the page closed
+  the window; the gate returned to the button alone, no note, no field. The owner confirmed every
+  screen as described ("3.4 i 3.5 wszystko jak w opisie").
+- **Row 3.5** (2026-09-23, same machine, `CAST_TV_BROWSER=/nonexistent .venv/bin/python -m castlib`
+  after Ctrl+C on the previous run, which printed `Stopped.`). Pressing "Open gopro.com" showed
+  within a second, under the button, the fallback block: "cast-tv could not open a gopro.com window
+  here: No gopro.com window could be opened. /nonexistent: [Errno 2] No such file or directory:
+  '/nonexistent'. A token pasted from a signed-in browser works instead:", the three numbered
+  steps, the token field and "Save token". A junk value (`eyJtest`) and "Save token" put "GoPro
+  rejected the token (401) - expired or incomplete." under the note; the block stayed. Confirmed by
+  the owner as above. The paste of a real token is row 5.6, not run here.
+
 ## Measurements
 
 To be filled by the owner from Phase 5 of the plan; values only, never a token.

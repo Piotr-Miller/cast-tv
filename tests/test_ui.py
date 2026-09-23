@@ -80,6 +80,58 @@ def test_ui_offers_a_share_link_before_any_sign_in():
         js = fh.read()
     assert "s.detail.picks > 0" in js and "this.linkNote = String" in js
 
+
+def _ui_text(name):
+    from castlib.server import UI_DIR
+    import os
+    with open(os.path.join(UI_DIR, name), encoding="utf-8") as fh:
+        return fh.read()
+
+
+def test_gopro_gate_offers_the_window_first():
+    """S-13: the GoPro gate is the window step; the paste form sits only inside a fallback block; the banner offers the window again."""
+    import re
+    html, js = _ui_text("index.html"), _ui_text("app.js")
+    assert '<template x-if="gate(tab).window">' in html and "connectStep(tab) === 'browser'" in html
+    assert 'openWindow(tab)' in html and "connect(name, { fresh: true })" in js
+    forms = [m.start() for m in re.finditer(r"saveToken\(tab\)", html)]
+    assert len(forms) == 2                                   # the gate's copy and the banner's copy
+    for pos in forms:                                        # each under the nearest x-if, which is the fallback rule
+        opener = html.rfind('<template x-if="', 0, pos)
+        tag = html[opener:html.index(">", opener)]
+        assert "fallback(tab)" in tag, tag
+    start = html.index('class="banner warn expired"')
+    banner = html[start:html.index("<h2>", start)]
+    assert "gate(tab).again" in banner and "openWindow(tab)" in banner and "fallback(tab)" in banner
+    assert "again: 'Open gopro.com again'" in js and "cta: 'Open gopro.com'" in js and "window: true" in js
+    assert "paste: true" not in js and "steps: [" not in js and "gate(tab).paste" not in html
+
+
+def test_gopro_gate_texts():
+    """S-13: the decided wording; the phone line comes from the server's note; no "GoPro sign-in", no hours."""
+    from castlib.sources.gopro import ON_HOST_NOTE
+    html, js = _ui_text("index.html"), _ui_text("app.js")
+    assert ("body: 'A gopro.com window opens on the computer running cast-tv. Sign in in that window. "
+            "cast-tv then uses that browser session to access your GoPro media and closes the window.'") in js
+    assert "expired: 'cast-tv couldn’t access your GoPro media with this session.'" in js
+    assert "expiredBody: 'Open gopro.com again to reconnect.'" in js
+    assert "A gopro.com window is open on the computer running cast-tv. Sign in in that window; this page continues by itself." in html
+    block = html[html.index("connectStep(tab) === 'browser'"):html.index('<template x-if="!connecting(tab)">')]
+    assert "source(tab).detail.note" in block and "cancelConnect(tab)" in block and "expires_in" in block
+    assert ON_HOST_NOTE == ("The gopro.com window opens on the computer running cast-tv, not on the device "
+                            "showing this page.")
+    assert "'gopro.com window open…'" in js and "'reconnect needed'" in js
+    for text in (js, html):
+        assert "GoPro sign-in" not in text and "lasts a few hours" not in text
+
+
+def test_gopro_steps_are_not_duplicated_in_the_ui():
+    """S-13: the devtools steps have one source (gopro.TOKEN_STEPS); the UI lists them from detail.fallback."""
+    html, js = _ui_text("index.html"), _ui_text("app.js")
+    assert "F12" not in js and "F12" not in html and "gp_access_token" not in js
+    assert "fallback(tab).steps" in html and "fallbackText(tab)" in html
+
+
 def open_ui_bytes():
     from castlib.server import UI_DIR
     import os
