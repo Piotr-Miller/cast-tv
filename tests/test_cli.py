@@ -266,6 +266,24 @@ def test_version_names_the_gopro_window(monkeypatch, tmp_path, capsys):
     assert launched == []
 
 
+def test_gopro_without_a_token_points_at_the_ui(monkeypatch, tmp_path, capsys):
+    """``cast-gopro`` with nothing stored names the UI route before the devtools steps; ``--token`` says the same."""
+    from castlib import config
+    monkeypatch.setattr(config, "_CONFIG", str(tmp_path / "config"))
+    monkeypatch.delenv("GOPRO_TOKEN", raising=False)
+    assert cli.main_gopro([]) == 1
+    err = capsys.readouterr().err
+    lines = err.splitlines()
+    assert lines[0] == "No GoPro token stored."
+    assert lines[1].startswith("Run cast-tv, open the GoPro tab and press Open gopro.com.")
+    assert err.index("Run cast-tv") < err.index("F12") < err.index("checked 2026-09-20")
+    assert "lasts a few hours" not in err and "GoPro sign-in" not in err
+    monkeypatch.setenv("COLUMNS", "200")                       # argparse wraps help at the terminal width
+    with pytest.raises(SystemExit):
+        cli.main_gopro(["--help"])
+    assert "the UI's Open gopro.com is the usual route" in capsys.readouterr().out
+
+
 def test_self_check_converts_a_heic(capsys):
     """The release smoke test's probe: a HEIC made in memory comes out as a JPEG."""
     assert cli.main_tv(["--self-check"]) == 0

@@ -250,7 +250,7 @@ function castTv() {
       const f = this.fallback(name);
       if (!f) return '';
       const reason = String(f.reason || '').trim().replace(/\.$/, '');
-      return 'cast-tv could not open a gopro.com window here: ' + reason + '. A token pasted from a signed-in browser works instead:';
+      return reason + '. A token pasted from a signed-in browser works instead:';   // the server's sentence already says why
     },
     openWindow(name) { this.connect(name, { fresh: true }); },
     expiredText(name) {

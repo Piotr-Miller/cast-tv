@@ -360,12 +360,81 @@ One entry per ticked manual row (`lessons.md:5-10`): the row, the date, the mach
   Files\Google\Chrome\Application\chrome.exe`; artifacts `cast-tv-windows-x64.exe` (22 569 701 bytes)
   and `cast-tv-linux-x64` (35 352 062 bytes).
 
+### Phase 4
+
+- **Rows 4.1, 4.2, 4.3** (2026-09-24, the Fedora workstation, from the checkout).
+  `.venv/bin/python -m pytest tests/test_cli.py`: 15 passed (1 new,
+  `test_gopro_without_a_token_points_at_the_ui`: `cast-gopro` with an empty config dir and no
+  `GOPRO_TOKEN` prints "No GoPro token stored." then a line starting "Run cast-tv, open the GoPro
+  tab and press Open gopro.com." before the F12 step and the dated standing note; `--help` for
+  `--token` reads "the UI's Open gopro.com is the usual route"). The two greps of the plan -
+  "lasts a few hours" / "last hours" over `README.md`, `castlib/ui/app.js`, `castlib/sources/gopro.py`,
+  and "GoPro sign-in" over `README.md`, the UI files, `gopro.py`, `prd.md` - found nothing (both
+  exited 1); the same "GoPro sign-in" grep over `roadmap.md` also found nothing after the S-13
+  section was rewritten (its old "Ideas" line carried the phrase). `.venv/bin/python -m pyflakes
+  castlib tests`: no output. `.venv/bin/python -m pytest`: 338 passed, 1 skipped, 28.5 s; no
+  `gopro-browser` process afterwards. Nothing was launched by this phase.
+- **A read-through before row 4.4** (2026-09-24, the agent; the owner's own read is the row).
+  Every claim in the README's GoPro section and the new Limitations paragraph was traced: the
+  standing sentence and the three sources with their read date 2026-09-20 to this file's first
+  spike (lines 20-58; see the 4.4 outcome below for what the sentence may say); the Terms' "Last Updated Date: April 11,
+  2024" and the §9 wording to lines 46-56; Firefox 141 (2025-07-22) to lines 207-209; the
+  browser list and Chrome-first order to `castlib/auth/browser.py:48-51,81`; the profile mode,
+  the seeded password-manager preference, the cache location and the `--app=` media-library
+  window to `browser.py:41,54,120-154`; the five-minute deadline to `browser.py:44`; the on-host
+  note to `castlib/sources/gopro.py:54`; "session captured" in the header to `gopro.py:793-796`;
+  `gopro-session.json` and its fields to `gopro.py:50-52`; the first-refusal card to the source's
+  `report` seam (Phase 2); `CAST_TV_BROWSER` as the only candidate to `browser.py:90-95` and
+  `--version` to `castlib/cli.py:286-299`; `GOPRO_TOKEN` to `gopro.py:84-88`; the fallback rule
+  to `castlib/ui/index.html:224-229,304-309`; the disconnect route removing token, sidecar and
+  profile to `gopro.py:873-876`; the Windows paths to `castlib/config.py:7-8`. Two sentences are
+  inferences, not sourced facts, and are worded as such: that GoPro "can end that on its side
+  at any time", and that the observed lifetime "once one is observed, is recorded with its
+  date" (a commitment about this file's Measurements table, below). Not claimed anywhere: that
+  the password-manager preference takes effect in Chrome or Edge (row 5.9 measures it), or any
+  session lifetime.
+- **Row 4.4, first read: not confirmed** (2026-09-24, the owner). The sentence "GoPro offers no
+  sign-in that another application may use" (README Limitations) and its GoPro-section form
+  "GoPro publishes no sign-in for other applications" overreach the sources: this file's line 84
+  records only that no documented, self-serve sign-in was found, and the closed beta's terms
+  remain unknown. The owner's wording, adopted verbatim: "No publicly documented, self-serve
+  sign-in for third-party applications was found (checked 2026-09-20)." Applied the same day
+  to both README places and, for one claim with one wording, to the three other copies:
+  `STANDING_NOTE` in `castlib/sources/gopro.py:54` (printed by `cast-gopro`; the plan's Phase 2
+  contract at `plan.md:411-412` prescribed the older sentence, so this is a deliberate deviation
+  from the plan's text on the owner's finding), the S-13 "Found" bullet in
+  `context/foundation/roadmap.md`, and the PRD Non-Goal, whose "none is offered to individuals"
+  was replaced for the same reason (whether an individual is eligible for the beta is "Not yet
+  checked", line 84-85). The row stays open until the owner reads the two README passages again.
+- **The fallback line, trimmed** (2026-09-24, the owner's call on the Phase 3 review note):
+  `fallbackText` in `castlib/ui/app.js` no longer prefixes "cast-tv could not open a gopro.com
+  window here: "; it shows the server's own sentence (`fallback.reason`, e.g. "No Chrome,
+  Chromium, Edge or Brave was found on this computer." or "No gopro.com window could be opened.
+  /nonexistent: ...") followed by "A token pasted from a signed-in browser works instead:". The
+  Phase 3 observations above quote the older, doubled line as it was seen then.
+- **Rows 4.1-4.3 re-run after the two changes** (2026-09-24, same machine): `tests/test_ui.py`,
+  `tests/test_gopro.py`, `tests/test_cli.py`: 68 passed; the full suite 338 passed, 1 skipped,
+  30.3 s; `node --check castlib/ui/app.js` and pyflakes clean; the two greps of the plan and a
+  third one for the old sentence ("publishes no sign-in", "offers no sign-in", "none is offered
+  to individuals") over README, `castlib/` and `context/foundation/` all found nothing.
+- **Row 4.4, second read: confirmed** (2026-09-24, the owner, README from the checkout against
+  this file). One more correction before the confirmation: in the Limitations paragraph "what
+  that beta offers, to whom and on what terms is not published" overstated what is unknown -
+  the developer page does advertise upload, download and playback (lines 20-22); what is not
+  established is the access the beta grants, to whom, and on what terms. The owner's wording,
+  adopted verbatim: "what access the beta grants, to whom and on what terms is not published."
+  The owner also kept the corrected standing sentence in `STANDING_NOTE`, the roadmap and the
+  PRD as within the intended scope ("usuwają to samo zbyt kategoryczne twierdzenie"). With that
+  change the owner confirmed the row: every claim in the GoPro section and the Limitations
+  paragraph carries its date or traces to this file.
+
 ## Measurements
 
 To be filled by the owner from Phase 5 of the plan; values only, never a token.
 
 | Field | Observation | Date |
 | --- | --- | --- |
+| `captured_at` / `captured_by` of the first window capture (Fedora, Chrome) | | |
 | `cookie.session` / `cookie.expires` at capture | | |
 | Sign-in method and seconds to the list (Fedora, Chrome) | | |
 | Sign-in method and seconds to the list (Windows, Edge, the artifact) | | |

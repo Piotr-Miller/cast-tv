@@ -51,8 +51,8 @@ META_WRITE_EVERY = 60.0       # seconds between sidecar writes for last_success_
 META_KEYS = ("captured_at", "captured_by", "cookie", "last_success_at", "first_401_at")
 ON_HOST_NOTE = ("The gopro.com window opens on the computer running cast-tv, not on the device "
                 "showing this page.")
-STANDING_NOTE = ("GoPro publishes no sign-in for other applications (checked 2026-09-20; "
-                 "see README, Limitations).")
+STANDING_NOTE = ("No publicly documented, self-serve sign-in for third-party applications was found "
+                 "(checked 2026-09-20; see README, Limitations).")
 # The devtools route, the one source of the steps: the CLI prints them below, the UI's fallback
 # block lists them when no gopro.com window can be opened on the host.
 TOKEN_STEPS = (
