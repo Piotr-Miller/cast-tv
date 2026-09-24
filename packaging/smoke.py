@@ -1,4 +1,4 @@
-"""Smoke-test a built cast-tv binary: the client is built in, HEIC decodes, the UI serves.
+"""Smoke-test a built cast-tv binary: the client is built in, a browser is found, HEIC decodes, the UI serves.
 
     python packaging/smoke.py dist/cast-tv-linux-x64
 
@@ -31,6 +31,9 @@ def main(binary) -> int:
     print(version.strip())
     if "Google Photos client: built in" not in version:
         sys.exit("the Google client is not built in")
+    # both runner images carry Chrome (Windows also Edge): discovery must name one, without launching it
+    if "GoPro window: " not in version or "GoPro window: none found" in version:
+        sys.exit("no browser for the gopro.com window was found on this runner")
     print(run(binary, "--self-check").strip())
     proc = subprocess.Popen([binary, "--no-browser", "-p", str(PORT)],
                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

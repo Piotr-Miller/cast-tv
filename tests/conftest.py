@@ -207,13 +207,25 @@ class FakeTV:
             return [u.rsplit("/", 1)[-1] for u in self.uris]
 
 
+def _no_browser_launch(args, **kwargs):
+    raise OSError("the test suite never launches a browser (replace browser.launch or browser.Handoff)")
+
+
 @pytest.fixture(autouse=True)
 def _no_stay_awake(monkeypatch):
-    """No test spawns ``systemd-inhibit``, touches the Windows execution state or hooks the console."""
+    """No test spawns ``systemd-inhibit``, touches the Windows execution state, hooks the console or launches a browser.
+
+    A GoPro round started without a fake ``Handoff`` would otherwise open a
+    real Chrome on the developer's desktop (it did once, 2026-09-22); with
+    ``launch`` refused it ends in ``browser_failed`` instead. Tests of the
+    engine replace ``launch`` themselves.
+    """
     from castlib import platform
+    from castlib.auth import browser
     monkeypatch.setattr(platform, "default_backend", lambda: platform.NullBackend())
     monkeypatch.setattr(platform, "end_on_console_close", lambda: False)
     monkeypatch.setattr(platform, "firewall_policy", platform.FirewallPolicy(platform="none"))
+    monkeypatch.setattr(browser, "launch", _no_browser_launch)
 
 
 @pytest.fixture
