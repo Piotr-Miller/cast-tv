@@ -851,17 +851,17 @@ profile directory and `gopro-session.json` behind, harmless and removable by han
 
 #### Automated
 
-- [x] 5.1 The full suite is green on both CI systems for the commit under test
-- [x] 5.2 The PR's release-build run for that commit is green; its Windows artifact is the one used below (run id in `research.md`)
+- [x] 5.1 The full suite is green on both CI systems for the commit under test — 2bce9dc
+- [x] 5.2 The PR's release-build run for that commit is green; its Windows artifact is the one used below (run id in `research.md`) — 2bce9dc
 
 #### Manual
 
-- [x] 5.3 Fedora, the full hand-off (Chrome version, sign-in method, seconds to the list, cookie `session`/`expires` recorded)
-- [x] 5.4 Fedora, Cancel closes the window; button returns, no field
-- [x] 5.5 Fedora, the window closed by hand: "closed before a session appeared", button, no field
-- [x] 5.6 Fedora, the fallback with `CAST_TV_BROWSER=/nonexistent`: reason, steps, a paste works, "token stored just now"
-- [x] 5.7 Fedora, Ctrl+C mid-round closes the window; `pgrep -f gopro-browser` prints nothing
-- [x] 5.8 Phone: the window opens on the Fedora machine, the phone shows the on-host note, then lists by itself
+- [x] 5.3 Fedora, the full hand-off (Chrome version, sign-in method, seconds to the list, cookie `session`/`expires` recorded) — 2bce9dc
+- [x] 5.4 Fedora, Cancel closes the window; button returns, no field — 2bce9dc
+- [x] 5.5 Fedora, the window closed by hand: "closed before a session appeared", button, no field — 2bce9dc
+- [x] 5.6 Fedora, the fallback with `CAST_TV_BROWSER=/nonexistent`: reason, steps, a paste works, "token stored just now" — 2bce9dc
+- [x] 5.7 Fedora, Ctrl+C mid-round closes the window; `pgrep -f gopro-browser` prints nothing — 2bce9dc
+- [x] 5.8 Phone: the window opens on the Fedora machine, the phone shows the on-host note, then lists by itself — 2bce9dc
 - [ ] 5.9 No "Save password?" bubble in the window on either system
 - [ ] 5.10 Windows 11, Edge, the artifact: `--version` names the browser; rows 5.3-5.6 repeated; closing the console closes the window; no `msedge.exe` left
 - [ ] 5.11 The profile question, dated: after the first refusal, "Open gopro.com again" closed without typing, or asked to sign in
