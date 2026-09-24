@@ -839,13 +839,13 @@ profile directory and `gopro-session.json` behind, harmless and removable by han
 
 #### Automated
 
-- [ ] 4.1 `python -m pytest tests/test_cli.py` passes
-- [ ] 4.2 `grep` finds no "lasts a few hours" / "last hours" in README, app.js, gopro.py
-- [ ] 4.3 `grep` finds no "GoPro sign-in" in README, the UI files, gopro.py, prd.md
+- [x] 4.1 `python -m pytest tests/test_cli.py` passes
+- [x] 4.2 `grep` finds no "lasts a few hours" / "last hours" in README, app.js, gopro.py
+- [x] 4.3 `grep` finds no "GoPro sign-in" in README, the UI files, gopro.py, prd.md
 
 #### Manual
 
-- [ ] 4.4 The README's GoPro section and Limitations paragraph read against `research.md`: every claim carries its date or file:line
+- [x] 4.4 The README's GoPro section and Limitations paragraph read against `research.md`: every claim carries its date or file:line
 
 ### Phase 5: Both systems before merge
 

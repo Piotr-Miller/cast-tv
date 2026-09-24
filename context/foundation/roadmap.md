@@ -3,7 +3,7 @@ project: cast-tv
 version: 1
 status: active
 created: 2026-09-19
-updated: 2026-09-20
+updated: 2026-09-24
 prd_version: 1
 main_goal: personal-use-then-share
 top_blocker: time
@@ -45,7 +45,7 @@ conversion and the cast supervisor. Delivered with `cloud-source-ui` (PR #1, 202
 | S-10 | (not opened) | connect Google Photos with any Google account, without weekly re-consent | S-08 | US-04 | parked |
 | S-11 | s11-screensaver | watch a slideshow or a long film without the TV's screen saver cutting in | S-02 | US-03 | done |
 | S-12 | (proposed) | run cast-tv as a desktop window on Windows and Linux, not only a browser tab | S-08 | — | proposed |
-| S-13 | (proposed) | connect GoPro without copying a token by hand | S-03 | FR-010 | proposed |
+| S-13 | s13-gopro-auth | connect GoPro without copying a token by hand | S-03 | FR-010 | in progress |
 | S-14 | (proposed) | cast to Google TV and Chromecast devices, not only DLNA TVs | S-02 | — | proposed |
 
 ## Streams
@@ -102,9 +102,9 @@ and a LAN-exposure problem (`cloud-source-ui/research.md`).
 
 ## Proposed
 
-Raised by the owner on 2026-09-19 (in Polish, quoted with an English gloss). Nothing here is
-planned or researched yet; each needs a `research.md` before a plan. The ideas under each are
-starting points, not findings.
+Raised by the owner on 2026-09-19 (in Polish, quoted with an English gloss). Unless its entry
+says otherwise, nothing here is planned or researched yet; each needs a `research.md` before a
+plan. The ideas under each are starting points, not findings.
 
 ### S-11: No screen saver during a slideshow or a long film
 
@@ -143,14 +143,26 @@ starting points, not findings.
 ### S-13: GoPro without a hand-pasted token
 
 - **Phase:** phase:post-mvp
+- **Change:** `context/changes/s13-gopro-auth/`
 - **Owner's words:** "Rozkminka jak uprościć dodawanie tokenu dla GoPro - ręczne wklejanie jest
   jakieś nieprofesjonalne" ("figure out how to simplify adding the GoPro token - pasting it by
   hand looks unprofessional")
-- **To find out:** whether GoPro offers any sign-in a third-party app may use; the cloud API
-  cast-tv calls is not public.
-- **Ideas:** a GoPro sign-in inside an app-owned browser window (pairs with S-12) that keeps the
-  resulting cookie; a browser extension or bookmarklet that hands the token to the local server.
-  Either way the token stays inside cast-tv and is never shown or logged.
+- **Found (2026-09-20, `s13-gopro-auth/research.md`):** no publicly documented, self-serve
+  sign-in for third-party applications; the "Cloud API (BETA)" sits behind a business intake form
+  and its terms are not published, Open GoPro covers the camera only, and the Terms of Use §9
+  permit access only through GoPro's own software or a general web browser. The frame (`frame.md`, 2026-09-20/21) split the slice into a *hand-off*
+  problem cast-tv can solve and a *standing* problem it cannot.
+- **Planned 2026-09-21** (`s13-gopro-auth/plan.md`): the hand-off only. Pressing **Open gopro.com**
+  launches a Chromium-family browser already on the host (Chrome, Chromium, Edge, Brave; not
+  Firefox) in a window and profile cast-tv owns, reads the `gp_access_token` cookie over the Chrome
+  DevTools Protocol once the person has signed in, verifies it against `api.gopro.com`, stores it
+  as a paste was stored and closes the window. The profile persists under the config directory
+  and goes with a disconnect; the paste stays as the fallback when no window can be opened; the
+  standing is unchanged and recorded as a dated README limitation. The bookmarklet is out (page
+  script cannot read the cookie); the extension and an embedded webview were weighed and
+  declined. Phases 1-3 (the engine, the source and API, the UI gate) landed on PR #40 by
+  2026-09-23; Phase 4 is the docs; Phase 5 exercises both systems by hand before merge.
+- The token stays inside cast-tv and is never shown or logged.
 
 ### S-14: Google TV and Chromecast as targets
 

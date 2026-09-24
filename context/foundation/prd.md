@@ -126,8 +126,9 @@ or create cloud projects.
 - FR-002: Show the TV's state and a clear banner when it is unreachable.
 
 ### Sources
-- FR-010: GoPro lists the cloud library after a token pasted in the UI; an expired token keeps
-  the list with a banner.
+- FR-010: GoPro lists the cloud library after a session handed over from a browser window on the
+  host, or after a token pasted in the UI when no such window can be opened; a refused token
+  keeps the list with a banner.
 - FR-011: OneDrive browses the whole drive by folder after a device-code sign-in (refresh ~90 days).
 - FR-012: Google Photos lists what the user picked in Google's picker after a one-time consent on
   the host; share links from other people's libraries cast videos with no sign-in.
@@ -167,6 +168,8 @@ or create cloud projects.
 - No audio casting from the UI; no GIF or raw stills.
 - No browsing local folders from the UI.
 - No Google OAuth verification for now (no domain; decision 2026-09-19).
+- No GoPro-sanctioned client: no publicly documented, self-serve sign-in for third-party
+  applications was found (checked 2026-09-20); the connection is the person's own browser session.
 - No code signing, installers, auto-update or macOS for now.
 - No background service; no persistence of Google picks across restarts.
 

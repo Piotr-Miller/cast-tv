@@ -399,7 +399,8 @@ def main_gopro(argv=None):
                                  description="Play GoPro cloud material on a TV.")
     ap.add_argument("what", nargs="?",
                     help="number from the listing, media id, or a gopro.com/v/... link")
-    ap.add_argument("--token", help="store an access token from the browser and exit")
+    ap.add_argument("--token", help="store a token pasted from a signed-in browser and exit "
+                                    "(the UI's Open gopro.com is the usual route)")
     ap.add_argument("-n", "--count", type=int, default=25, help="how many entries to list")
     ap.add_argument("-q", "--quality", choices=("auto", "source", "proxy"), default="auto",
                     help="auto takes the best variant, proxy a lighter preview")
