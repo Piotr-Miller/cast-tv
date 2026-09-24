@@ -435,15 +435,207 @@ One entry per ticked manual row (`lessons.md:5-10`): the row, the date, the mach
   `cast-tv-windows-x64.exe` (22 595 547 bytes) and `cast-tv-linux-x64` (35 351 998 bytes), so the
   `.exe` of this commit exists for Phase 5 if no review fix lands after it.
 
+### Phase 5
+
+- **Rows 5.1, 5.2** (2026-09-24, commit `d14deaa`, PR #40). The commit under test is the branch
+  head after the Phase 4 close-out; it touches `context/` only, so its binary is built from the
+  code of `d669315` and nothing later (the Phase 5 commit itself is context-only too, so this
+  run stays the one that counts). The test workflow (run 36049997692) passed on `ubuntu-latest`
+  (338 passed, 1 skipped, 31.3 s) and `windows-latest` (335 passed, 4 skipped, 83.8 s). The
+  release build (run 36049997670) was green on `ubuntu-22.04` and `windows-latest`; its
+  `release` job was skipped as designed (no tag); its smoke step printed `GoPro window:
+  /usr/bin/google-chrome` and `GoPro window: C:\Program Files\Google\Chrome\Application\chrome.exe`.
+  The run's artifacts: `cast-tv-windows-x64.exe` (artifact id 10830037066, 22 572 716 bytes as
+  GitHub lists it, i.e. zipped; expires 2026-12-23) and `cast-tv-linux-x64` (id 10830006951,
+  35 352 149 bytes). The Windows artifact was downloaded on the Fedora workstation with `gh run
+  download 36049997670 -n cast-tv-windows-x64.exe`: the unpacked `cast-tv-windows-x64.exe` is
+  22 840 651 bytes, SHA-256
+  `0d22f1d7caff48e8413817098bfbf6d0ce21a72046100c651240aaef27809317`. Row 5.10's copy on the
+  laptop is checked against that hash (`Get-FileHash .\cast-tv-windows-x64.exe` in PowerShell)
+  so "the artifact of the commit under test" is a comparison, not a belief. Rows 5.1 and 5.2 are
+  ticked on this.
+- **Pre-checks before the manual rows** (2026-09-24, the agent, the Fedora workstation; nothing
+  launched, nothing signed in). `ss -ltnp 'sport = :8895'` listed nothing, so no older cast-tv
+  holds the port (row 2.4's first attempt hit one); `pgrep -af gopro-browser` found no browser
+  process. `google-chrome --version`: Google Chrome 153.0.8010.47, unchanged since row 1.5;
+  `.venv/bin/python -m castlib --version` printed the three lines with `GoPro window:
+  /usr/bin/google-chrome`. `~/.config/cast-tv/` holds no `gopro-token` and no
+  `gopro-session.json` (row 3.5's junk paste was refused and never saved), so the GoPro tab
+  shows the gate on start. It does hold the `gopro-browser` profile that row 3.4's window
+  created on 2026-09-23; no sign-in was performed in it, so GoPro asks to sign in either way,
+  and the disconnect route before row 5.3 removes it and gives the Definitions' "empty on first
+  use" case. The LAN address for row 5.8 is `http://192.168.50.198:8895/ui/` (`hostname -I`;
+  cast-tv prints it at start).
+- **Found on the way: a directory `remove_profile()` does not remove** (2026-09-24, the agent).
+  Next to the expected `~/.cache/cast-tv/gopro-browser-cache/` (the `--disk-cache-dir`) there is
+  `~/.cache/cast-tv/gopro-browser/Default/`, empty, dated 2026-09-23 20:57. It is Chrome's own
+  doing: on Linux, when the user data dir sits under `$XDG_CONFIG_HOME`, Chrome keeps its cache
+  in the same subpath under `$XDG_CACHE_HOME` ("this maps ~/.config/google-chrome to
+  ~/.cache/google-chrome", `GetUserCacheDirectory` in
+  https://chromium.googlesource.com/chromium/src/+/main/chrome/common/chrome_paths_linux.cc,
+  read 2026-09-24), and `--disk-cache-dir` moves only the HTTP cache out of it.
+  `castlib/auth/browser.py:141-144` removes the profile and `gopro-browser-cache` only, so this
+  directory survives `disconnect()`. Harmless (an empty tree), Linux-only, and not a row of this
+  phase, so no code change here; recorded for the owner's call (a third `rmtree` in
+  `remove_profile()` and a README "Where files live" mention would close it).
+- **How the Fedora rows were run** (2026-09-24, the agent, on the owner's request "zrob to za
+  mnie"; the sign-in itself stayed the owner's). cast-tv from the checkout at `d14deaa`,
+  `.venv/bin/python -m castlib --no-browser`, started under `setsid` so it owns its process
+  group and a terminal's Ctrl+C can be reproduced as SIGINT to that group (`--no-browser` only
+  skips opening the UI tab; the hand-off window is unaffected, README "GoPro"). The UI was
+  driven in the owner's Chrome through the extension, in a tab of its own reached with the
+  same-origin `location.href = '/ui/'` step of the Phase 3 pre-check. That tab was occluded the
+  whole time (`document.visibilityState === 'hidden'`), and the UI pauses its poll in a hidden
+  tab by design (`castlib/ui/app.js:107`, resumed by the `visibilitychange` handler), so after
+  each server-side transition the view was refreshed with the same `refresh()` that handler
+  calls; the transitions that follow a user action (the button, Cancel) arrived through the
+  action's own response, as in any tab. The app window is Google Chrome 153.0.8010.47
+  (`/usr/bin/google-chrome`, `/opt/google/chrome/chrome` in `ps`) on the app's own profile; the
+  owner's Chrome profile was never touched. Every reading below is from `GET
+  /api/sources/gopro`, `GET /api/errors`, `pgrep`, `ls` and the page text; no token value was
+  read or printed.
+- **Row 5.4** (2026-09-24 22:09 local, the Fedora workstation). Start state: no token, no
+  sidecar; the row-3.4 profile removed first with `POST /api/sources/gopro/disconnect` (answer
+  `{"state": "disconnected", "detail": {"stored": false}}`; `gopro-browser` and
+  `gopro-browser-cache` gone). The gate: "Connect GoPro", the body, one button "Open
+  gopro.com", the note, no field; Diagnostics 0. The button: the tab hint "gopro.com window
+  open…", the waiting block ("A gopro.com window is open on the computer running cast-tv. Sign
+  in in that window; this page continues by itself.", "waiting for the sign-in… valid 5 min",
+  the on-host note, "Cancel"); a process `/opt/google/chrome/chrome
+  --user-data-dir=…/gopro-browser --disk-cache-dir=…/gopro-browser-cache
+  --remote-debugging-port=0 --no-first-run --no-default-browser-check --password-store=basic …`
+  and `DevToolsActivePort` in the profile; the API `connecting`, `step: browser`, `expires_in:
+  294`. "Cancel" on the page: the Chrome process gone, the API `{"state": "disconnected",
+  "detail": {"stored": false}}` (no `flow_error`, no `fallback`), the gate back to the button
+  alone, no note, no field; Diagnostics still 0.
+- **Row 5.5** (2026-09-24 22:16 local, same machine; run twice, the second time with the view
+  read). The window opened on
+  `https://gopro.com/login?redirect_uri=https%3A%2F%2Fgopro.com%2Fmedia-library…` (GoPro sends
+  the `--app=` media-library URL to its own login page; no bot wall). No sign-in performed. The
+  window was closed *not with its X* (a Wayland session with no xdotool) but by closing its only
+  page target over CDP from a second client on the browser endpoint (`Target.closeTarget`;
+  `close_window.py` in the session scratchpad, on `castlib.auth.cdp`): the last window closing
+  is what the X does, and Chrome then exits on its own - the process was gone within 1 s. The
+  API: `disconnected`, `flow_error: {"code": "browser_closed", "message": "The gopro.com window
+  was closed before a session appeared."}`, no `fallback`; Diagnostics 0. The view after
+  `refresh()`: the button, under it the warn-coloured line "The gopro.com window was closed
+  before a session appeared.", the note; no field. The X button itself is pressed by the owner
+  on Windows (row 5.10).
+- **Row 5.7** (2026-09-24 22:17 local, same machine). With a round running - the Chrome main
+  process sits in cast-tv's own process group (`pgid` equal to cast-tv's pid), so a terminal's
+  Ctrl+C reaches both, as it would at a real terminal - SIGINT was sent to that group (`kill
+  -INT -- -<pgid>`). cast-tv exited within 1 s, its output ending with `Stopped.`; the Chrome
+  process was gone in the same second; `pgrep -f gopro-browser`, run from a script file so no
+  shell command line carried the pattern, printed no browser process (its one hit was the
+  agent's own `bash -c`, whose command line contained the pattern; at a terminal, where the
+  command line is `pgrep -f gopro-browser` alone, it prints nothing). Also the Definitions'
+  SIGTERM case, in a separate round at 22:18: `kill -TERM <cast-tv pid>` to cast-tv alone,
+  Chrome not signalled - `Stopped.`, and the window was gone in the same second, so `close()`
+  closes it by itself (`castlib/sources/gopro.py:878-887`).
+- **Row 5.3, the measured half** (2026-09-24, same machine; cast-tv restarted at 22:18 after the
+  SIGTERM round; the profile present from the rounds above, with no session in it). The button
+  pressed at 20:18:38 UTC (22:18:38 local): `connecting/browser`, `expires_in: 299`. The owner
+  signed in in the window (method, 2FA and the moment of the last click: the owner's report,
+  which this row waits for). A once-per-second recorder of `GET /api/sources/gopro` saw
+  `connecting` until 20:20:54 and `connected` at 20:20:55 UTC: `captured_by: "window"`,
+  `captured_at: 1790281254.958` = 2026-09-24T20:20:54.957Z; `stored_at` and `verified_at`
+  20:20:55.072Z (verified against `api.gopro.com` and written 115 ms after the cookie was
+  seen); `cookie: {"session": false, "expires": 1790886054.401}` = 2026-10-01T20:20:54.401Z,
+  exactly 7.0 days (604 799 s) after capture - **the `gp_access_token` cookie GoPro sets is
+  persistent with a seven-day expiry, not a session cookie** (what the token itself is good for
+  is the observed period, rows 5.11-5.12). The window closed by itself (no Chrome process with
+  the profile afterwards). The tab after `refresh()`: the header "session captured just now"
+  (the tab hint the same), the library listed (100 items on the first page, "Load more"),
+  Diagnostics 0 (`errors_seq: 0`, `/api/errors` empty). Files at 22:20: `gopro-token` (0600,
+  1 273 bytes) and `gopro-session.json` (0600, 213 bytes); the sidecar reads `captured_at
+  1790281254.958`, `captured_by "window"`, `cookie {session: false, expires: 1790886054.401}`,
+  `last_success_at 1790281256.513` (the first list, 1.6 s after capture), `first_401_at null`,
+  `token_mtime 1790281255.073` = the token file's mtime; no part of the token in it. From the
+  button to the list: 2 min 17 s, of which the sign-in is the owner's part.
+- **Row 5.3, the owner's half, and row 5.9 for Chrome** (2026-09-24, the owner, at the window
+  on the Fedora workstation): signed in with the password (not Google or Apple), no 2FA was
+  asked, and no "Save password?" bubble appeared in the window after the sign-in ("haslo, nie
+  bylo 2fa, nie widzialem dymku"). The seconds from the last sign-in click to the list were not
+  timed; the button-to-list span above (2 min 17 s) includes the typing. Row 5.3 is ticked on
+  the two halves together; row 5.9 stays open for its Edge half (row 5.10).
+- **Row 5.6, the fallback half** (2026-09-24 22:24 local, the agent, same machine). A deviation
+  from the row's literal command, on purpose: the fallback instance ran as a *second* cast-tv,
+  `XDG_CONFIG_HOME` and `XDG_CACHE_HOME` in the session scratchpad,
+  `CAST_TV_BROWSER=/nonexistent .venv/bin/python -m castlib --no-browser -p 8896`, so the first
+  window capture of row 5.3 stayed live on port 8895 for the observed-period rows (5.11-5.12)
+  instead of being removed by the `disconnect` the row needs first; the fallback path does not
+  read the config dir, and the disconnect-then-recapture case in the real config dir is row
+  5.8. Its `--version` third line: `GoPro window: CAST_TV_BROWSER=/nonexistent (not found)`.
+  In its tab, "Open gopro.com" at 20:24:34.183 UTC: the API had `flow_error.code:
+  "browser_failed"` and `fallback` at 20:24:34.186 (3 ms; nothing launched, no Chrome process
+  with a `--user-data-dir`), and the page showed under the button, in one block: "No gopro.com
+  window could be opened. /nonexistent: [Errno 2] No such file or directory: '/nonexistent'. A
+  token pasted from a signed-in browser works instead:", the three numbered steps of
+  `TOKEN_STEPS` (media-library and sign in; F12 -> Application -> Storage -> Cookies; copy
+  `gp_access_token`, or the Network tab's "authorization" header), the field with the `eyJ…`
+  placeholder and "Save token"; the note below; Diagnostics 0. The paste half is the owner's.
+- **Row 5.6, the paste half** (2026-09-24 22:33 local, the owner pasted a token from the
+  devtools of their own signed-in Chrome into that field and pressed "Save token"; the agent
+  read the result). The API on port 8896: `connected`, `stored: true`, `age: "token stored just
+  now"`, `captured_by: "paste"`, `captured_at: 1790281991.434` (20:33:11 UTC), `cookie: null`,
+  `first_401_at: null`, and neither `fallback` nor `flow_error` any more (a paste clears the
+  fallback, as `test_no_browser_sets_the_fallback` has it); the list answered 100 items with a
+  next page; Diagnostics 0. The page: the header and the tab hint "token stored just now", the
+  library listed, `gateNote` empty. In the throwaway config dir: `gopro-token` (0600, 1 273
+  bytes), `gopro-session.json` (0600, 170 bytes: `captured_by "paste"`, `cookie null`,
+  `token_mtime` = the file's mtime, no part of the token), and an empty `gopro-browser`
+  directory that `prepare_profile()` had created before the failed launch (expected: the
+  profile is prepared, then the candidates are tried). Also seen: the sidecar's
+  `last_success_at` (20:33:11.567, the verifying `search`) lagged the API's (20:33:18.849, the
+  list) by design - the disk write is throttled to once a minute (`META_WRITE_EVERY`). The 8896
+  instance was then stopped and its tab closed; the scratchpad dirs are the session's.
+- **Seen before row 5.8: an open tab keeps its list after an API disconnect** (2026-09-24 22:34,
+  the agent). `POST /api/sources/gopro/disconnect` on the live instance answered
+  `disconnected`, removed `gopro-token`, `gopro-session.json`, the profile and its cache. The
+  tab that had been listing (the owner had meanwhile switched it to Photos and loaded 200
+  items) showed, after `refresh()`, the hint "not connected" over the same list, not the gate:
+  the gate renders only while `!listVisible(tab)` (`castlib/ui/index.html:196`), and the list is
+  dropped only on a transition *to* `connected` (the Phase 3 review F1 rule, `d820006`). A
+  reload showed the gate with the button and no field. Not a row of this phase (the UI has no
+  disconnect control; the route is curl-only, "What We're NOT Doing") and the phone loads the
+  page fresh; recorded because a future "Forget the session" control would have to clear the
+  list as well as the credential.
+- **Row 5.8, the measured half** (2026-09-24 22:39-22:40 local; the owner on the phone and at
+  the Fedora window, the agent at the API). After the disconnect above (no token, no profile),
+  the owner opened `http://192.168.50.198:8895/ui/` on the phone and pressed "Open gopro.com"
+  there. The recorder on `GET /api/sources/gopro` (once a second, the agent's hidden tab's poll
+  paused, so the phone was the only UI client) saw `disconnected` until 20:39:40,
+  `connecting/browser` at 20:39:41 UTC (the window opened on the Fedora workstation), and
+  `connected` at 20:40:42 UTC, 61 s later: `captured_by: "window"`, `captured_at:
+  1790282441.284` = 2026-09-24T20:40:41.283Z, `stored_at`/`verified_at` 20:40:41.398Z, `cookie:
+  {"session": false, "expires": 1790887240.448}` = 2026-10-01T20:40:40.447Z, again 7.0 days
+  (604 799 s) after capture; `last_success_at: 1790282442.004` = 0.7 s after capture, the
+  phone's own list request, so the phone's tab listed by itself (the owner's report says what
+  the phone showed); Diagnostics 0; no Chrome process with the profile afterwards (the window
+  closed by itself). Files at 22:40: `gopro-token` (0600, 1 273 bytes), `gopro-session.json`
+  (0600, 215 bytes, `captured_by "window"`, `token_mtime` = the file's mtime, no part of the
+  token), the profile `gopro-browser` (0700). This capture is the one now live on the Fedora
+  workstation, and the one rows 5.11-5.12 measure; the sign-in in the window was in a profile
+  the disconnect had emptied, so it was a full sign-in (the owner's report confirms which).
+  cast-tv does not log requests, so the phone's address is not in its output. Ticked with the
+  owner's report on the phone's screens.
+- **Row 5.8, the owner's half, and row 5.9 for Chrome again** (2026-09-24, the owner): the
+  phone showed the on-host note ("notka była"), the phone's tab went to the list by itself
+  without a refresh ("lista sama"), the window on the Fedora workstation asked for a sign-in
+  ("prosiło o logowanie": the disconnect had emptied the profile, so no remembered session
+  carried over - the profile question of row 5.11 is a different case, a profile that *has*
+  seen a sign-in), and no "Save password?" bubble appeared ("bez dymku"), the second Chrome
+  observation for row 5.9. Row 5.8 is ticked on the two halves; row 5.9 still waits for Edge.
+
 ## Measurements
 
 To be filled by the owner from Phase 5 of the plan; values only, never a token.
 
 | Field | Observation | Date |
 | --- | --- | --- |
-| `captured_at` / `captured_by` of the first window capture (Fedora, Chrome) | | |
-| `cookie.session` / `cookie.expires` at capture | | |
-| Sign-in method and seconds to the list (Fedora, Chrome) | | |
+| `captured_at` / `captured_by` of the first window capture (Fedora, Chrome) | 2026-09-24T20:20:54.957Z (22:20:54 local) / `window`; cast-tv from the checkout at `d14deaa`, Google Chrome 153.0.8010.47 | 2026-09-24 |
+| `cookie.session` / `cookie.expires` at capture | `false` / 1790886054.401 = 2026-10-01T20:20:54Z, 7.0 days after capture: a persistent cookie | 2026-09-24 |
+| Sign-in method and seconds to the list (Fedora, Chrome) | password, no 2FA, no "Save password?" bubble; 2 min 17 s from the button to the list including the typing (the last click was not timed) | 2026-09-24 |
 | Sign-in method and seconds to the list (Windows, Edge, the artifact) | | |
 | Worked for at least (last successful call after capture) | | |
 | First refusal (first 401 after capture) | | |
