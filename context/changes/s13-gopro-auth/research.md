@@ -427,6 +427,13 @@ One entry per ticked manual row (`lessons.md:5-10`): the row, the date, the mach
   PRD as within the intended scope ("usuwają to samo zbyt kategoryczne twierdzenie"). With that
   change the owner confirmed the row: every claim in the GoPro section and the Limitations
   paragraph carries its date or traces to this file.
+- **The Phase 4 commit, the CI half** (2026-09-24, commit `d669315`, PR #40). The test workflow
+  (run 36046967872) passed on `ubuntu-latest` (338 passed, 1 skipped, 30.9 s) and `windows-latest`
+  (335 passed, 4 skipped, 87.7 s). The release build (run 36046967835) was green on `ubuntu-22.04`
+  and `windows-latest`; its smoke step printed `GoPro window: /usr/bin/google-chrome` and
+  `GoPro window: C:\Program Files\Google\Chrome\Application\chrome.exe`; artifacts
+  `cast-tv-windows-x64.exe` (22 595 547 bytes) and `cast-tv-linux-x64` (35 351 998 bytes), so the
+  `.exe` of this commit exists for Phase 5 if no review fix lands after it.
 
 ## Measurements
 
