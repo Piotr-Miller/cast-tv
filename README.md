@@ -34,7 +34,7 @@ laptop's disk (or through the laptop from the cloud), and the remote drives seek
 
 The download is `cast-tv` only - the UI and the command line below; `cast-gopro` and
 `cast-photos` come with the pipx install. `cast-tv --version` says whether the Google Photos
-client is built in (it is, in a release).
+client is built in (it is, in a release) and which browser would open the gopro.com window.
 
 **From source**, with Python 3.10 or newer and [pipx](https://pipx.pypa.io/), which puts
 `cast-tv`, `cast-gopro` and `cast-photos` on the path on both systems:
@@ -122,11 +122,34 @@ instead of offering the command.
 
 ### GoPro
 
-GoPro has no public login for third-party apps, so the tab takes a bearer token copied out of a
-logged-in browser: open the GoPro cloud library, open the devtools network tab, and copy the
-`Authorization` header of any `api.gopro.com` request. Paste it into the tab (or
-`cast-gopro --token eyJhbGc...`). It expires after a few hours; the tab then shows a banner over
-the list and takes a new paste in place. `$GOPRO_TOKEN` overrides the stored token.
+No publicly documented, self-serve sign-in for third-party applications was found (checked
+2026-09-20; see Limitations), so the tab borrows your own gopro.com browser session. Press
+**Open gopro.com**: cast-tv starts a Chromium-family browser already on this computer (Chrome,
+Chromium, Edge or Brave, Chrome first; Firefox cannot be used, it removed the protocol this
+needs in version 141, July 2025) as a window of its own on a profile of its own, showing the
+GoPro media library. Sign in there the way you always do. cast-tv reads the session cookie of
+that window over the browser's DevTools protocol, checks it against `api.gopro.com`, stores it
+exactly as a pasted token was stored, and closes the window; the tab lists the library and the
+header says when the session was captured. The window opens on the machine running cast-tv,
+whichever device pressed the button (the phone sees a note saying so). **Cancel**, closing the
+window yourself, or five minutes without a sign-in end the round and bring the button back.
+
+The profile lives in the config directory as `gopro-browser` (readable by you only, the
+browser's password manager switched off in its settings) and keeps whatever gopro.com remembers
+between rounds; its HTTP cache is under the cache directory. Your own browser and its profile
+are never touched. `cast-tv --version` names the browser the window would use;
+`$CAST_TV_BROWSER` points it at a specific executable, which is then the only one tried.
+
+When no such browser is found, or it fails to start, the tab says why and takes a bearer token
+pasted from a signed-in browser instead, with the steps on screen (`cast-gopro` prints the same
+steps; `cast-gopro --token eyJhbGc...` stores the value). `$GOPRO_TOKEN` overrides whatever is
+stored.
+
+When GoPro later refuses the session, the tab shows a banner over the list and offers **Open
+gopro.com again**. How long a session lasts is not promised: cast-tv keeps what it observes
+(when and how the session was captured, when it last worked, when it was first refused, the
+cookie's expiry) in `gopro-session.json` next to the token, and the first refusal puts that
+observed period on one Diagnostics card.
 
 Camera originals can be too much for a TV to decode - a 5.3K clip runs at 119 Mbit/s in a
 3840x3360 frame, which this TV refuses outright - so a heavy clip defaults to the proxy variant
@@ -237,12 +260,18 @@ are served as they are. GIF, raw and other stills the TV cannot show are not lis
 
 | | Linux | Windows |
 | --- | --- | --- |
-| tokens, settings, `google-client.json` | `~/.config/cast-tv` | `%APPDATA%\cast-tv` |
+| tokens, settings, `google-client.json`, `gopro-session.json` (session timing, never the token) | `~/.config/cast-tv` | `%APPDATA%\cast-tv` |
+| the gopro.com window's browser profile | `~/.config/cast-tv/gopro-browser` | `%APPDATA%\cast-tv\gopro-browser` |
+| that profile's HTTP cache | `~/.cache/cast-tv/gopro-browser-cache` | `%LOCALAPPDATA%\cast-tv\Cache\gopro-browser-cache` |
 | listing cache (metadata only) | `~/.cache/cast-tv` | `%LOCALAPPDATA%\cast-tv\Cache` |
 | converted photos, per process | `/tmp/cast-tv-photos-*` | `%TEMP%\cast-tv-photos-*` |
 | downloaded Google videos, per process | `/var/tmp/cast-tv-videos-*` | `%TEMP%\cast-tv-videos-*` |
 
-Token files are written readable by their owner only (mode 0600 on Linux).
+Token files are written readable by their owner only (mode 0600 on Linux); the browser profile
+is 0700. There is no "forget" control in the UI: `POST /api/sources/gopro/disconnect` (from this
+machine, e.g. with `curl -X POST http://localhost:8895/api/sources/gopro/disconnect`) forgets
+the token and removes the profile and its cache, and all three can be deleted by hand while
+cast-tv is not running.
 
 ## Limitations
 
@@ -277,7 +306,21 @@ opt-in call available only to apps running on the TV itself. The measurements ar
 `context/archive/`, under the `s11-screensaver` change.
 
 **Google Photos** picks are not kept across restarts, and the one-time consent must happen on
-the host. **GoPro** tokens last hours, not days.
+the host, as must the gopro.com window.
+
+**No publicly documented, self-serve sign-in for third-party applications was found** (checked
+2026-09-20), so the GoPro tab runs on your own browser session and nothing more. All read
+2026-09-20: GoPro's developer page advertises a "Cloud API (BETA)" whose *Request Access* leads
+to a business partnership form that asks for a company, and what access the beta grants, to
+whom and on what terms is not published (https://gopro.com/en/us/info/developer-tools,
+https://gopro.com/en/us/connect); Open GoPro documents the camera only, over Bluetooth, Wi-Fi
+and USB (https://gopro.github.io/OpenGoPro/docs/); and the Terms of Use, §9 (last updated
+2024-04-11, https://gopro.com/en/us/legal/terms), permit access to the service only through
+GoPro's own software or a generally available web browser. cast-tv therefore borrows the
+session of a browser window you signed in to - the same footing as the pasted token it
+replaces, not a client GoPro has sanctioned - and GoPro can end that on its side at any time.
+How long a captured session lasts is not known; nothing here promises a lifetime, and once one
+is observed it is recorded with its date.
 
 **Local folders** are not browsable from the UI (anything on the LAN could list them); local files
 are cast from the command line, and then show up in the UI for that session.

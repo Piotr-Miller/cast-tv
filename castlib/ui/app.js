@@ -13,17 +13,13 @@ const SOURCES = [
 const GATES = {
   gopro: {
     title: 'Connect GoPro',
-    body: 'GoPro has no public sign-in for apps. The token comes from a logged-in browser and lasts a few hours; the header shows how old it is.',
-    cta: 'Save token',
-    note: 'The token is kept in ~/.config/cast-tv, readable by you only.',
-    paste: true,
-    expired: 'The GoPro token expired',
-    expiredBody: 'This list is what was fetched last. Paste a fresh token to keep going; nothing else changes.',
-    steps: [
-      'Open gopro.com/media-library in a browser and sign in.',
-      'F12 → Application → Cookies → gopro.com → copy the value of gp_access_token (it starts with eyJ). Or: Network → any api.gopro.com request → Request Headers → the part of "authorization" after "Bearer ".',
-      'Paste it below.',
-    ],
+    body: 'A gopro.com window opens on the computer running cast-tv. Sign in in that window. cast-tv then uses that browser session to access your GoPro media and closes the window.',
+    cta: 'Open gopro.com',
+    again: 'Open gopro.com again',
+    note: 'The session is kept in ~/.config/cast-tv (Windows: %APPDATA%\\cast-tv), readable by you only.',
+    window: true,            // the hand-off: a window on the host; the paste appears only on detail.fallback
+    expired: 'cast-tv couldn’t access your GoPro media with this session.',
+    expiredBody: 'Open gopro.com again to reconnect.',
   },
   onedrive: {
     title: 'Connect OneDrive',
@@ -120,6 +116,7 @@ function castTv() {
       this._refreshing = true;
       try {
         const s = await api('GET', '/api/status', undefined, { timeout: POLL_TIMEOUT_MS });
+        this.watchSources(s);
         this.status = s;
         this.offline = false;
         if (s.settings && typeof s.settings.interval === 'number') this.interval = s.settings.interval;
@@ -184,6 +181,16 @@ function castTv() {
 
     // ------------------------------------------------------------ sources
     source(name) { return (this.status.sources && this.status.sources[name]) || null; },
+    // a source that has just become connected holds a new credential: its list is fetched again.
+    // A round that ended without one (cancelled, closed, timed out, failed to open) keeps the last
+    // list, so an expired banner still sits over it. Called with the new status before it lands.
+    watchSources(s) {
+      for (const src of SOURCES) {
+        const before = this.source(src.name), after = s.sources && s.sources[src.name];
+        const fresh = !!after && after.state === 'connected' && !(before && before.state === 'connected');
+        if (fresh && this.lists[src.name]) this.lists[src.name].loaded = false;
+      }
+    },
     connected(name) {
       const s = this.source(name);
       return !!s && s.state === 'connected';
@@ -201,9 +208,10 @@ function castTv() {
         if (typeof d.picks === 'number') return d.picks ? d.picks + ' picked' : 'nothing picked yet';
         return 'connected';
       }
-      if (s.state === 'expired') return this.gate(name).paste ? 'token expired' : 'sign-in expired';
+      if (s.state === 'expired') return this.gate(name).window ? 'reconnect needed' : 'sign-in expired';
       if (s.state === 'connecting') {
         const step = s.detail && s.detail.step;
+        if (step === 'browser') return 'gopro.com window open…';
         return step === 'code' ? 'enter the code…' : (step === 'consent' ? 'waiting for consent…' : 'connecting…');
       }
       if (s.detail && s.detail.stored) return 'checking…';
@@ -214,28 +222,46 @@ function castTv() {
       if (!d) return '';
       return d.age || (d.account ? 'signed in as ' + d.account : '');
     },
-    // a multi-step sign-in in progress: the gate shows the code (OneDrive) or the consent link (Google)
+    // a multi-step sign-in in progress: the gate shows the code (OneDrive), the consent link (Google)
+    // or the waiting line for the gopro.com window on the host
     connecting(name) {
       const s = this.source(name);
-      return !!s && s.state === 'connecting' && !!s.detail && (s.detail.step === 'code' || s.detail.step === 'consent');
+      return !!s && s.state === 'connecting' && !!s.detail && ['code', 'consent', 'browser'].includes(s.detail.step);
     },
     connectStep(name) {
       const s = this.source(name);
       return (s && s.detail && s.detail.step) || '';
     },
+    // how the last round ended, from the status poll (never a user-action message: that is gateNote)
     flowError(name) {
       const s = this.source(name);
-      const e = s && s.detail && s.detail.flow_error;
-      return e ? String(e.message || '').split('\n')[0] : '';
+      const d = s && s.detail;
+      const e = d && d.flow_error;
+      if (!e) return '';
+      if (d.fallback && (e.code === 'no_browser' || e.code === 'browser_failed')) return '';   // the fallback block carries that reason
+      return String(e.message || '').split('\n')[0];
     },
+    // GoPro: no window could be opened here, so the paste applies; the steps come from the server, one source of truth
+    fallback(name) {
+      const s = this.source(name);
+      return (s && s.detail && s.detail.fallback) || null;
+    },
+    fallbackText(name) {
+      const f = this.fallback(name);
+      if (!f) return '';
+      const reason = String(f.reason || '').trim().replace(/\.$/, '');
+      return reason + '. A token pasted from a signed-in browser works instead:';   // the server's sentence already says why
+    },
+    openWindow(name) { this.connect(name, { fresh: true }); },
     expiredText(name) {
-      if (this.gate(name).paste) return 'The stored token was rejected (401). Paste a fresh one.';
+      const g = this.gate(name);
+      if (g.window) return g.expired + ' ' + g.expiredBody;    // the decided sentence, no times
       const s = this.source(name);
       const e = s && s.detail && s.detail.error;
       return (e && String(e.message || '').split('\n')[0]) || 'The sign-in is no longer valid. Connect again.';
     },
     cancelConnect(name) { this.connect(name, { cancel: true }); },
-    gate(name) { return GATES[name] || { title: 'Connect ' + name, body: '', cta: 'Connect', note: '', steps: [] }; },
+    gate(name) { return GATES[name] || { title: 'Connect ' + name, body: '', cta: 'Connect', note: '' }; },
     // entering a tab verifies a stored-but-unverified token once, and fetches the list once connected
     enterTab(name) {
       this.chooser = null;
@@ -254,8 +280,7 @@ function castTv() {
         await api('POST', '/api/sources/' + name + '/connect', params || {});
         this.gateNote[name] = '';
         this.tokenInput = '';
-        if (this.lists[name]) this.lists[name].loaded = false;   // a new token: list again
-        await this.refresh();
+        await this.refresh();                                    // a new credential: watchSources lists again
         this.ensureList(name);
       } catch (e) {
         this.gateNote[name] = e.code === 'unknown_source'
@@ -551,7 +576,8 @@ function castTv() {
       if (['tv_fetched_nothing', 'tv_unreachable', 'tv_rejected', 'tv_never_started', 'no_tv'].includes(e.code)) return 'bad';
       if (['dts_audio', 'token_rejected', 'no_token', 'refresh_rejected', 'graph_unauthorized', 'expired_token',
            'authorization_declined', 'bad_verification_code', 'no_client_id', 'picker_unauthorized',
-           'consent_timeout', 'consent_declined', 'no_google_client', 'repick_needed'].includes(e.code)) return 'warn';
+           'consent_timeout', 'consent_declined', 'no_google_client', 'repick_needed',
+           'no_browser', 'browser_failed', 'browser_closed', 'browser_timeout'].includes(e.code)) return 'warn';
       return '';
     },
 

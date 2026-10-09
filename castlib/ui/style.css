@@ -341,3 +341,12 @@ form.linkpaste { margin-top: 18px; display: flex; flex-wrap: wrap; align-items: 
 form.linkpaste .small { flex-basis: 100%; }
 form.linkpaste input { flex: 1 1 260px; font-family: var(--mono); font-size: 12px; }
 .section .linknote { margin-top: 8px; font-size: 12.5px; color: var(--warn); }
+
+/* ---- S-13: the gopro.com window gate; the paste as the fallback block, on the gate and on the banner */
+.fallback { margin-top: 18px; text-align: left; }
+.fallback .why { font-size: 13px; line-height: 1.5; color: var(--ink-2); }
+.fallback ol.steps { margin: 10px 0 0; padding-left: 22px; font-size: 13px; line-height: 1.5; color: var(--ink-2); }
+.fallback ol.steps li { margin: 6px 0; }
+.fallback form.paste { margin-top: 14px; display: flex; gap: 8px; }
+.fallback form.paste input { flex: 1; font-family: var(--mono); font-size: 12px; }
+.banner .fallback { flex-basis: 100%; margin-top: 2px; }

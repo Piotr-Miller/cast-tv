@@ -201,19 +201,44 @@
         </div>
         <h3 x-text="gate(tab).title"></h3>
         <p x-text="gate(tab).body"></p>
-        <template x-if="gate(tab).paste">
+        <!-- GoPro: a gopro.com window on the computer running cast-tv hands its session over; the paste only when no window can open there -->
+        <template x-if="gate(tab).window">
           <div>
-            <ol class="steps">
-              <template x-for="(step, i) in gate(tab).steps" :key="i"><li x-text="step"></li></template>
-            </ol>
-            <form class="paste" @submit.prevent="saveToken(tab)">
-              <input type="text" x-model="tokenInput" placeholder="eyJhbGc…" autocomplete="off" spellcheck="false" aria-label="GoPro token">
-              <button type="submit" class="primary" :disabled="busy.connect || !tokenInput.trim()" x-text="busy.connect ? 'Checking…' : gate(tab).cta"></button>
-            </form>
-            <div class="later" x-show="expired(tab)">The stored token was rejected (401). Paste a fresh one.</div>
+            <template x-if="connecting(tab) && connectStep(tab) === 'browser'">
+              <div class="devicecode consent">
+                <div class="lead">A gopro.com window is open on the computer running cast-tv. Sign in in that window; this page continues by itself.</div>
+                <div class="wait"><span class="dot busy"></span><span>waiting for the sign-in…</span><span class="muted mono" x-text="'valid ' + Math.max(1, Math.round(source(tab).detail.expires_in / 60)) + ' min'"></span></div>
+                <div class="phone small muted" x-text="source(tab).detail.note"></div>
+                <div class="cta">
+                  <button class="ghost" @click="cancelConnect(tab)">Cancel</button>
+                </div>
+              </div>
+            </template>
+            <template x-if="!connecting(tab)">
+              <div>
+                <div class="cta">
+                  <button class="primary" @click="openWindow(tab)" :disabled="busy.connect" x-text="busy.connect ? 'Opening…' : (expired(tab) ? gate(tab).again : gate(tab).cta)"></button>
+                </div>
+                <div class="later" x-show="expired(tab)" x-text="expiredText(tab)"></div>
+                <div class="later" x-show="flowError(tab)" x-text="flowError(tab)"></div>
+                <!-- the fallback: no window could be opened here, so a token pasted from a signed-in browser applies -->
+                <template x-if="fallback(tab)">
+                  <div class="fallback">
+                    <div class="why" x-text="fallbackText(tab)"></div>
+                    <ol class="steps">
+                      <template x-for="(step, i) in fallback(tab).steps" :key="i"><li x-text="step"></li></template>
+                    </ol>
+                    <form class="paste" @submit.prevent="saveToken(tab)">
+                      <input type="text" x-model="tokenInput" placeholder="eyJhbGc…" autocomplete="off" spellcheck="false" aria-label="GoPro token">
+                      <button type="submit" class="primary" :disabled="busy.connect || !tokenInput.trim()" x-text="busy.connect ? 'Checking…' : 'Save token'"></button>
+                    </form>
+                  </div>
+                </template>
+              </div>
+            </template>
           </div>
         </template>
-        <template x-if="!gate(tab).paste">
+        <template x-if="!gate(tab).window">
           <div>
             <!-- Google consent: runs in a browser on the computer hosting cast-tv; this page flips by itself -->
             <template x-if="connecting(tab) && connectStep(tab) === 'consent'">
@@ -268,16 +293,27 @@
       <!-- an expired token: the banner sits over the list that was fetched last -->
       <div class="banner warn expired" x-show="expired(tab)" x-cloak>
         <div class="text"><div class="title" x-text="gate(tab).expired || 'The connection expired'"></div><div class="small muted" x-text="gate(tab).expiredBody || expiredText(tab)"></div></div>
-        <template x-if="gate(tab).paste">
-          <form class="paste" @submit.prevent="saveToken(tab)">
-            <input type="text" x-model="tokenInput" placeholder="eyJhbGc…" autocomplete="off" spellcheck="false" aria-label="GoPro token">
-            <button type="submit" class="primary" :disabled="busy.connect || !tokenInput.trim()" x-text="busy.connect ? 'Checking…' : 'Save token'"></button>
-          </form>
+        <template x-if="gate(tab).window">
+          <div class="actions"><button class="primary" @click="openWindow(tab)" :disabled="busy.connect" x-text="busy.connect ? 'Opening…' : gate(tab).again"></button></div>
         </template>
-        <template x-if="!gate(tab).paste">
+        <template x-if="!gate(tab).window">
           <div class="actions"><button class="primary" @click="connect(tab)" :disabled="busy.connect" x-text="busy.connect ? 'Starting…' : 'Connect again'"></button></div>
         </template>
         <div class="later" x-show="gateNote[tab]" x-text="gateNote[tab]"></div>
+        <div class="later" x-show="gate(tab).window && flowError(tab)" x-text="flowError(tab)"></div>
+        <!-- GoPro: the same fallback rule as the gate; the paste only when no window can open on the host -->
+        <template x-if="gate(tab).window && fallback(tab)">
+          <div class="fallback">
+            <div class="why" x-text="fallbackText(tab)"></div>
+            <ol class="steps">
+              <template x-for="(step, i) in fallback(tab).steps" :key="i"><li x-text="step"></li></template>
+            </ol>
+            <form class="paste" @submit.prevent="saveToken(tab)">
+              <input type="text" x-model="tokenInput" placeholder="eyJhbGc…" autocomplete="off" spellcheck="false" aria-label="GoPro token">
+              <button type="submit" class="primary" :disabled="busy.connect || !tokenInput.trim()" x-text="busy.connect ? 'Checking…' : 'Save token'"></button>
+            </form>
+          </div>
+        </template>
       </div>
       <h2>
         <span x-text="(sourceTabs.find(s => s.name === tab) || {label: tab}).label"></span>

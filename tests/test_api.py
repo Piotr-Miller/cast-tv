@@ -4,13 +4,18 @@ import json
 import os
 import urllib.parse
 
+import pytest
+
+from castlib import net
 from castlib.api import MAX_SHOW_ITEMS
 from castlib.errors import CastError
 from castlib.items import Upstream
+from castlib.sources import gopro
 from castlib.sources.base import Listing
 from castlib.sources.local import item_for_path
 from tests.conftest import request, wait_for
 from tests.fixtures import make
+from tests.test_gopro import FakeGoPro, use_fake_handoffs
 
 
 def _json(base, method, path, body=None, headers=None):
@@ -303,3 +308,70 @@ def test_connect_body_is_one_dict(app):
     status, _, d = _json(app.base_url, "POST", "/api/sources/fake/connect", {"self": 1, "token": "t"})
     assert status == 200 and d == {"state": "connected", "detail": {}}
     assert src.connected_with == [{"self": 1, "token": "t"}]   # "self" is data, not a parameter name
+
+
+# ---------------------------------------------------------------- GoPro (S-13)
+@pytest.fixture
+def gopro_fake(monkeypatch):
+    """A scripted api.gopro.com and scripted hand-offs behind the ``app`` fixture's real ``GoProSource``."""
+    f = FakeGoPro()
+    monkeypatch.setattr(net, "fetch", f.fetch)
+    monkeypatch.setattr(gopro, "probe_media", f.probe)
+    use_fake_handoffs(monkeypatch, f)
+    return f
+
+
+def test_gopro_connect_fresh_starts_the_round(app, gopro_fake):
+    """The route needs no change: ``{"fresh": true}`` reaches the source as it is, and the status shows the round."""
+    status, _, d = _json(app.base_url, "POST", "/api/sources/gopro/connect", {"fresh": True})
+    assert status == 200 and d["step"] == "browser" and d["state"] == "connecting"
+    assert d["detail"]["step"] == "browser" and d["detail"]["note"] == gopro.ON_HOST_NOTE
+    _, _, s = _json(app.base_url, "GET", "/api/status")
+    assert s["sources"]["gopro"]["state"] == "connecting" and s["sources"]["gopro"]["detail"]["step"] == "browser"
+    assert len(gopro_fake.handoffs) == 1
+    status, _, d = _json(app.base_url, "POST", "/api/sources/gopro/connect", {})
+    assert status == 200 and d["step"] == "browser" and len(gopro_fake.handoffs) == 1   # the same round
+    gopro_fake.handoffs[0].offer(gopro_fake.good)
+    wait_for(lambda: _json(app.base_url, "GET", "/api/sources/gopro")[2]["state"] == "connected")
+    _, _, d = _json(app.base_url, "GET", "/api/sources/gopro")
+    assert d["detail"]["captured_by"] == "window" and d["detail"]["age"] == "session captured just now"
+    status, _, d = _json(app.base_url, "GET", "/api/sources/gopro/list")
+    assert status == 200 and d["items"]
+    # cancel while nothing runs is a no-op; a closed window leaves a note and no fallback
+    status, _, d = _json(app.base_url, "POST", "/api/sources/gopro/connect", {"cancel": True})
+    assert status == 200 and d["state"] == "connected"
+    status, _, d = _json(app.base_url, "POST", "/api/sources/gopro/disconnect")
+    assert status == 200 and d == {"state": "disconnected", "detail": {"stored": False}}
+    _json(app.base_url, "POST", "/api/sources/gopro/connect", {"fresh": True})
+    gopro_fake.handoffs[-1].close_window()
+    wait_for(lambda: "flow_error" in _json(app.base_url, "GET", "/api/sources/gopro")[2]["detail"])
+    _, _, d = _json(app.base_url, "GET", "/api/sources/gopro")
+    assert d["detail"]["flow_error"]["code"] == "browser_closed" and "fallback" not in d["detail"]
+    _, _, e = _json(app.base_url, "GET", "/api/errors")
+    assert e["errors"] == []                                  # a closed window is not a Diagnostics card
+
+
+def test_first_401_lands_one_diagnostics_card(app, gopro_fake):
+    """The App hands the source its error ring; the first refusal is one ``token_rejected`` card with the period."""
+    status, _, d = _json(app.base_url, "POST", "/api/sources/gopro/connect", {"token": gopro_fake.good})
+    assert status == 200 and d["state"] == "connected"
+    status, _, d = _json(app.base_url, "GET", "/api/sources/gopro/list")
+    assert status == 200
+    _, _, e = _json(app.base_url, "GET", "/api/errors")
+    assert e["errors"] == []
+    gopro_fake.good = "eyJrotated"                            # the session dies
+    for _ in range(2):
+        status, _, d = _json(app.base_url, "GET", "/api/sources/gopro/list")
+        assert status == 401 and d["error"]["code"] == "token_rejected"
+        assert d["error"]["hint"].startswith("Token pasted")   # the route's own answer carries it too
+    status, _, _ = _json(app.base_url, "GET", "/api/sources/gopro/thumb/vid-heavy")
+    assert status == 401                                      # a refused thumb: the same 401, no second card
+    _, _, e = _json(app.base_url, "GET", "/api/errors")
+    cards = [x for x in e["errors"] if x["code"] == "token_rejected"]
+    assert len(cards) == 1 and len(e["errors"]) == 1
+    hint = cards[0]["hint"]
+    assert hint.startswith("Token pasted 20") and "Worked for at least" in hint and "First refusal" in hint
+    assert cards[0]["source"] == "gopro" and cards[0]["message"].startswith("GoPro rejected the token (401)")
+    _, _, s = _json(app.base_url, "GET", "/api/status")
+    assert s["sources"]["gopro"]["state"] == "expired" and s["errors"] == 1
+    assert s["sources"]["gopro"]["detail"]["first_401_at"]
