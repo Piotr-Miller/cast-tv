@@ -327,10 +327,11 @@ are cast from the command line, and then show up in the UI for that session.
 
 ## Repository tooling
 
-`ai-toolkit sync` installs the managed authoring skills locally, from the version pinned in
-`.ai-toolkit/config.json` (1.4.0; the `install` field there is the exact command). They are deliberately not
-tracked here - see `.gitignore` - and the recovery channel is never installed into this repo,
-because it carries course-licensed material that must not enter a public repository.
+`ai-toolkit setup` installs the authoring skills locally, from the version pinned in `.ai-toolkit/config.json`
+(1.8.0; the `install` field there is the exact command): the managed skills, the recovery channel and the Millrune
+loop (`rune-*`), as in lumina-clean-ai. None of it is tracked here - see `.gitignore`, which covers every path
+`setup` writes. The recovery channel and Millrune carry course-licensed material, so they live only in a local
+checkout and never enter this public repository.
 
 Tests run on every pull request on `ubuntu-latest` and `windows-latest`
 (`.github/workflows/test.yml`); there is no TV in CI, so the cast lifecycle is covered with a
