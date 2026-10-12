@@ -626,6 +626,77 @@ One entry per ticked manual row (`lessons.md:5-10`): the row, the date, the mach
   carried over - the profile question of row 5.11 is a different case, a profile that *has*
   seen a sign-in), and no "Save password?" bubble appeared ("bez dymku"), the second Chrome
   observation for row 5.9. Row 5.8 is ticked on the two halves; row 5.9 still waits for Edge.
+- **How the Windows rows were run** (2026-10-12, the Windows 11 laptop `DESKTOP-35JAM1C`,
+  Windows 11 Pro 10.0.26200). The artifact of release run 36049997670 was downloaded on the
+  laptop with `gh run download 36049997670 -n cast-tv-windows-x64.exe` into
+  `Downloads\s13-row-5.10`: 22 840 651 bytes, SHA-256 `0d22f1d7…27809317`, the hash row 5.2
+  recorded (checked with `sha256sum` by the agent and with `Get-FileHash` by the runner). The
+  branch's code is unchanged since that build (`git diff d14deaa 78a910e -- castlib packaging
+  .github` is empty; the merges from `main` brought `.ai-toolkit/config.json` and one README
+  line). The rows were walked by `phase5-windows.ps1` (`a411c6e`), which reads `GET
+  /api/sources/gopro` and `GET /api/errors` every 0.5 s, counts browser processes whose command
+  line names `gopro-browser`, and asks the owner the questions only a person can answer; it
+  never reads a token. Two runs:
+  - *Run 1* (22:32-22:37, discarded): the owner pressed "Open gopro.com" at 22:34:14 and
+    Cancel about 20 s later, before answering the runner's first question, so the runner then
+    waited for a round that had already ended; the owner stopped cast-tv. Nothing failed; the
+    run was out of step with the runner. Its log is kept on the laptop as
+    `phase5-windows-run1.log`.
+  - *Run 2* (22:45-22:52), every row below. Started by the agent with `Start-Process
+    powershell` from a PowerShell 7 session; in that window `Get-FileHash` returned nothing, so
+    the log's hash line reads "DOES NOT MATCH" against an empty value. The file is the same one
+    run 1 hashed as OK and `sha256sum` confirmed; the empty value is Windows PowerShell 5.1
+    inheriting PowerShell 7's `PSModulePath` (most likely), not the binary.
+- **Row 5.10, `--version`** (2026-10-12 22:45). `cast-tv 0.3.0`, `Google Photos client: built
+  in`, `GoPro window: C:\Program Files\Google\Chrome\Application\chrome.exe`. Both browsers are
+  installed: Chrome 155.0.8059.40 and Edge 155.0.4283.45; Chrome comes first in the candidate
+  list, so rows 5.3-5.7 below ran in a Chrome window, and the Edge window was run separately
+  (the last entry). No `gopro-token` on the laptop before the run; 0 browser processes on the
+  app profile.
+- **Row 5.10, as 5.4** (22:46). The gate: one button, no field (owner: y). The button: the API
+  `connecting/browser` at 22:46:15, 7 browser processes on the profile (main `chrome.exe`
+  pid 21480); the waiting block with "valid 5 min" and Cancel (owner: y). Cancel: the API
+  `disconnected` with no `flow_error`, every browser process gone within 10 s, the button alone
+  with no field and no message (owner: y).
+- **Row 5.10, as 5.5** (22:46-22:47). The owner closed the gopro.com window with its own X,
+  without signing in: the API `disconnected`, `flow_error: browser_closed`, no `fallback`, the
+  processes gone within 10 s; the page showed "The gopro.com window was closed before a session
+  appeared." under the button, no field (owner: y). This is the X itself, which Fedora's row 5.5
+  could only stand in for over CDP.
+- **Row 5.10, as 5.7** (22:47). With a round running (7 processes, main pid 16688), the owner
+  closed the black cast-tv console window with its X: cast-tv exited and the server stopped
+  answering, the browser processes were gone within 15 s (0 afterwards), and the gopro.com
+  window closed together with the console (owner: y) - the console-close hook of PR #11
+  reaches the window.
+- **Row 5.10, as 5.3, and row 5.9 for Chrome on Windows** (22:47-22:49, cast-tv restarted by the
+  runner, the profile from the rounds above with no session in it). The button at 22:48:01; the
+  API `connected` at 22:48:50, 49.4 s later: `captured_by: window`, `captured_at` 2026-10-12
+  20:48:49Z, `cookie: {session: false, expires: 2026-10-19 20:48:48Z}`, 7.00 days after
+  capture, as on Fedora; the processes gone within 15 s (the window closed by itself). The
+  owner: password, no 2FA ("paswword, no 2fa"), about 1 s from the last sign-in click to the
+  window closing, no "Save password?" bubble, the library listed with "session captured just
+  now" and Diagnostics unchanged (all y).
+- **Row 5.10, as 5.6** (22:49-22:52). The runner disconnected (`stored: false`), had the owner
+  stop cast-tv with Ctrl+C, and restarted it with `CAST_TV_BROWSER=C:\nonexistent.exe`;
+  `--version` then printed `GoPro window: CAST_TV_BROWSER=C:\nonexistent.exe (not found)`. The
+  button: `flow_error: browser_failed` with `fallback`, the reason "No gopro.com window could be
+  opened. C:\nonexistent.exe: [WinError 2] The system cannot find the file specified", 3
+  numbered steps, 0 browser processes (nothing launched); the page showed the reason, the steps
+  and the field with "Save token" (owner: y). The owner pasted a token from their own browser:
+  `connected`, `captured_by: paste`, "token stored just now", `fallback` gone, Diagnostics 0,
+  the tab listed (owner: y). At the end, after Ctrl+C: 0 browser processes on the profile.
+- **Row 5.10 and row 5.9 in an Edge window** (2026-10-12 22:53-22:55, the agent started the
+  artifact with `CAST_TV_BROWSER=C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe`,
+  `--version` naming it, then `POST /api/sources/gopro/disconnect`, which removed the pasted
+  token and the profile). A once-per-0.7 s recorder of the API and of `msedge.exe` processes
+  naming `gopro-browser` saw the button at 22:54:27 (1 process, up to 18 while the page loaded),
+  `connected` at 22:55:32 with `captured_by: window`, `captured_at` 2026-10-12 20:55:30Z,
+  `cookie: {session: false, expires: 2026-10-19 20:55:30Z}` (7.00 days), and 0 `msedge.exe` on
+  the profile from 22:55:31 (the window closed by itself; the row's "no `msedge.exe` left").
+  `last_success_at` 6.5 s after capture (the tab's list), `/api/errors` empty. The owner:
+  password, no 2FA, no "Save password?" bubble in Edge ("1 nie, 2 haslo, no 2fa"). With
+  Chrome on both systems and Edge here, row 5.9 has all its halves; row 5.10 is ticked on the
+  entries above. This Edge capture is the one left live on the laptop (cast-tv pid 18940).
 
 ## Measurements
 
@@ -636,7 +707,7 @@ To be filled by the owner from Phase 5 of the plan; values only, never a token.
 | `captured_at` / `captured_by` of the first window capture (Fedora, Chrome) | 2026-09-24T20:20:54.957Z (22:20:54 local) / `window`; cast-tv from the checkout at `d14deaa`, Google Chrome 153.0.8010.47 | 2026-09-24 |
 | `cookie.session` / `cookie.expires` at capture | `false` / 1790886054.401 = 2026-10-01T20:20:54Z, 7.0 days after capture: a persistent cookie | 2026-09-24 |
 | Sign-in method and seconds to the list (Fedora, Chrome) | password, no 2FA, no "Save password?" bubble; 2 min 17 s from the button to the list including the typing (the last click was not timed) | 2026-09-24 |
-| Sign-in method and seconds to the list (Windows, Edge, the artifact) | | |
+| Sign-in method and seconds to the list (Windows, the artifact) | Chrome 155.0.8059.40: password, no 2FA, no bubble; 49.4 s from the button to the capture including the typing, about 1 s from the last click to the window closing (owner's estimate); cookie persistent, 7.00 days. Edge 155.0.4283.45: password, no 2FA, no bubble; 63 s from the button to the capture; cookie 7.00 days | 2026-10-12 |
 | Worked for at least (last successful call after capture) | | |
 | First refusal (first 401 after capture) | | |
 | "Open gopro.com again" after the refusal: closed without typing, or asked to sign in | | |
