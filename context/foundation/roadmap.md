@@ -161,7 +161,9 @@ plan. The ideas under each are starting points, not findings.
   standing is unchanged and recorded as a dated README limitation. The bookmarklet is out (page
   script cannot read the cookie); the extension and an embedded webview were weighed and
   declined. Phases 1-3 (the engine, the source and API, the UI gate) landed on PR #40 by
-  2026-09-23; Phase 4 is the docs; Phase 5 exercises both systems by hand before merge.
+  2026-09-23; Phase 4 is the docs; Phase 5 exercised both systems by hand: Fedora with Chrome
+  on 2026-09-24, the Windows 11 artifact in Chrome and Edge windows on 2026-10-12. Rows 5.11-5.12
+  (what GoPro does when it first refuses a captured session) stay open and dated until it happens.
 - The token stays inside cast-tv and is never shown or logged.
 
 ### S-14: Google TV and Chromecast as targets
