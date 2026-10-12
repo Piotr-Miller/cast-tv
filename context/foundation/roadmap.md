@@ -45,7 +45,7 @@ conversion and the cast supervisor. Delivered with `cloud-source-ui` (PR #1, 202
 | S-10 | (not opened) | connect Google Photos with any Google account, without weekly re-consent | S-08 | US-04 | parked |
 | S-11 | s11-screensaver | watch a slideshow or a long film without the TV's screen saver cutting in | S-02 | US-03 | done |
 | S-12 | (proposed) | run cast-tv as a desktop window on Windows and Linux, not only a browser tab | S-08 | — | proposed |
-| S-13 | s13-gopro-auth | connect GoPro without copying a token by hand | S-03 | FR-010 | in progress |
+| S-13 | s13-gopro-auth | connect GoPro without copying a token by hand | S-03 | FR-010 | merged (PR #40, 2026-10-12); only rows 5.11-5.12 open, at GoPro's first refusal |
 | S-14 | (proposed) | cast to Google TV and Chromecast devices, not only DLNA TVs | S-02 | — | proposed |
 
 ## Streams
