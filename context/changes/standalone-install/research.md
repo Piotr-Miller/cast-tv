@@ -223,9 +223,42 @@ for the secret are the two masked lines `GOOGLE_CLIENT_SECRET: ***`, one per bui
 where Actions lists a step's `env`. No value appears, and neither does any `GOCSPX` string.
 `write_client.py` prints nothing of what it writes.
 
-## Phase 3.4: weekly consent (pending)
+## Phase 3.4: weekly consent
 
 - The user, 2026-09-19: "ustawiłem teraz nowy consent 21:46 19/09" ("I've just given a new
   consent, 21:46 19/09"), on this laptop right after the Cancel check of row 3.3. While the app
   is in Testing, Google's refresh token lasts 7 days, so the tab should say "The Google Photos
   consent expired" from about 2026-09-26 21:46; no Connect before then, or the week restarts.
+
+### 2026-10-13: the token did not expire
+
+Windows laptop, the `v0.3.0-rc2` exe (re-downloaded from the Release the same day).
+
+- Before the run, `%APPDATA%\cast-tv\google.json` was still dated 2026-09-19 21:46: nothing had
+  refreshed the consent for 24 days.
+- The user clicked Connect on the Google Photos tab: "Klinkanlem Connect i pokazala sie strona z
+  Picker, nie wyswieltalem zdjecia na TV" ("I clicked Connect and the Picker page appeared, I
+  didn't show a photo on the TV"). No banner, no Google consent page. `google.json` was rewritten
+  at 13:58:51 with a new access token: Connect with a stored credential refreshes it first
+  (`castlib/sources/gphotos.py`, `connect`), and Google accepted the 24-day-old refresh token.
+- The project's state, read by the user from Google Auth Platform → Audience the same afternoon:
+  "Publishing status: Testing", "User type: External". That is the case Google documents as "a
+  refresh token expiring in 7 days" (see the top of this file). Not observed here; why is not
+  known, and one token is not enough to say the rule is gone. The UI's wording ("asked again about
+  weekly", the banner's "or the test-user token ran out") stays as it is.
+
+### 2026-10-13: a revoked consent, the same path
+
+Waiting for the expiry no longer tests anything, so the row was run with a revoked consent: Google
+answers the refresh with `invalid_grant` either way, and that is what sets `expired`
+(`gphotos.py`, `_mark_expired`). Steps given to the user, on the same exe:
+
+1. myaccount.google.com/connections → cast-tv → delete all connections. The user: **14:05**.
+2. Start the exe, Google Photos tab, Connect. Expected: the banner "The Google Photos consent
+   expired", no consent page yet. The user: **14:12**, no deviation reported.
+3. Connect again. Expected: Google's consent page; accept. The user: **14:16**. `google.json` was
+   rewritten at 14:16:11. A second Connect opens the consent page only when the source is
+   `expired` (a stored credential otherwise just refreshes), so this also confirms step 2's state.
+4. Pick one photo and send it to the TV. The user: "pokazalo sie" ("it showed").
+
+The user's report, whole: "14:05 14:12 14:16 pokazalo sie". No screenshot was sent.
