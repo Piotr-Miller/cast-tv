@@ -160,7 +160,7 @@ adds a tester. The Cloud-project steps move under "Your own Google client (optio
       expired"; Connect again restores it (recorded when it happens, not waited for).
       *2026-10-13:* the 2026-09-19 token still refreshed after 24 days (app in Testing), so the
       row ran on a consent revoked at myaccount.google.com: the banner, Connect again, a pick on
-      the TV. — c208c8f
+      the TV. — 6da3f4e
 
 ## Owner steps (Piotr, before the first release)
 
