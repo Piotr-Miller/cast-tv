@@ -156,11 +156,11 @@ adds a tester. The Cloud-project steps move under "Your own Google client (optio
       cast; a HEIC photo from OneDrive or the picker converts and shows. — ee48787
 - [x] **3.3 Not a tester**: a second Google account that is not a test user: Google shows
       "Access blocked"; the gate's line explains it; Cancel returns to the gate. — b28f9c9
-- [ ] **3.4 Weekly consent**: about 7 days after 3.1, the tab shows "The Google Photos consent
+- [x] **3.4 Weekly consent**: about 7 days after 3.1, the tab shows "The Google Photos consent
       expired"; Connect again restores it (recorded when it happens, not waited for).
       *2026-10-13:* the 2026-09-19 token still refreshed after 24 days (app in Testing), so the
       row ran on a consent revoked at myaccount.google.com: the banner, Connect again, a pick on
-      the TV.
+      the TV. — c208c8f
 
 ## Owner steps (Piotr, before the first release)
 
