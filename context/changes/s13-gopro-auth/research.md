@@ -11,7 +11,7 @@ Against GoPro's own pages (gopro.com, gopro.github.io) and `api.gopro.com`, with
 **What the previous source said.** `context/archive/2026-09-07-cloud-source-ui/research.md:259` —
 "bearer token pasted from a browser; expires in hours; no public OAuth" (2026-09-08, last updated
 2026-09-10). Repeated as `context/archive/2026-09-07-cloud-source-ui/change.md:179` — "**GoPro** -
-no public OAuth exists." — and as `context/changes/standalone-install/research.md:42` — "GoPro has
+no public OAuth exists." — and as `context/archive/2026-09-19-standalone-install/research.md:42` — "GoPro has
 no public sign-in for apps; the token is pasted in the UI." (2026-09-19). None of the three carries
 a link or a read date.
 

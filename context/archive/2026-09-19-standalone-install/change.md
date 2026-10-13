@@ -1,10 +1,10 @@
 ---
 change_id: standalone-install
 title: cast-tv runs on a new PC with nothing to install or copy first
-status: implementing
+status: archived
 created: 2026-09-19
-updated: 2026-09-19
-archived_at: null
+updated: 2026-10-13
+archived_at: 2026-10-13T12:40:00Z
 ---
 
 ## Notes

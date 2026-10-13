@@ -40,7 +40,7 @@ conversion and the cast supervisor. Delivered with `cloud-source-ui` (PR #1, 202
 | S-05 | cloud-source-ui, phase 6 | pick in Google Photos and cast the pick; share links | S-02 | FR-012 | done |
 | S-06 | cloud-source-ui, phase 7 | install with pipx on Fedora and Windows 11 | S-02 | NFR platforms | done |
 | S-07 | (follow-ups, PRs #10-#17) | close the window to stop the TV; see why a managed laptop cannot cast; paste a share link before any sign-in | S-06 | Guardrails; FR-012 | done |
-| S-08 | standalone-install | download one file on a new PC and use every tab | S-06 | US-04; FR-030 | all rows done (3.4 on 2026-10-13); `v0.3.0` tag to decide |
+| S-08 | standalone-install | download one file on a new PC and use every tab | S-06 | US-04; FR-030 | done (`v0.3.0`, 2026-10-13) |
 | S-09 | (not opened) | cast a photo or a motion photo's clip from a share link | S-05 | FR-012 | backlog |
 | S-10 | (not opened) | connect Google Photos with any Google account, without weekly re-consent | S-08 | US-04 | parked |
 | S-11 | s11-screensaver | watch a slideshow or a long film without the TV's screen saver cutting in | S-02 | US-03 | done |
@@ -66,7 +66,7 @@ and a LAN-exposure problem (`cloud-source-ui/research.md`).
 ### S-08: A new PC works after one download
 
 - **Phase:** phase:post-mvp
-- **Change:** `context/changes/standalone-install/`
+- **Change:** `context/archive/2026-09-19-standalone-install/` (archived 2026-10-13)
 - **Outcome:** a Windows or Linux PC with no Python downloads one file from GitHub Releases and
   every tab connects; Google Photos through a client built into the release.
 - **Status:** Phase 1 (built-in client, `--version`) merged as #20; Phase 2 (PyInstaller spec,
@@ -77,7 +77,8 @@ and a LAN-exposure problem (`cloud-source-ui/research.md`).
   and 3.3 (a non-tester Google account) passed**, and **3.4 on 2026-10-13**: the token from
   2026-09-19 still refreshed after 24 days with the app in Testing, so the row ran on a consent
   revoked at myaccount.google.com - the banner, Connect again, a pick on the TV. Every plan row
-  is ticked. Left: whether to cut `v0.3.0` without the `-rc`.
+  is ticked. **Released as `v0.3.0` on 2026-10-13** from `main` at `dc2ead3`, so it also
+  carries S-13's GoPro sign-in.
 - **What row 3.2 caught:** the Linux binary could verify no certificate at all. Built on
   `ubuntu-latest`, it carries that runner's OpenSSL, which looks for CAs under `/usr/lib/ssl`;
   Fedora has no such directory, so Google, OneDrive and GoPro were all unreachable from the
@@ -201,3 +202,8 @@ plan. The ideas under each are starting points, not findings.
   saver starts after 2 minutes on a motionless picture and the manual says it cannot be switched
   off; a moving film is unaffected. Lesson: measure the device before planning a workaround - the
   measurement killed two of the three candidate fixes and rewrote the third's rationale.
+- **S-08: a new PC works after one download** - released as `v0.3.0` (2026-10-13), archived →
+  `context/archive/2026-09-19-standalone-install/`. Windows .exe and Linux binary on GitHub
+  Releases with the Google client built in from repository secrets. Row 3.4 found Google's
+  documented 7-day Testing expiry did not happen (a token refreshed after 24 days); it ran on a
+  revoked consent instead.
