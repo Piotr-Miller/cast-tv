@@ -1070,7 +1070,10 @@ class _Transport(urllib.request.BaseHandler):
 
     def _answer(self, req):
         self.seen.append(req.full_url)
-        status, headers, body = self.routes.get(req.full_url, (404, {}, b""))
+        answer = self.routes.get(req.full_url, (404, {}, b""))
+        if isinstance(answer, Exception):        # the network failing on that address
+            raise answer
+        status, headers, body = answer
         msg = http.client.HTTPMessage()
         for name, value in headers.items():
             msg[name] = value
@@ -1512,7 +1515,8 @@ def test_share_link_to_a_photo_says_so_before_any_probe(monkeypatch):
     with pytest.raises(NotMedia) as err:
         sharelink.resolve(LINK)
     assert err.value.code == "photo_link"
-    assert "videos only" in err.value.message and "picker" in err.value.message
+    assert "cast-photos casts videos from links" in err.value.message
+    assert "Google Photos tab" in err.value.message
     assert transport.seen == [LINK]                             # nothing probed
 
 
@@ -1523,9 +1527,162 @@ def test_share_link_to_a_video_page_still_resolves(monkeypatch):
     assert transport.seen[:2] == [LINK, MEDIA_BASE + "=dv"]
 
 
-def test_no_stream_says_share_links_are_video_only(monkeypatch):
-    still = (206, {"Content-Type": "image/jpeg", "Content-Range": "bytes 0-1/100"}, b"\xff\xd8")
-    _scripted_links(monkeypatch, {LINK: _page(MEDIA_BASE), **{MEDIA_BASE + s: still for s in sharelink.SUFFIXES}})
+def test_no_stream_points_photos_to_the_tab(monkeypatch):
+    _scripted_links(monkeypatch, {LINK: _page(MEDIA_BASE), **{MEDIA_BASE + s: STILL for s in sharelink.SUFFIXES}})
     with pytest.raises(NotMedia) as err:
         sharelink.resolve(LINK)
-    assert err.value.code == "no_stream" and "videos only" in err.value.message
+    assert err.value.code == "no_stream"
+    assert "videos only" not in err.value.message and "Google Photos tab" in err.value.message
+
+
+# ---------------------------------------------------------------- photo, motion photo, album pages
+# measured 2026-10-13 (s09 research.md): an album's page differs from a single item's by its
+# og:description and by linking each of its items as /share/<share id>/photo/<item id>
+ALBUM_HEAD = ('<meta property="og:title" content="OM-1 Mayrhofen">'
+              '<meta property="og:description" content="Shared album · Tap to view!">'
+              '<meta property="og:image" content="%s=w600-h315-p-k">')
+STILL = (206, {"Content-Type": "image/jpeg", "Content-Range": "bytes 0-1/100"}, b"\xff\xd8")
+NOT_FOUND = (404, {"Content-Type": "image/png"}, b"")          # =m37 on a plain photo (measured)
+GOOGLEVIDEO = "https://rr2---sn-abc.googlevideo.com/videoplayback?id=1"
+
+
+def _items(n, share="AF1Qip"):
+    """The item links of a share page: ``n`` distinct ``/share/<share>/photo/<item>`` links."""
+    return "".join('<a href="./share/%s/photo/AF1Item%d?key=k1">' % (share, i) for i in range(n))
+
+
+def _share_page(head, items=1, *addresses):
+    """``LINK`` redirecting to ``SHARE_PAGE``, which carries ``head``, ``items`` item links and ``addresses``."""
+    status, headers, body = _page_with(head, *addresses)
+    return {LINK: (302, {"Location": SHARE_PAGE}, b""),
+            SHARE_PAGE: (status, headers, body + _items(items).encode())}
+
+
+@pytest.mark.parametrize("head", [ALBUM_HEAD % MEDIA_BASE, VIDEO_HEAD % (MEDIA_BASE, MEDIA_BASE)],
+                         ids=["photo-cover", "video-cover"])
+def test_share_link_album_is_refused_before_any_probe(monkeypatch, head):
+    transport = _scripted_links(monkeypatch, {
+        **_share_page(head, 5, MEDIA_BASE), **{MEDIA_BASE + s: PROBED for s in ("=d", "=dv", "=m37")}})
+    for read in (sharelink.shared, sharelink.resolve):
+        transport.seen.clear()
+        with pytest.raises(NotMedia) as err:
+            read(LINK)
+        assert err.value.code == "album_link"
+        assert "not cast yet" in err.value.message and "single photo or video" in err.value.message
+        assert "\n" not in err.value.message                    # the UI shows the first line only
+        assert transport.seen == [LINK, SHARE_PAGE]             # nothing probed
+
+
+def test_share_link_album_heuristic_counts_distinct_items():
+    page = _items(3) + _items(2)                               # items 0 and 1 linked twice
+    assert sharelink.album_items(page, SHARE_PAGE) == 3
+    assert sharelink.album_items(_items(4, share="Other"), SHARE_PAGE) == 0     # another share's items
+    assert sharelink.album_items(_items(4), LINK) == 0                          # not a /share/ page
+    assert sharelink.album_items("", SHARE_PAGE) == 0
+
+
+def test_share_link_album_of_one_item_is_its_item(monkeypatch):
+    _scripted_links(monkeypatch, {**_share_page(ALBUM_HEAD % MEDIA_BASE, 1, MEDIA_BASE),
+                                  MEDIA_BASE + "=d": STILL, MEDIA_BASE + "=m37": NOT_FOUND})
+    assert sharelink.shared(LINK).kind == "photo"
+
+
+def test_share_page_photo_lists_the_still(monkeypatch):
+    transport = _scripted_links(monkeypatch, {**_share_page(PHOTO_HEAD % MEDIA_BASE, 1, MEDIA_BASE),
+                                              MEDIA_BASE + "=d": STILL, MEDIA_BASE + "=m37": NOT_FOUND})
+    got = sharelink.shared(LINK)
+    assert got == sharelink.Shared("photo", MEDIA_BASE + "=d", clip=None, thumb=MEDIA_BASE + "=w400-h400")
+    assert transport.seen == [LINK, SHARE_PAGE, MEDIA_BASE + "=d", MEDIA_BASE + "=m37"]
+
+
+def test_share_page_photo_base_is_the_og_image_one():
+    other = "https://lh3.googleusercontent.com/pw/" + "B" * 30
+    assert sharelink.og_image_base((PHOTO_HEAD % MEDIA_BASE) + '<a href="%s=w10">' % other) == MEDIA_BASE
+    assert sharelink.og_image_base('<meta content="%s=w1" property="og:image">' % MEDIA_BASE) == MEDIA_BASE
+    assert sharelink.og_image_base(PHOTO_HEAD % "https://evil.test/pw/x") is None
+    assert sharelink.og_image_base(PHOTO_HEAD % "http://lh3.googleusercontent.com/pw/x") is None
+    assert sharelink.og_image_base('<a href="%s">' % MEDIA_BASE) is None
+
+
+@pytest.mark.parametrize("still", [NOT_FOUND, (206, {"Content-Type": "text/html"}, b"<html>")],
+                         ids=["404", "not-a-photo"])
+def test_share_page_photo_whose_still_does_not_answer_is_no_media(monkeypatch, still):
+    transport = _scripted_links(monkeypatch, {**_share_page(PHOTO_HEAD % MEDIA_BASE, 1, MEDIA_BASE),
+                                              MEDIA_BASE + "=d": still})
+    with pytest.raises(NotMedia) as err:
+        sharelink.shared(LINK)
+    assert err.value.code == "no_media"
+    assert MEDIA_BASE + "=m37" not in transport.seen
+
+
+def test_share_page_photo_on_a_foreign_host_is_never_probed(monkeypatch):
+    foreign = "https://evil.test/pw/" + "A" * 30
+    transport = _scripted_links(monkeypatch, {**_share_page(PHOTO_HEAD % foreign), foreign + "=d": STILL})
+    with pytest.raises(NotMedia) as err:
+        sharelink.shared(LINK)
+    assert err.value.code == "no_media"
+    assert transport.seen == [LINK, SHARE_PAGE]
+
+
+def test_share_page_photo_without_tags_is_probed_as_video(monkeypatch):
+    _scripted_links(monkeypatch, {**_share_page("", 1, MEDIA_BASE), MEDIA_BASE + "=dv": PROBED})
+    assert sharelink.shared(LINK) == sharelink.Shared("video", MEDIA_BASE + "=dv")
+
+
+def test_share_page_photo_without_tags_or_addresses_is_no_media(monkeypatch):
+    _scripted_links(monkeypatch, _share_page(""))
+    with pytest.raises(NotMedia) as err:
+        sharelink.shared(LINK)
+    assert err.value.code == "no_media"
+
+
+def test_share_page_video_and_media_address_still_resolve(monkeypatch):
+    _scripted_links(monkeypatch, {**_share_page(VIDEO_HEAD % (MEDIA_BASE, MEDIA_BASE), 1, MEDIA_BASE),
+                                  MEDIA_BASE + "=dv": PROBED})
+    assert sharelink.shared(LINK) == sharelink.Shared("video", MEDIA_BASE + "=dv")
+    assert sharelink.shared(MEDIA_BASE + "=w10") == sharelink.Shared("video", MEDIA_BASE + "=dv")
+
+
+def test_share_page_motion_photo_offers_its_clip(monkeypatch):
+    transport = _scripted_links(monkeypatch, {
+        **_share_page(PHOTO_HEAD % MEDIA_BASE, 1, MEDIA_BASE), MEDIA_BASE + "=d": STILL,
+        MEDIA_BASE + "=m37": (302, {"Location": GOOGLEVIDEO}, b""), GOOGLEVIDEO: PROBED})
+    got = sharelink.shared(LINK)
+    assert got.kind == "photo" and got.url == MEDIA_BASE + "=d"
+    assert got.clip == MEDIA_BASE + "=m37" and got.thumb == MEDIA_BASE + "=w400-h400"
+    assert transport.seen[-2:] == [MEDIA_BASE + "=m37", GOOGLEVIDEO]
+    assert MEDIA_BASE + "=dv" not in transport.seen                # the HEVC original is never asked
+
+
+@pytest.mark.parametrize("answer, named", [
+    ((403, {"Content-Type": "text/html"}, b""), "403"),
+    ((429, {"Content-Type": "text/html"}, b""), "429"),
+    ((503, {}, b""), "503"),
+    ((200, {"Content-Type": "text/html"}, b"<html>"), "text/html"),
+], ids=["403", "429", "503", "200-html"])
+def test_share_page_motion_clip_probe_fails_on_any_other_answer(monkeypatch, answer, named):
+    _scripted_links(monkeypatch, {**_share_page(PHOTO_HEAD % MEDIA_BASE, 1, MEDIA_BASE),
+                                  MEDIA_BASE + "=d": STILL, MEDIA_BASE + "=m37": answer})
+    with pytest.raises(UpstreamError) as err:
+        sharelink.shared(LINK)
+    assert err.value.code == "clip_probe_failed" and named in err.value.message
+
+
+def test_share_page_motion_clip_probe_network_failure_fails_the_paste(monkeypatch):
+    _scripted_links(monkeypatch, {**_share_page(PHOTO_HEAD % MEDIA_BASE, 1, MEDIA_BASE),
+                                  MEDIA_BASE + "=d": STILL,
+                                  MEDIA_BASE + "=m37": urllib.error.URLError("connection reset")})
+    with pytest.raises(UpstreamError) as err:
+        sharelink.shared(LINK)
+    assert err.value.code == "probe_failed" and "connection reset" in err.value.message
+
+
+def test_share_page_motion_clip_redirect_off_google_is_never_requested(monkeypatch):
+    secret = "http://127.0.0.1:9/secret"
+    transport = _scripted_links(monkeypatch, {
+        **_share_page(PHOTO_HEAD % MEDIA_BASE, 1, MEDIA_BASE), MEDIA_BASE + "=d": STILL,
+        MEDIA_BASE + "=m37": (302, {"Location": secret}, b""), secret: PROBED})
+    with pytest.raises(UpstreamError) as err:
+        sharelink.shared(LINK)
+    assert err.value.code == "redirect_refused"
+    assert secret not in transport.seen

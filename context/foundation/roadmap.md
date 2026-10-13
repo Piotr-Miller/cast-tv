@@ -41,7 +41,7 @@ conversion and the cast supervisor. Delivered with `cloud-source-ui` (PR #1, 202
 | S-06 | cloud-source-ui, phase 7 | install with pipx on Fedora and Windows 11 | S-02 | NFR platforms | done |
 | S-07 | (follow-ups, PRs #10-#17) | close the window to stop the TV; see why a managed laptop cannot cast; paste a share link before any sign-in | S-06 | Guardrails; FR-012 | done |
 | S-08 | standalone-install | download one file on a new PC and use every tab | S-06 | US-04; FR-030 | done (`v0.3.0`, 2026-10-13) |
-| S-09 | (not opened) | cast a photo or a motion photo's clip from a share link | S-05 | FR-012 | backlog |
+| S-09 | s09-share-link-photos | cast a photo or a motion photo's clip from a share link | S-05 | FR-012 | in progress |
 | S-10 | (not opened) | connect Google Photos with any Google account, without weekly re-consent | S-08 | US-04 | parked |
 | S-11 | s11-screensaver | watch a slideshow or a long film without the TV's screen saver cutting in | S-02 | US-03 | done |
 | S-12 | (proposed) | run cast-tv as a desktop window on Windows and Linux, not only a browser tab | S-08 | — | proposed |
@@ -89,7 +89,8 @@ and a LAN-exposure problem (`cloud-source-ui/research.md`).
 ### S-09: Photos through share links
 
 - **Phase:** phase:post-mvp
-- **Change:** not opened; recorded in `cloud-source-ui/follow-ups/review-fixes.md`.
+- **Change:** `context/changes/s09-share-link-photos/`; recorded in
+  `context/archive/2026-09-07-cloud-source-ui/follow-ups/review-fixes.md`.
 - **Outcome:** a share link to a photo lists a photo tile; a motion photo's clip offers `=m37`
   (H.264 1080p), since the Samsung refused its `=dv` HEVC 120 fps original.
 - **Open:** albums are untested; plan first.
