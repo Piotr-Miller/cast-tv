@@ -180,7 +180,7 @@ plan. The ideas under each are starting points, not findings.
 
 ## Open Roadmap Questions
 
-- Archive `cloud-source-ui` to `context/archive/` now that every row and follow-up but S-09 is done?
+None open. (Archiving `cloud-source-ui` was answered on 2026-09-20, #32.)
 
 ## Parked
 
