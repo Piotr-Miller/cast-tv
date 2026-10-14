@@ -1,10 +1,11 @@
 ---
 change_id: s09-share-link-photos
 title: "Cast a photo or a motion photo's clip from a share link"
-status: impl_reviewed
+status: archived
+outcome: completed
 created: 2026-10-13
 updated: 2026-10-14
-archived_at: null
+archived_at: 2026-10-14T18:43:42Z
 ---
 
 ## Notes
