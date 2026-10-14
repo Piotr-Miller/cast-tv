@@ -338,32 +338,32 @@ console close are noticed.
 
 #### Automated
 
-- [x] 1.1 The new Phase 1 tests pass — e39716a
-- [x] 1.2 No main-thread Event wait is left in the loops — e39716a
-- [x] 1.3 The whole suite passes — e39716a
-- [x] 1.4 Pyflakes is clean — e39716a
+- [x] 1.1 The new Phase 1 tests pass — 881a565
+- [x] 1.2 No main-thread Event wait is left in the loops — 881a565
+- [x] 1.3 The whole suite passes — 881a565
+- [x] 1.4 Pyflakes is clean — 881a565
 
 ### Phase 2: Signals during startup
 
 #### Automated
 
-- [x] 2.1 The new Phase 2 tests pass — 4cdcfbd
-- [x] 2.2 The existing signal tests pass — 4cdcfbd
-- [x] 2.3 The whole suite passes — 4cdcfbd
-- [x] 2.4 Pyflakes is clean — 4cdcfbd
+- [x] 2.1 The new Phase 2 tests pass — f60d99a
+- [x] 2.2 The existing signal tests pass — f60d99a
+- [x] 2.3 The whole suite passes — f60d99a
+- [x] 2.4 Pyflakes is clean — f60d99a
 
 ### Phase 3: Subprocess tests report where a hang waits, and the checks
 
 #### Automated
 
-- [x] 3.1 The helper's test passes — 0e33b39
-- [x] 3.2 The two subprocess tests pass ten times in a row — 0e33b39
-- [x] 3.3 The whole suite passes — 0e33b39
-- [x] 3.4 Pyflakes is clean — 0e33b39
-- [x] 3.5 CI passes on the PR, Ubuntu and Windows — 0e33b39
+- [x] 3.1 The helper's test passes — 23111dd
+- [x] 3.2 The two subprocess tests pass ten times in a row — 23111dd
+- [x] 3.3 The whole suite passes — 23111dd
+- [x] 3.4 Pyflakes is clean — 23111dd
+- [x] 3.5 CI passes on the PR, Ubuntu and Windows — 23111dd
 
 #### Manual
 
-- [x] 3.6 Race probe under load: every run exit 0 Stopped — accepted at 89a10050affd2102ca7692994dd64d7d5834b0e2
-- [x] 3.7 Ctrl+C at the first address line prints Stopped and returns — accepted at 89a10050affd2102ca7692994dd64d7d5834b0e2
-- [x] 3.8 kill ends cast-tv with Stopped and status 0 — accepted at 89a10050affd2102ca7692994dd64d7d5834b0e2
+- [x] 3.6 Race probe under load: every run exit 0 Stopped — accepted at dfdb032d7ab797a55320d99926f2a61f95bd4995
+- [x] 3.7 Ctrl+C at the first address line prints Stopped and returns — accepted at dfdb032d7ab797a55320d99926f2a61f95bd4995
+- [x] 3.8 kill ends cast-tv with Stopped and status 0 — accepted at dfdb032d7ab797a55320d99926f2a61f95bd4995
