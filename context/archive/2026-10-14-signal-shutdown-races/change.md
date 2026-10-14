@@ -1,10 +1,11 @@
 ---
 change_id: signal-shutdown-races
 title: "Make the SIGTERM and SIGINT subprocess tests reliable on Ubuntu CI"
-status: impl_reviewed
+status: archived
+outcome: completed
 created: 2026-10-14
 updated: 2026-10-14
-archived_at: null
+archived_at: 2026-10-14T20:58:57Z
 ---
 
 ## Notes
