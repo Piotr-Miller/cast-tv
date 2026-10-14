@@ -362,6 +362,6 @@ console close are noticed.
 
 #### Manual
 
-- [ ] 3.6 Race probe under load: every run exit 0 Stopped
-- [ ] 3.7 Ctrl+C at the first address line prints Stopped and returns
-- [ ] 3.8 kill ends cast-tv with Stopped and status 0
+- [x] 3.6 Race probe under load: every run exit 0 Stopped — accepted at 89a10050affd2102ca7692994dd64d7d5834b0e2
+- [x] 3.7 Ctrl+C at the first address line prints Stopped and returns — accepted at 89a10050affd2102ca7692994dd64d7d5834b0e2
+- [x] 3.8 kill ends cast-tv with Stopped and status 0 — accepted at 89a10050affd2102ca7692994dd64d7d5834b0e2
