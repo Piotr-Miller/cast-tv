@@ -72,3 +72,56 @@
 - Plan drift: every planned item (helper `main_wait`, three call sites, `end_on_sigterm`, the `App.start` wrap, `cli.ui` catch, `finish_or_dump`, all 10 named tests) matches the plan; no unplanned code files.
 - Automated checks at c52188c, all exit 0: 1.1 (4 passed), 1.2, 2.1 (4 passed), 2.2 (11 passed), 3.1 (1 passed), 3.2 (10/10), full suite (384 passed, 1 skipped), pyflakes clean, 3.5 `gh pr checks 53`: ubuntu-latest and windows-latest pass, and the PR head is c52188c.
 - Mutation check skipped: `context/foundation/test-plan.md` §2 has no risk on signal or shutdown handling, and §3 configures no mutation tool.
+
+## Re-review 2 (2026-10-14)
+
+- **Scope**: full — the report's scope
+- **Session**: fresh
+- **Base**: c52188c6b32e7a5443c0c51cdf6fe7d2790f2480 (previous round)
+- **Head**: 353151145d3533d2997907b8f4327d4e34a9788a
+- **Worktree**: excluded (clean)
+- **Checks ran at**: 353151145d3533d2997907b8f4327d4e34a9788a
+- **Manual acceptance**: 3 of 3 confirmed
+- **Verdict**: APPROVED
+- **Findings**: 0 critical, 0 warnings, 2 observations (F5 split from F4 in triage)
+- **Closes**: F1, F2, F3
+
+| Dimension | Verdict |
+|-----------|---------|
+| Plan Adherence | WARNING |
+| Scope Discipline | PASS |
+| Safety & Quality | PASS |
+| Architecture | PASS |
+| Pattern Consistency | PASS |
+| Success Criteria | PASS |
+
+### F4 — Phase 2 text and three comments still promise a full close before serve()
+
+- **Severity**: 🔍 OBSERVATION
+- **Impact**: 🏃 LOW — quick decision; fix is obvious and narrowly scoped
+- **Dimension**: Plan Adherence
+- **Location**: castlib/app.py:200-202, castlib/cli.py:139-140, castlib/cli.py:277, context/changes/signal-shutdown-races/plan.md (Phase 2 §1 Intent and Contract)
+- **Detail**: The F1/F3 owner decision was written into the plan's Definitions and Critical Implementation Details, but four places still state the old rule. The `App.start` docstring says "A Ctrl+C (or SIGTERM) after the bind stops and closes the app". The `cli.ui` comment says "start() already stopped and closed it". The `_cast_item` `finally` comment says the port is freed "whatever the exit path (… Ctrl+C …)". Plan Phase 2 §1 says "`app.interrupted()` and `app.close()` when `app` exists" and "After the bind, a `KeyboardInterrupt` leaves it with the app already stopped and closed". Since e7173ec, an interrupt between the bind and the end of `serve()` closes only the socket in `App.start`, and propagates out of `cast`/`show` without `close()`. The code is right and matches the decision; only the text is wrong. A later reader could "fix" the code back to match it and bring the F1 hang back.
+- **Fix**: Change the three comments and the Phase 2 §1 Intent and Contract to say "after `serve()`" / "before `serve()` only the socket is closed", citing the 2026-10-14 owner decision.
+- **Decision**: FIXED — Fix now, plan part only (owner decision: the three code comments go to follow-ups/review-fixes.md, because editing castlib/app.py or castlib/cli.py, comments included, makes rows 3.6-3.8 stale); plan.md Phase 2 §1 Intent and Contract now say "once `app.serve()` has returned" and "only the server socket is closed" before it; siblings: plan.md Implementation Approach fixed, plan.md Phase 2 §2 Intent fixed, plan.md Desired End State / Phase 2 Overview / Testing Strategy n/a (product-level wording, qualified by the Definitions ledger), castlib/app.py:200-202, castlib/cli.py:139-140 and castlib/cli.py:278 tracked in F5 (ACCEPTED, deferred to follow-ups/review-fixes.md); reopened: none (acceptance-state.sh after the edit: 3.6-3.8 current)
+
+
+### F5 — Three code comments still describe the pre-F1 close (split from F4)
+
+- **Severity**: 🔍 OBSERVATION
+- **Impact**: 🏃 LOW — quick decision; fix is obvious and narrowly scoped
+- **Dimension**: Plan Adherence
+- **Location**: castlib/app.py:200-202, castlib/cli.py:139-140, castlib/cli.py:278
+- **Detail**: Linked from F4. The code half of F4: the `App.start` docstring, the `_cast_item` `finally` comment and the `cli.ui` comment still say that a Ctrl+C after the bind stops and closes the app. Editing these files, comments included, makes manual rows 3.6-3.8 stale (their surface is `castlib/app.py`, `castlib/cli.py`).
+- **Fix**: Reword the three comments as listed in follow-ups/review-fixes.md the next time these files change.
+- **Decision**: ACCEPTED — owner, 2026-10-14: deferred to follow-ups/review-fixes.md so that 3.6-3.8 stay accepted at 89a1005; the plan, which is the source of truth, is already corrected (F4)
+
+### Notes
+
+- F1 verified: `running = app` comes after `app.serve()` (castlib/app.py:213-219), and the `except` closes only the socket while `running` is None. `test_ctrl_c_before_the_http_loop_runs_does_not_hang` passes at HEAD and fails against c52188c's app.py and cli.py (temporary worktree, `cli.ui did not return` after 5 s). An interrupt after `serve()` returns but before `running = app` is stored takes the socket-only path. Round 1 already noted this as a blind spot; it is harmless at exit.
+- F2 verified by reading: in the SIGTERM test child, `print('ready')` and `run_forever()` are inside a `try`, and its `except KeyboardInterrupt` mirrors `cli.ui`'s fallback (tests/test_gphotos.py:1245-1250). 3.2 passed ten times in a row.
+- F3 verified: `app.serve()` comes before the `try` in `_cast_item` (castlib/cli.py:132) and `show` (castlib/cli.py:221). `test_cast_and_show_ctrl_c_before_the_http_loop_runs_do_not_hang` passes at HEAD and fails against c52188c's code. Siblings: grep `App(`, `run_forever`, `.close()` in castlib/cli.py finds only `ui` (serving by then) and `_taken_over` (reached from a serving app).
+- Automated checks at 3531511, all exit 0: 1.1 (4 passed), 1.2, 2.1 (4 passed), 2.2 (13 passed), 3.1 (1 passed), 3.2 (10/10), full suite (386 passed, 1 skipped), pyflakes clean, 3.5 `gh pr checks 53`: ubuntu-latest and windows-latest pass, and the PR head is 3531511.
+- Manual: `acceptance-state.sh` exit 0; 3.6, 3.7 and 3.8 are `current` at 89a1005. Their observations are in research.md §"Manual checks after the impl-review fixes, 2026-10-14 22:24-22:25", at e7173ec. Lessons: 1 of 6 entries apply to impl-review ("A ticked manual row needs a written observation"), and it is satisfied.
+- Bookkeeping in diff: context/changes/signal-shutdown-races/change.md, context/changes/signal-shutdown-races/plan.md, context/changes/signal-shutdown-races/research.md, context/changes/signal-shutdown-races/reviews/impl-review-c52188c.md
+- Mutation check skipped, as in round 1: no risk in test-plan.md §2 covers signal handling, and no mutation tool is configured.

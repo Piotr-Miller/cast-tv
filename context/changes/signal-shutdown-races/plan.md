@@ -97,8 +97,8 @@ cloud-source-ui fix `81097b8` (`context/archive/2026-09-07-cloud-source-ui/plan.
 Fix the app, not the tests. Phase 1 replaces the three main-thread `Event.wait` calls with one
 helper, `main_wait`, which sleeps in short steps and checks `is_set()`. Phase 2 installs the
 SIGTERM handler as soon as `App.start` has bound its port, before it prints anything. It also makes
-a `KeyboardInterrupt` during the rest of `App.start` stop and close the app, then lets `cli.ui()`
-return 0. Phase 3 gives both subprocess tests a timeout path that dumps the child's thread stacks,
+a `KeyboardInterrupt` during the rest of `App.start` stop and close the app (only the socket
+before `serve()` returns), then lets `cli.ui()` return 0. Phase 3 gives both subprocess tests a timeout path that dumps the child's thread stacks,
 then runs the probe and the terminal checks. Each fault gets an in-process test that injects the
 `KeyboardInterrupt` deterministically, so the suite proves each fix without depending on timing.
 
@@ -201,19 +201,21 @@ Faults A and B. The SIGTERM handler is in place before `App.start` prints anythi
 swallowed `ValueError`/`OSError`. `App.start` calls it right after the bind succeeds, before the
 first `print`. `run_forever()` keeps calling it inside its `try`, as `81097b8` requires, because
 `cli._taken_over` reaches `run_forever()` without `App.start`. The body of `App.start` after the
-bind is wrapped. On `KeyboardInterrupt` it calls `app.interrupted()` and `app.close()` when `app`
-exists, otherwise `server.server_close()`, and then re-raises.
+bind is wrapped. On `KeyboardInterrupt` it calls `app.interrupted()` and `app.close()` once
+`app.serve()` has returned, otherwise `server.server_close()`, and then re-raises (owner decision
+2026-10-14, impl-review F1).
 
 **Contract**: `end_on_sigterm() -> None` is idempotent and does nothing off the main thread.
 `App.start`'s signature, return value and the exceptions it raises before the bind are unchanged.
-After the bind, a `KeyboardInterrupt` leaves it with the app already stopped and closed.
+After `app.serve()` has returned, a `KeyboardInterrupt` leaves it with the app already stopped and
+closed. Between the bind and that point, only the server socket is closed.
 
 #### 2. `cli.ui()`
 
 **File**: `castlib/cli.py`
 
 **Intent**: catch `KeyboardInterrupt` from `App.start` and return 0. `App.start` has already
-printed `Stopped.` and cleaned up. The existing fallback after `App.start`
+printed `Stopped.` and cleaned up, or closed only the socket when `serve()` had not returned. The existing fallback after `App.start`
 (`except KeyboardInterrupt` around `run_forever()`) stays.
 
 **Contract**: `ui()` returns 0 for a Ctrl+C at any point after the bind.
