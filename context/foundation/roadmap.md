@@ -90,7 +90,7 @@ and a LAN-exposure problem (`cloud-source-ui/research.md`).
 ### S-09: Photos through share links
 
 - **Phase:** phase:post-mvp
-- **Change:** `context/changes/s09-share-link-photos/`; recorded in
+- **Change:** `context/archive/2026-10-13-s09-share-link-photos/` (archived 2026-10-14); recorded in
   `context/archive/2026-09-07-cloud-source-ui/follow-ups/review-fixes.md`.
 - **Outcome:** a share link to a photo lists a photo tile; a motion photo's clip offers `=m37`
   (H.264 1080p), since the Samsung refused its `=dv` HEVC 120 fps original.
