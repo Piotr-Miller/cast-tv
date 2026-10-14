@@ -49,13 +49,14 @@ cloud-source-ui fix `81097b8` (`context/archive/2026-09-07-cloud-source-ui/plan.
 
 | Term | Decided meaning | Origin | On degenerate data | Verified by |
 | ---- | --------------- | ------ | ------------------ | ----------- |
-| Ctrl+C at startup | Same as Ctrl+C later: `Stopped.`, Stop to a selected TV, sources closed, port freed, exit 0 | product (`81097b8`) | Before the `App` exists (still binding): nothing to stop; the port is released and the exit is quiet, status 0 | 2.1, 2.2, 2.3 |
+| Ctrl+C at startup | Same as Ctrl+C later: `Stopped.`, Stop to a selected TV, sources closed, port freed, exit 0 | product (`81097b8`) | Before the `App` exists (still binding), or before its HTTP loop runs (owner decision 2026-10-14, impl-review F1): nothing to stop; the port is released and the exit is quiet, status 0 | 2.1, 2.2, 2.3 |
 
 ## Desired End State
 
 - A `kill` (SIGTERM) sent at any moment after cast-tv has printed its first line ends it like Ctrl+C:
   `Stopped.`, sources closed, exit 0. The SIGTERM test's `ready` line now comes after the
-  handler is installed.
+  handler is installed, and its child prints `ready` and runs `run_forever()` inside a `try`
+  with `cli.ui()`'s `KeyboardInterrupt` fallback (owner decision 2026-10-14, impl-review F2).
 - A Ctrl+C during `App.start` ends cast-tv like a later Ctrl+C, with no traceback.
 - No main-thread loop waits in `Event.wait`. A Ctrl+C can no longer leave an Event's lock held, so
   `close()` cannot hang on `self._closed.set()`.
@@ -109,9 +110,12 @@ then runs the probe and the terminal checks. Each fault gets an in-process test 
   *before* the first `print` in `App.start`, so that any line a test or user reads means the
   handler is in place. Only the main thread may call `signal.signal`; keep the existing
   `current_thread() is main_thread()` guard and the `ValueError`/`OSError` swallow.
-- **State sequencing**: when a `KeyboardInterrupt` reaches `App.start` after `app` exists, run
-  `app.interrupted()`, then `app.close()`, then re-raise. `cli.ui()` then returns 0 without
-  calling them again. Before `app` exists, close only the bound server socket. Tests that call
+- **State sequencing**: when a `KeyboardInterrupt` reaches `App.start` after `app.serve()` has
+  returned, run `app.interrupted()`, then `app.close()`, then re-raise. `cli.ui()` then returns 0
+  without calling them again. Before that, close only the bound server socket: `close()` calls
+  `server.shutdown()`, which waits for a `serve_forever` loop. `cli.cast` and `cli.show` call
+  `app.serve()` before the `try` whose `finally` closes the app, for the same reason (owner
+  decision 2026-10-14, impl-review F1 and F3). Tests that call
   `App.start` in-process must restore the original SIGTERM handler afterwards.
 
 ## Phase 1: The main thread waits without Event.wait
@@ -358,6 +362,6 @@ console close are noticed.
 
 #### Manual
 
-- [x] 3.6 Race probe under load: every run exit 0 Stopped — accepted at bed2488c3c4db64fed700caaaca84f2e0db751cf
-- [x] 3.7 Ctrl+C at the first address line prints Stopped and returns — accepted at bed2488c3c4db64fed700caaaca84f2e0db751cf
-- [x] 3.8 kill ends cast-tv with Stopped and status 0 — accepted at bed2488c3c4db64fed700caaaca84f2e0db751cf
+- [ ] 3.6 Race probe under load: every run exit 0 Stopped
+- [ ] 3.7 Ctrl+C at the first address line prints Stopped and returns
+- [ ] 3.8 kill ends cast-tv with Stopped and status 0

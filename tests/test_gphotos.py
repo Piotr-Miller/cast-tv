@@ -1242,8 +1242,12 @@ def test_sigterm_closes_sources_like_ctrl_c(tmp_path):
         "app = m.App.start(port, browser=False)\n"
         "app.use_tv('127.0.0.1', 'http://127.0.0.1:1/avt', 'Fake')\n"
         "app.sources['gphotos'].close = lambda: print('gphotos closed', flush=True)\n"
-        "print('ready', flush=True)\n"
-        "sys.exit(app.run_forever())\n" % (str(tmp_path / "config"), str(tmp_path / "cache")))
+        "try:\n"
+        "    print('ready', flush=True)\n"
+        "    rc = app.run_forever()\n"
+        "except KeyboardInterrupt:\n"   # a kill before run_forever's try: cli.ui's fallback does the same
+        "    app.interrupted(); app.close(); rc = 0\n"
+        "sys.exit(rc)\n" % (str(tmp_path / "config"), str(tmp_path / "cache")))
     from tests.conftest import finish_or_dump
     proc = subprocess.Popen([sys.executable, "-c", code], stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                             env=dict(os.environ, PYTHONFAULTHANDLER="1"),   # a hang prints its threads

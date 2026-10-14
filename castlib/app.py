@@ -210,12 +210,13 @@ class App:
                 if _is_cast_tv("http://127.0.0.1:%d/api/status" % port):
                     raise AlreadyRunning(url)
             raise
-        app = None
+        running = None                   # the app, once its HTTP loop runs: close() waits for that loop
         try:
             end_on_sigterm()             # before the first line: whoever reads it may send a kill
             app = cls(server, debug=debug)
             app.sources["gphotos"].open_browser = browser   # the Google consent opens a tab on this machine, unless --no-browser
             app.serve()
+            running = app
             try:
                 lan = local_ip("192.0.2.1")
             except OSError:
@@ -264,11 +265,11 @@ class App:
                     pass
         except KeyboardInterrupt:
             # Ctrl+C or a kill while starting ends cast-tv like any later one
-            if app is None:
+            if running is None:          # not serving yet: shutdown() would wait for a loop that never ran
                 server.server_close()
             else:
-                app.interrupted()
-                app.close()
+                running.interrupted()
+                running.close()
             raise
         return app
 
