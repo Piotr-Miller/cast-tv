@@ -41,6 +41,24 @@ INTERVAL_DEFAULT = 8
 INTERVAL_MIN, INTERVAL_MAX = 2, 600
 # a port in use: EADDRINUSE on POSIX; Windows sockets report WSAEADDRINUSE (10048)
 ADDR_IN_USE = {errno.EADDRINUSE, getattr(errno, "WSAEADDRINUSE", 10048)}
+MAIN_WAIT_STEP = 0.05      # seconds main_wait sleeps between looks at the flag
+
+
+def main_wait(event: threading.Event, timeout: float, sleep=time.sleep) -> bool:
+    """``event.wait(timeout)`` for the main thread, where Ctrl+C and SIGTERM arrive.
+
+    A ``KeyboardInterrupt`` raised inside ``Event.wait`` can leave the Event's
+    internal lock held; the ``set()`` in ``close()`` then waits forever (CI saw
+    "Stopped." and no exit). This sleeps in short steps and reads the flag,
+    which takes no lock.
+    """
+    deadline = time.monotonic() + timeout
+    while not event.is_set():
+        left = deadline - time.monotonic()
+        if left <= 0:
+            return False
+        sleep(min(left, MAIN_WAIT_STEP))
+    return True
 
 
 class AlreadyRunning(Exception):
@@ -272,7 +290,7 @@ class App:
                     signal.signal(signal.SIGTERM, _term)
                 except (ValueError, OSError):
                     pass
-            while not self._closed.wait(1.0):
+            while not main_wait(self._closed, 1.0):
                 pass
         except KeyboardInterrupt:
             self.interrupted()

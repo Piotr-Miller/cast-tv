@@ -224,6 +224,71 @@ def test_ctrl_c_before_run_forever_takes_over(monkeypatch):
     assert done == ["interrupted", "close"]
 
 
+def _interrupted(*a, **kw):
+    raise KeyboardInterrupt
+
+
+def test_main_wait_behaves_like_event_wait():
+    import threading
+    from castlib.app import main_wait
+    ev = threading.Event()
+    start = time.monotonic()
+    assert main_wait(ev, 0.1) is False
+    assert time.monotonic() - start >= 0.1
+    threading.Timer(0.05, ev.set).start()
+    start = time.monotonic()
+    assert main_wait(ev, 5.0) is True
+    assert time.monotonic() - start < 1.0
+    assert main_wait(ev, 0) is True                      # already set: True at once, like Event.wait
+
+
+def test_ctrl_c_inside_main_wait_leaves_the_event_usable():
+    """CI hung after "Stopped.": a Ctrl+C inside ``Event.wait`` can leave the Event's lock held."""
+    import threading
+    from castlib.app import main_wait
+    ev = threading.Event()
+    with pytest.raises(KeyboardInterrupt):
+        main_wait(ev, 1.0, sleep=_interrupted)
+    assert ev._cond._lock.acquire(timeout=1)
+    ev._cond._lock.release()
+    ev.set()                                             # what close() does next
+    assert ev.is_set()
+
+
+def test_run_forever_ctrl_c_in_its_wait_stops_and_closes(app, monkeypatch, capsys):
+    from castlib import app as app_module
+    monkeypatch.setattr(app_module.signal, "signal", lambda *a: None)   # pytest keeps its own SIGTERM
+    monkeypatch.setattr(app_module, "main_wait", _interrupted)
+    assert app.run_forever() == 0
+    assert "Stopped." in capsys.readouterr().out
+    assert "Stop" in app.tv_fake.actions()
+    assert app._closed.is_set()
+
+
+def test_run_forever_does_not_wait_on_the_event_in_the_main_thread(app, monkeypatch):
+    import threading
+    from castlib import app as app_module
+    monkeypatch.setattr(app_module.signal, "signal", lambda *a: None)
+
+    def forbidden(timeout=None):
+        raise AssertionError("Event.wait in the main thread, where Ctrl+C lands")
+    monkeypatch.setattr(app._closed, "wait", forbidden)
+    threading.Timer(0.2, app._closed.set).start()        # what another thread's close() does
+    assert app.run_forever() == 0
+
+
+def test_cast_and_show_ctrl_c_in_their_wait_print_stopped(cli_env, tmp_path, monkeypatch, capsys):
+    servers, tv = cli_env
+    tv.video_script = ["PLAYING"]
+    monkeypatch.setattr(cli, "main_wait", _interrupted)
+    clip = tmp_path / "clip.mp4"
+    clip.write_bytes(b"\0" * 100)
+    assert cli.cast(str(clip), tv="127.0.0.1", port=_free_port()) == 0
+    assert "Stopped." in capsys.readouterr().out
+    assert cli.show([str(clip), str(clip)], tv="127.0.0.1", port=_free_port()) == 0
+    assert "Stopped." in capsys.readouterr().out
+
+
 def test_version_names_the_client(monkeypatch, tmp_path, capsys):
     """``--version``: the version, where the Google Photos client would come from, the GoPro window's browser."""
     import castlib
