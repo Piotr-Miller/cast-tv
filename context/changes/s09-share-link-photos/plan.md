@@ -299,11 +299,11 @@ Run from a branch build: in a terminal on the Fedora PC, `cast-tv` from this bra
 the UI open on the phone; the Samsung on. Write each result in `research.md` (row, date, link,
 what the TV showed) before ticking the row.
 
-- In the Google Photos tab, paste `https://photos.app.goo.gl/QT9rQWxXYDDfSpKD8` (plain photo) into the link field and press Add link: one photo tile with a thumbnail appears; tap its play button: the photo shows on the TV, upright and in normal colours.
-- Paste `https://photos.app.goo.gl/Nj2VHaD5bqKviYhq6` (motion photo): one photo tile; tap play: "Cast which variant?" offers Photo and Clip; Photo shows the still on the TV (not a green rectangle); Clip plays the 1.8 s clip on the TV.
-- Paste `https://photos.app.goo.gl/PpeVYpY5J4QkpYm99` (album of several items): no tile appears; under the link field a line says album links are not cast yet.
-- Paste `https://photos.app.goo.gl/KwhGzcxkNtQpudc46` (video): it still lists as a video tile and plays on the TV.
-- Tick the plain-photo and motion-photo tiles, start the slideshow: both show as stills on the TV, one after the other.
+- In the Google Photos tab, paste `https://photos.app.goo.gl/QT9rQWxXYDDfSpKD8` (plain photo) into the link field and press Add link: one photo tile with a thumbnail appears; tap its play button: the photo shows on the TV, upright and in normal colours. — surface: castlib/sources/gphotos.py, castlib/sources/sharelink.py, castlib/photos.py, castlib/ui/index.html, castlib/ui/app.js
+- Paste `https://photos.app.goo.gl/Nj2VHaD5bqKviYhq6` (motion photo): one photo tile; tap play: "Cast which variant?" offers Photo and Clip; Photo shows the still on the TV (not a green rectangle); Clip plays the 1.8 s clip on the TV. — surface: castlib/sources/gphotos.py, castlib/sources/sharelink.py, castlib/photos.py, castlib/ui/index.html, castlib/ui/app.js
+- Paste `https://photos.app.goo.gl/PpeVYpY5J4QkpYm99` (album of several items): no tile appears; under the link field a line says album links are not cast yet. — surface: castlib/sources/gphotos.py, castlib/sources/sharelink.py, castlib/ui/index.html, castlib/ui/app.js
+- Paste `https://photos.app.goo.gl/KwhGzcxkNtQpudc46` (video): it still lists as a video tile and plays on the TV. — surface: castlib/sources/gphotos.py, castlib/sources/sharelink.py, castlib/ui/index.html, castlib/ui/app.js
+- Tick the plain-photo and motion-photo tiles, start the slideshow: both show as stills on the TV, one after the other. — surface: castlib/sources/gphotos.py, castlib/sources/sharelink.py, castlib/photos.py, castlib/ui/index.html, castlib/ui/app.js
 - In the terminal, `cast-photos https://photos.app.goo.gl/QT9rQWxXYDDfSpKD8 --url-only`: it prints that cast-photos casts videos from links and to paste the link into the Google Photos tab — surface: castlib/sources/sharelink.py
 
 **Implementation Note**: Manual checks are acceptance. `/rune-implement` commits the phase once
