@@ -372,8 +372,8 @@ four for a video today. The photo itself is fetched whole by `photos.py`, as for
 
 #### Automated
 
-- [x] 3.1 No document still says share links cast videos only
-- [x] 3.2 The whole suite passes
+- [x] 3.1 No document still says share links cast videos only — 2c1c9f5
+- [x] 3.2 The whole suite passes — 2c1c9f5
 
 #### Manual
 
