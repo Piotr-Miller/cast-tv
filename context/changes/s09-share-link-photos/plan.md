@@ -377,9 +377,9 @@ four for a video today. The photo itself is fetched whole by `photos.py`, as for
 
 #### Manual
 
-- [ ] 3.3 Plain photo link casts the photo
-- [ ] 3.4 Motion photo link offers Photo and Clip, both play
-- [ ] 3.5 Album link (several items) is refused under the field
-- [ ] 3.6 Video link still plays
-- [ ] 3.7 Slideshow of two link photos shows both stills
-- [ ] 3.8 cast-photos points a photo link to the tab
+- [x] 3.3 Plain photo link casts the photo — accepted at f3ab375fa40ea7fc1d660bda8a3b46ac5d82d010
+- [x] 3.4 Motion photo link offers Photo and Clip, both play — accepted at f3ab375fa40ea7fc1d660bda8a3b46ac5d82d010
+- [x] 3.5 Album link (several items) is refused under the field — accepted at f3ab375fa40ea7fc1d660bda8a3b46ac5d82d010
+- [x] 3.6 Video link still plays — accepted at f3ab375fa40ea7fc1d660bda8a3b46ac5d82d010
+- [x] 3.7 Slideshow of two link photos shows both stills — accepted at f3ab375fa40ea7fc1d660bda8a3b46ac5d82d010
+- [x] 3.8 cast-photos points a photo link to the tab — accepted at f3ab375fa40ea7fc1d660bda8a3b46ac5d82d010
