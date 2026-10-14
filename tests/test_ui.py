@@ -187,6 +187,31 @@ def test_gopro_expired_list_survives_a_failed_reconnect():
     assert out["requests"].count("GET /api/sources/gopro/list") == 2      # once connected, once reconnected
 
 
+def test_gphotos_links_stay_usable_after_the_consent_expires():
+    """A share link needs no consent: with the Google consent expired, the field is still offered (on
+    the gate and under the list) and the pasted links still list, under the expired banner."""
+    html = _ui_text("index.html")
+    forms = [line for line in html.splitlines() if 'class="paste linkpaste"' in line]
+    assert len(forms) == 2
+    for form in forms:
+        assert "expired" not in form, form
+    expired = {"state": "expired", "detail": {"stored": True, "picks": 1, "picks_seq": 1,
+                                              "error": {"code": "refresh_rejected", "message": "Connect again."}}}
+    status = dict(_status({"state": "disconnected", "detail": {"stored": False}}))
+    status["sources"] = {"gphotos": expired}
+    out = drive_ui([
+        {"answer": {"path": "/api/sources/gphotos/list", "body": {"items": [
+            {"source": "gphotos", "id": "link-1", "name": "QT9rQWxXYDDfSpKD8", "kind": "photo"}]}}},
+        {"status": status},
+        {"call": "refresh"}, {"call": "ensureList", "args": ["gphotos"]},   # what opening the tab runs
+        {"read": "listVisible", "args": ["gphotos"]},
+        {"read": "items", "args": ["gphotos"]},
+    ])
+    visible, items = out["reads"]
+    assert "GET /api/sources/gphotos/list" in out["requests"]
+    assert visible is True and [it["id"] for it in items] == ["link-1"]
+
+
 def open_ui_bytes():
     from castlib.server import UI_DIR
     import os

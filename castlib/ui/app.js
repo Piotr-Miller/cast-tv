@@ -316,7 +316,7 @@ function castTv() {
     ensureList(name) {
       const l = this.lists[name];
       const s = this.source(name);
-      const listed = !!s && s.state !== 'expired' && !!s.detail && s.detail.picks > 0;   // pasted links list without a sign-in
+      const listed = !!s && !!s.detail && s.detail.picks > 0;   // pasted links list without a sign-in, or with an expired one
       if (!(this.connected(name) || listed) || (l && (l.loaded || l.loading))) return;
       this.loadList(name);
     },
