@@ -335,7 +335,7 @@ are cast from the command line, and then show up in the UI for that session.
 ## Repository tooling
 
 `ai-toolkit setup` installs the authoring skills locally, from the version pinned in `.ai-toolkit/config.json`
-(1.10.0; the `install` field there is the exact command): the managed skills, the recovery channel and the Millrune
+(1.11.0; the `install` field there is the exact command): the managed skills, the recovery channel and the Millrune
 loop (`rune-*`), as in lumina-clean-ai. None of it is tracked here - see `.gitignore`, which covers every path
 `setup` writes. The recovery channel and Millrune carry course-licensed material, so they live only in a local
 checkout and never enter this public repository.
