@@ -19,7 +19,7 @@ import webbrowser
 import castlib
 from castlib import net, platform
 from castlib.auth import browser, loopback
-from castlib.app import AlreadyRunning, App
+from castlib.app import AlreadyRunning, App, main_wait
 from castlib.diagnostics import check_codecs
 from castlib.discovery import control_urls, discover
 from castlib.dlna import AVT, soap
@@ -160,7 +160,7 @@ def _follow(app, c, ip, relaying, debug):
     print("   Ctrl+C ends it (playback stops on the TV too)\n")
     last = None
     try:
-        while not c.done.wait(0.5):
+        while not main_wait(c.done, 0.5):
             line = (c.tv_state, c.position, c.duration)
             if line != last and c.tv_state:
                 sys.stdout.write("\r   %-12s %s / %s   " % (
@@ -234,7 +234,7 @@ def show(sources, interval=None, tv=None, port=DEFAULT_PORT, debug=False):
         print("   UI: http://localhost:%d/ui/  ·  Ctrl+C ends it\n" % app.server.port)
         last = None
         try:
-            while not sh.done.wait(0.5):
+            while not main_wait(sh.done, 0.5):
                 c = sh.current
                 if c is None:
                     continue
