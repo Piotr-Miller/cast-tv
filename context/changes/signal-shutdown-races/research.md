@@ -170,3 +170,17 @@ so the next unknown hang shows where it waits.
   mechanism but no test or user report has shown it. This is the owner's call when planning.
 - `castlib/cli.py:146` (`c.sent.wait()` without a handler) is a known gap from the phase-3 review.
   It is out of this change unless the owner adds it.
+
+## Manual checks after the fix, 2026-10-14 21:55-21:56
+
+Code at `0e33b39` (phases 1-3), Fedora PC, project venv (Python 3.14.8), run by Claude.
+
+| Row | What was run | Result |
+| --- | --- | --- |
+| 3.6 | `race-probes.md` §1 under load (`2 x nproc` = 16 busy loops on 8 CPUs), SIGINT 0 s, 0.2 ms and 2 ms after the `does not expose` line, 25 runs each | `0.0 {'exit 0 Stopped': 25}`, `0.0002 {'exit 0 Stopped': 25}`, `0.002 {'exit 0 Stopped': 25}`. Before the fix, delay 0: 17 of 25 exited -2 |
+| 3.7 | `.venv/bin/cast-tv --no-browser -t 127.0.0.1` on a pseudo-terminal; `^C` written to the terminal (what the keyboard's Ctrl+C sends) when the `http://localhost:8895/ui/` line appeared | Output: the two addresses, the firewall line, `^C`, `Stopped.`; exit status 0, 0.31 s after the key. The interrupt landed inside `App.start` (before its "Ctrl+C ends it" line), the window of fault B |
+| 3.8 | The same command again; `kill <pid>` (SIGTERM) from outside at the same line | Output: the addresses, the firewall line, `Stopped.`; exit status 0, 0.29 s after the kill |
+
+`-t 127.0.0.1` was added to the plan's command so that the check could not send Stop to the
+living-room TV. It does not change the path being checked, and it makes the interrupt land
+during `App.start`.
