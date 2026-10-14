@@ -129,8 +129,8 @@ def _cast_item(item, tv, port, debug, subtitle=None):
         return 1
     app = App(srv, debug=debug)
     app.codec_check = False                  # printed above, once
+    app.serve()                              # before the try: close() waits for the HTTP loop this starts
     try:
-        app.serve()
         app.use_tv(ip, avt, name)
         if not relaying:
             app.local.remember(item)         # the UI may re-cast it or put it in a show
@@ -218,8 +218,8 @@ def show(sources, interval=None, tv=None, port=DEFAULT_PORT, debug=False):
         return 1
     app = App(srv, debug=debug)
     app.codec_check = False
+    app.serve()                              # before the try: close() waits for the HTTP loop this starts
     try:
-        app.serve()
         app.use_tv(ip, avt, name)
         for item in items:
             app.local.remember(item)

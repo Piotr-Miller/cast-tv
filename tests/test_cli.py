@@ -366,6 +366,39 @@ def test_ctrl_c_before_the_app_exists_frees_the_port(start_env, monkeypatch, cap
     assert _port_is_free(port)
 
 
+def test_ctrl_c_before_the_http_loop_runs_does_not_hang(start_env, monkeypatch):
+    """``server.shutdown()`` waits for a ``serve_forever`` loop; before ``serve()`` none ever ran."""
+    import threading
+    port = _free_port()
+    monkeypatch.setattr(start_env.App, "serve", _interrupted)
+    result = []
+    t = threading.Thread(target=lambda: result.append(cli.ui(port=port, browser=False)), daemon=True)
+    t.start()
+    t.join(5)
+    assert result == [0], "cli.ui did not return: close() waited for an HTTP loop that never started"
+    assert _port_is_free(port)
+
+
+def test_cast_and_show_ctrl_c_before_the_http_loop_runs_do_not_hang(cli_env, tmp_path, monkeypatch):
+    import threading
+    monkeypatch.setattr(cli.App, "serve", _interrupted)
+    clip = tmp_path / "clip.mp4"
+    clip.write_bytes(b"\0" * 100)
+    for run in (lambda: cli.cast(str(clip), tv="127.0.0.1", port=_free_port()),
+                lambda: cli.show([str(clip), str(clip)], tv="127.0.0.1", port=_free_port())):
+        raised = []
+
+        def target():
+            try:
+                run()
+            except KeyboardInterrupt:
+                raised.append(True)
+        t = threading.Thread(target=target, daemon=True)
+        t.start()
+        t.join(5)
+        assert raised == [True], "the CLI did not return: close() waited for an HTTP loop that never started"
+
+
 def test_failed_bind_leaves_sigterm_alone(app, start_env, upstream):
     from castlib.app import AlreadyRunning
     before = signal.getsignal(signal.SIGTERM)
