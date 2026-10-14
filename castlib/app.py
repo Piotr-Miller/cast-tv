@@ -199,7 +199,8 @@ class App:
 
         Raises ``AlreadyRunning`` when another cast-tv answers on the port, and
         ``OSError`` when the port is held by something else. A Ctrl+C (or SIGTERM)
-        after the bind stops and closes the app, then the ``KeyboardInterrupt`` goes on.
+        once ``serve()`` has returned stops and closes the app; between the bind and
+        that point only the socket is closed. Either way the ``KeyboardInterrupt`` goes on.
         """
         out = out or sys.stdout
         try:

@@ -136,8 +136,9 @@ def _cast_item(item, tv, port, debug, subtitle=None):
             app.local.remember(item)         # the UI may re-cast it or put it in a show
         return _follow(app, app.cast(item, subtitle=subtitle), ip, relaying, debug)
     finally:
-        # the CLI owns this server: retire what it registered and free the
-        # port, whatever the exit path (SOAP failure, Ctrl+C, end of playback)
+        # the CLI owns this server: retire what it registered and free the port,
+        # whatever the exit path once serve() runs (SOAP failure, Ctrl+C, end of
+        # playback); an interrupt inside serve() propagates without close()
         app.close()
 
 
@@ -275,8 +276,8 @@ def ui(port=DEFAULT_PORT, tv=None, debug=False, browser=True):
     except OSError as e:
         print("Cannot bind port %d: %s" % (port, e))
         return 1
-    except KeyboardInterrupt:              # Ctrl+C while starting: start() already stopped and closed it
-        return 0
+    except KeyboardInterrupt:              # Ctrl+C while starting: start() already stopped and closed it,
+        return 0                           # or closed only its socket before serve() returned
     try:
         return app.run_forever()
     except KeyboardInterrupt:              # Ctrl+C in the instant before run_forever took over
