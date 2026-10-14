@@ -752,7 +752,7 @@ class GPhotosSource:
 
     # ------------------------------------------------------ share links
     def link(self, params: dict) -> dict:
-        """A pasted share link: scraped now, listed as a video item of this tab."""
+        """A pasted share link: scraped now, listed as a video or a photo item of this tab."""
         params = params if isinstance(params, dict) else {}
         link = params.get("link")
         if not isinstance(link, str) or not link.strip():
@@ -765,25 +765,39 @@ class GPhotosSource:
             for lid, known in self._links.items():
                 if known["link"] == link:
                     return {"item": self._link_entry(lid, known).as_dict()}
-        url = sharelink.resolve(link)
+        got = sharelink.shared(link)
         name = urllib.parse.urlsplit(link).path.rstrip("/").rsplit("/", 1)[-1] or "Google Photos"
         with self._lock:
             lid = LINK_PREFIX + str(len(self._links) + 1)
-            known = {"link": link, "url": url, "name": name, "resolved_at": time.time()}
+            # url: the video stream, or the photo's =d; clip and thumb only on a photo
+            known = {"link": link, "kind": got.kind, "url": got.url, "clip": got.clip, "thumb": got.thumb,
+                     "name": name, "resolved_at": time.time()}
             self._links[lid] = known
             self._picks_seq += 1
             return {"item": self._link_entry(lid, known).as_dict()}
 
     @staticmethod
     def _link_entry(lid: str, known: dict) -> Entry:
-        return Entry(source="gphotos", id=lid, name=known["name"], kind="video", thumb=None,
-                     mime="video/mp4", warn=None)
+        if known["kind"] != "photo":
+            return Entry(source="gphotos", id=lid, name=known["name"], kind="video", thumb=None,
+                         mime="video/mp4", warn=None)
+        variants = None
+        if known["clip"]:                        # a motion photo: the still, or its clip as Google's stream
+            variants = [
+                {"quality": "photo", "label": "Photo", "note": "the still", "default": True},
+                {"quality": "clip", "label": "Clip", "note": "Google's 1080p H.264 stream", "default": False},
+            ]
+        return Entry(source="gphotos", id=lid, name=known["name"], kind="photo",
+                     thumb="/api/sources/gphotos/thumb/%s" % lid, mime="image/jpeg", warn=None,
+                     variants=variants)
 
-    def _link_item(self, lid: str) -> MediaItem:
+    def _link_item(self, lid: str, quality: str = "auto") -> MediaItem:
         with self._lock:
             known = self._links.get(lid)
         if known is None:
             raise NotMedia("unknown_item", "That link was not pasted in this session.", source="gphotos", item=lid)
+        if known["kind"] == "photo":
+            return self._link_photo(lid, known, quality)
         source = self
 
         def fresh() -> Upstream:                 # played through the same guard: no redirect off Google
@@ -798,6 +812,39 @@ class GPhotosSource:
 
         return MediaItem(kind="video", title=known["name"], mime="video/mp4", source="gphotos",
                          source_id=lid, version=known["link"], resolve=fresh, refresh=again)
+
+    def _link_photo(self, lid: str, known: dict, quality: str) -> MediaItem:
+        """A photo link as its still (fetched whole by ``photos``), or a motion photo's clip (relayed)."""
+        if quality in ("auto", "photo"):
+            field, suffix = "url", sharelink.PHOTO
+        elif quality == "clip" and known["clip"]:
+            field, suffix = "clip", sharelink.CLIP
+        else:
+            raise ConfigError("bad_quality", "A Google Photos link to a photo is cast as \"photo\", "
+                              "or as \"clip\" when it is a motion photo.", source="gphotos", item=lid)
+        source = self
+
+        def fresh() -> Upstream:                 # fetched through the same guard: no redirect off Google
+            with source._lock:
+                return Upstream(source._links[lid][field], opener=sharelink.opener())
+
+        def again() -> Upstream:
+            got = sharelink.shared(known["link"])
+            address = got.url if field == "url" else got.clip
+            if got.kind != "photo" or not address:
+                raise UpstreamError("link_changed", "The shared link no longer holds this %s; paste it "
+                                    "again." % ("photo" if field == "url" else "motion clip"),
+                                    source="gphotos", item=lid)
+            with source._lock:
+                source._links[lid].update(url=got.url, clip=got.clip, thumb=got.thumb, resolved_at=time.time())
+            return Upstream(address, opener=sharelink.opener())
+
+        if field == "url":
+            return MediaItem(kind="photo", title=known["name"], mime="image/jpeg", source="gphotos",
+                             source_id=lid, version=known["link"] + suffix, resolve=fresh, refresh=again)
+        return MediaItem(kind="video", title=known["name"], mime="video/mp4", source="gphotos",
+                         source_id=lid, version=known["link"] + suffix, resolve=fresh, refresh=again,
+                         download=False)   # =m37 honours Range: relayed, like a picked video's stream
 
     # ------------------------------------------------------------ list
     def list(self, path=None, page=None) -> Listing:
@@ -814,7 +861,7 @@ class GPhotosSource:
     def resolve(self, source_id: str, quality: str = "auto") -> MediaItem:
         """An unregistered item whose ``resolve`` hands out ``baseUrl=d``/``=dv`` with the Bearer header."""
         if isinstance(source_id, str) and source_id.startswith(LINK_PREFIX):
-            return self._link_item(source_id)
+            return self._link_item(source_id, quality)
         if not good_id(source_id):
             raise NotMedia("bad_id", "Not a Google Photos item id.", source="gphotos",
                            item=str(source_id)[:64])
@@ -851,8 +898,13 @@ class GPhotosSource:
                          duration=entry.duration)
 
     def thumb(self, source_id: str) -> Upstream | None:
-        if not good_id(source_id) or source_id.startswith(LINK_PREFIX):
+        if not good_id(source_id):
             return None
+        if source_id.startswith(LINK_PREFIX):    # a photo link's thumbnail, behind the share-link guard
+            with self._lock:
+                known = self._links.get(source_id)
+                thumb = known["thumb"] if known is not None else None
+            return Upstream(thumb, opener=sharelink.opener()) if thumb else None
         with self._lock:
             if source_id not in self._picks:
                 return None

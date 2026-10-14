@@ -222,7 +222,7 @@ def _clip(url, op):
     """A motion photo's clip at ``url`` (base + ``=m37``), or None on a plain photo.
 
     ``probe_media()`` answers None to every HTTP error; here only a 404 means "no clip".
-    Any other answer that is not video fails the paste, naming what came back.
+    Only a 200/206 video answer is a clip; other answers fail the paste, naming what came back.
     """
     req = urllib.request.Request(url, headers={"User-Agent": net.UA, "Range": "bytes=0-1"})
     try:
@@ -240,11 +240,12 @@ def _clip(url, op):
         raise                                    # a redirect guard's refusal keeps its own code
     except Exception as e:
         raise UpstreamError("probe_failed", "Could not fetch %s: %s" % (url, e), source="link")
-    if ctype.startswith("video/") or ctype == "application/mp4":
+    if status in (200, 206) and (
+            ctype.startswith("video/") or ctype == "application/mp4"):
         print("  clip: %s %s" % (CLIP, ctype))
         return url
     raise UpstreamError("clip_probe_failed", "Google answered %d (%s) when asked for the photo's "
-                        "motion clip, not a video; try again later." % (status, ctype or "no type"),
+                        "motion clip; try again later." % (status, ctype or "no type"),
                         source="link")
 
 
