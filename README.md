@@ -198,10 +198,17 @@ the filesystem if that is less), all downloads together at most a quarter of it,
 stops before a write would leave less than 5 % of it free (at least 1 GiB). The tile's **1080p
 stream** variant is relayed and downloads nothing.
 
-**Share links** from other people's libraries still work, pasted into the tab or given to
-`cast-photos`: the page is parsed for candidate stream URLs, each is probed with a one-byte range
-request, and the first that answers as video wins. Share links cast videos only. Public links
-need nothing; private ones need a cookie jar (`-c cookies.txt`).
+**Share links** from other people's libraries work too, pasted into the tab or given to
+`cast-photos`. In the tab, a link to a video lists a video tile, and a link to a photo lists a
+photo tile with its thumbnail, cast and shown in a slideshow like a picked photo. A **motion
+photo**'s tile asks which variant to cast: the photo, or its short clip as Google's 1080p H.264
+stream (its original clip is HEVC at 120 fps, which the TV refuses); a slideshow shows the photo.
+A link to an **album** is refused with a note under the link field: albums are not cast yet, so
+share a single photo or video instead. `cast-photos <link>` casts a video from a link, never a
+photo: given a photo link it says to paste the link into the Google Photos tab. For a video the
+page is parsed for candidate stream URLs, each is probed with a one-byte range request, and the
+first that answers as video wins. Public links need nothing; private ones need a cookie jar
+(`-c cookies.txt`).
 
 ## Command line
 
@@ -225,7 +232,7 @@ cast-gopro 3                               # cast the third entry
 cast-gopro 3 -q proxy                      # ... as the lighter proxy variant
 cast-gopro https://gopro.com/v/AbCdE       # public GoPro share link
 cast-photos --pick                         # pick in Google Photos' own picker, then cast
-cast-photos https://photos.app.goo.gl/xxx  # Google Photos share link
+cast-photos https://photos.app.goo.gl/xxx  # Google Photos share link to a video
 cast-photos <private link> -c cookies.txt  # private item, with your cookies
 ```
 
