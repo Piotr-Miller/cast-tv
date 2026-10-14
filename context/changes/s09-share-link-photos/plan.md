@@ -364,16 +364,16 @@ four for a video today. The photo itself is fetched whole by `photos.py`, as for
 
 #### Automated
 
-- [x] 2.1 The new source tests pass
-- [x] 2.2 The whole suite passes
-- [x] 2.3 Pyflakes is clean
+- [x] 2.1 The new source tests pass — 9111645
+- [x] 2.2 The whole suite passes — 9111645
+- [x] 2.3 Pyflakes is clean — 9111645
 
 ### Phase 3: Wording, documents, and the TV
 
 #### Automated
 
-- [ ] 3.1 No document still says share links cast videos only
-- [ ] 3.2 The whole suite passes
+- [x] 3.1 No document still says share links cast videos only
+- [x] 3.2 The whole suite passes
 
 #### Manual
 

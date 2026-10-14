@@ -131,7 +131,9 @@ or create cloud projects.
   keeps the list with a banner.
 - FR-011: OneDrive browses the whole drive by folder after a device-code sign-in (refresh ~90 days).
 - FR-012: Google Photos lists what the user picked in Google's picker after a one-time consent on
-  the host; share links from other people's libraries cast videos with no sign-in.
+  the host; share links from other people's libraries, pasted into the tab, cast a video, a photo
+  or a motion photo's clip with no sign-in; album links are refused; `cast-photos <link>` casts a
+  video from a link, never a photo.
 - FR-013: Local files are cast from the command line only (no folder browsing from the LAN).
 
 ### Casting
@@ -177,4 +179,6 @@ or create cloud projects.
 
 - Google verification: when a domain exists, verification lifts the test-user limit and the
   weekly re-consent (`standalone-install/change.md`).
-- Photos through share links (a follow-up of `cloud-source-ui`): scope, and whether albums count.
+- Photos through share links (a follow-up of `cloud-source-ui`): answered 2026-10-13 by S-09
+  (`s09-share-link-photos`): photos and a motion photo's clip are cast from the tab; albums are
+  refused, and casting them is roadmap slice S-15.

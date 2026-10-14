@@ -3,7 +3,7 @@ project: cast-tv
 version: 1
 status: active
 created: 2026-09-19
-updated: 2026-10-13
+updated: 2026-10-14
 prd_version: 1
 main_goal: personal-use-then-share
 top_blocker: time
@@ -47,11 +47,12 @@ conversion and the cast supervisor. Delivered with `cloud-source-ui` (PR #1, 202
 | S-12 | (proposed) | run cast-tv as a desktop window on Windows and Linux, not only a browser tab | S-08 | — | proposed |
 | S-13 | s13-gopro-auth | connect GoPro without copying a token by hand | S-03 | FR-010 | merged (PR #40, 2026-10-12); only rows 5.11-5.12 open, at GoPro's first refusal |
 | S-14 | (proposed) | cast to Google TV and Chromecast devices, not only DLNA TVs | S-02 | — | proposed |
+| S-15 | (proposed) | cast an album from a share link | S-09 | FR-012 | proposed |
 
 ## Streams
 
 - **Casting core** (B-00, F-01, S-01, S-02, S-11, S-14): discovery, the server, the relay, photos, the supervisor.
-- **Sources** (S-03, S-04, S-05, S-09, S-10, S-13): one tab each, each behind its own connection.
+- **Sources** (S-03, S-04, S-05, S-09, S-10, S-13, S-15): one tab each, each behind its own connection.
 - **Platforms & install** (S-06, S-07, S-08, S-12): Fedora, Windows 11, the standalone release.
 
 ## Baseline
@@ -93,7 +94,9 @@ and a LAN-exposure problem (`cloud-source-ui/research.md`).
   `context/archive/2026-09-07-cloud-source-ui/follow-ups/review-fixes.md`.
 - **Outcome:** a share link to a photo lists a photo tile; a motion photo's clip offers `=m37`
   (H.264 1080p), since the Samsung refused its `=dv` HEVC 120 fps original.
-- **Open:** albums are untested; plan first.
+- **Open (answered 2026-10-13):** an album link is recognised by the several items its page
+  links to and refused with its own message (`album_link`); a one-item album is handled as its
+  item. Casting an album is S-15.
 
 ### S-10: Google Photos for any account
 
@@ -178,6 +181,25 @@ plan. The ideas under each are starting points, not findings.
   transcoding stays a rule) and how photos show there.
 - **Ideas:** mDNS discovery (`_googlecast._tcp`) next to SSDP; the Cast protocol with the
   Default Media Receiver (e.g. `pychromecast`); a target list in the UI that mixes both kinds.
+
+### S-15: An album from a share link
+
+- **Phase:** phase:post-mvp
+- **Prerequisites:** S-09; **PRD:** FR-012.
+- **Owner's words:** "wiele zdjęć/filmów za jednym linkiem" ("many photos/videos behind one
+  link"), 2026-10-13, when S-09 was planned; S-09 refuses such a link (`album_link`) and leaves
+  casting it to this slice.
+- **Starting point** (measured 2026-10-13, `s09-share-link-photos/research.md`, "An album"): an
+  album link redirects to the same `photos.google.com/share/<id>?key=…` page as a single item;
+  its Open Graph tags describe only the cover (`og:image`, no `og:video`); it links each item as
+  `/share/<share id>/photo/<item id>` (5 distinct on a five-item album, 1 on every single-item
+  page) and its `og:description` reads "Shared album · Tap to view!" (English text, may follow
+  the page's language). The cover's base answers `=d`, `=dv` and `=m37` like any item.
+- **To find out:** whether each item's page (`/share/<id>/photo/<item>?key=…`) answers as a
+  single shared item does, how a large album pages its items, and what an album whose cover is a
+  video or that holds one item looks like (none measured).
+- **Ideas:** list the album's items as tiles in the Google Photos tab, each resolved like a pasted
+  single-item link; a slideshow of the whole album.
 
 ## Open Roadmap Questions
 
