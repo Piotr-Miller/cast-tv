@@ -350,11 +350,11 @@ console close are noticed.
 
 #### Automated
 
-- [x] 3.1 The helper's test passes
-- [x] 3.2 The two subprocess tests pass ten times in a row
-- [x] 3.3 The whole suite passes
-- [x] 3.4 Pyflakes is clean
-- [ ] 3.5 CI passes on the PR, Ubuntu and Windows
+- [x] 3.1 The helper's test passes — 0e33b39
+- [x] 3.2 The two subprocess tests pass ten times in a row — 0e33b39
+- [x] 3.3 The whole suite passes — 0e33b39
+- [x] 3.4 Pyflakes is clean — 0e33b39
+- [x] 3.5 CI passes on the PR, Ubuntu and Windows — 0e33b39
 
 #### Manual
 
