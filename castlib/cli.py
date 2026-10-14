@@ -275,6 +275,8 @@ def ui(port=DEFAULT_PORT, tv=None, debug=False, browser=True):
     except OSError as e:
         print("Cannot bind port %d: %s" % (port, e))
         return 1
+    except KeyboardInterrupt:              # Ctrl+C while starting: start() already stopped and closed it
+        return 0
     try:
         return app.run_forever()
     except KeyboardInterrupt:              # Ctrl+C in the instant before run_forever took over
