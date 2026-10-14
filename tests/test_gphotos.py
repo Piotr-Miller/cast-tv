@@ -1244,7 +1244,9 @@ def test_sigterm_closes_sources_like_ctrl_c(tmp_path):
         "app.sources['gphotos'].close = lambda: print('gphotos closed', flush=True)\n"
         "print('ready', flush=True)\n"
         "sys.exit(app.run_forever())\n" % (str(tmp_path / "config"), str(tmp_path / "cache")))
+    from tests.conftest import finish_or_dump
     proc = subprocess.Popen([sys.executable, "-c", code], stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                            env=dict(os.environ, PYTHONFAULTHANDLER="1"),   # a hang prints its threads
                             cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     while True:
         line = proc.stdout.readline().decode()
@@ -1252,8 +1254,8 @@ def test_sigterm_closes_sources_like_ctrl_c(tmp_path):
         if line.strip() == "ready":
             break
     proc.send_signal(signal.SIGTERM)
-    out = proc.stdout.read().decode()
-    assert proc.wait(timeout=10) == 0
+    out = finish_or_dump(proc, 10)
+    assert proc.returncode == 0, out
     assert "gphotos closed" in out and "soap Stop" in out and "Stopped." in out
 
 

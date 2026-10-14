@@ -273,3 +273,24 @@ def wait_for(predicate, timeout=5.0, step=0.01):
             return True
         time.sleep(step)
     raise AssertionError("condition not met within %.1fs" % timeout)
+
+
+def finish_or_dump(proc, timeout):
+    """The child's remaining output once it exits; on a timeout, fail with every thread's stack.
+
+    The child must run with ``PYTHONFAULTHANDLER=1``: SIGABRT then makes it print
+    where each thread waits before it dies, so a hang names its frame instead of
+    ending in a bare ``TimeoutExpired``. POSIX only, like the tests that use it.
+    """
+    import signal
+    import subprocess
+    try:
+        out, _ = proc.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        proc.send_signal(signal.SIGABRT)
+        out, _ = proc.communicate(timeout=10)        # keeps what the first call had read
+        if isinstance(out, bytes):
+            out = out.decode(errors="replace")
+        pytest.fail("the child did not exit within %gs; its output and threads:\n%s" % (timeout, out),
+                    pytrace=False)
+    return out.decode(errors="replace") if isinstance(out, bytes) else out

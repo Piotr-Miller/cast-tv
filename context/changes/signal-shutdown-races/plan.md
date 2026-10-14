@@ -341,19 +341,19 @@ console close are noticed.
 
 #### Automated
 
-- [x] 2.1 The new Phase 2 tests pass
-- [x] 2.2 The existing signal tests pass
-- [x] 2.3 The whole suite passes
-- [x] 2.4 Pyflakes is clean
+- [x] 2.1 The new Phase 2 tests pass — 4cdcfbd
+- [x] 2.2 The existing signal tests pass — 4cdcfbd
+- [x] 2.3 The whole suite passes — 4cdcfbd
+- [x] 2.4 Pyflakes is clean — 4cdcfbd
 
 ### Phase 3: Subprocess tests report where a hang waits, and the checks
 
 #### Automated
 
-- [ ] 3.1 The helper's test passes
-- [ ] 3.2 The two subprocess tests pass ten times in a row
-- [ ] 3.3 The whole suite passes
-- [ ] 3.4 Pyflakes is clean
+- [x] 3.1 The helper's test passes
+- [x] 3.2 The two subprocess tests pass ten times in a row
+- [x] 3.3 The whole suite passes
+- [x] 3.4 Pyflakes is clean
 - [ ] 3.5 CI passes on the PR, Ubuntu and Windows
 
 #### Manual
