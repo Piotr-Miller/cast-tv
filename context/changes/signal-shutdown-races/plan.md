@@ -332,19 +332,19 @@ console close are noticed.
 
 #### Automated
 
-- [x] 1.1 The new Phase 1 tests pass
-- [x] 1.2 No main-thread Event wait is left in the loops
-- [x] 1.3 The whole suite passes
-- [x] 1.4 Pyflakes is clean
+- [x] 1.1 The new Phase 1 tests pass — e39716a
+- [x] 1.2 No main-thread Event wait is left in the loops — e39716a
+- [x] 1.3 The whole suite passes — e39716a
+- [x] 1.4 Pyflakes is clean — e39716a
 
 ### Phase 2: Signals during startup
 
 #### Automated
 
-- [ ] 2.1 The new Phase 2 tests pass
-- [ ] 2.2 The existing signal tests pass
-- [ ] 2.3 The whole suite passes
-- [ ] 2.4 Pyflakes is clean
+- [x] 2.1 The new Phase 2 tests pass
+- [x] 2.2 The existing signal tests pass
+- [x] 2.3 The whole suite passes
+- [x] 2.4 Pyflakes is clean
 
 ### Phase 3: Subprocess tests report where a hang waits, and the checks
 

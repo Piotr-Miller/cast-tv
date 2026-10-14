@@ -44,6 +44,25 @@ ADDR_IN_USE = {errno.EADDRINUSE, getattr(errno, "WSAEADDRINUSE", 10048)}
 MAIN_WAIT_STEP = 0.05      # seconds main_wait sleeps between looks at the flag
 
 
+def _term(signum, frame):
+    raise KeyboardInterrupt
+
+
+def end_on_sigterm() -> None:
+    """A plain ``kill`` ends the process the way Ctrl+C does, from the main thread only.
+
+    The TV is stopped and every source closed (Google Photos deletes its picker
+    sessions); neither ``close()`` nor ``atexit`` would run on the default
+    SIGTERM disposition. Installing it again is harmless.
+    """
+    if threading.current_thread() is not threading.main_thread():
+        return
+    try:
+        signal.signal(signal.SIGTERM, _term)
+    except (ValueError, OSError):
+        pass
+
+
 def main_wait(event: threading.Event, timeout: float, sleep=time.sleep) -> bool:
     """``event.wait(timeout)`` for the main thread, where Ctrl+C and SIGTERM arrive.
 
@@ -179,7 +198,8 @@ class App:
         """Bind first, then discover in the background, print the addresses, open the browser.
 
         Raises ``AlreadyRunning`` when another cast-tv answers on the port, and
-        ``OSError`` when the port is held by something else.
+        ``OSError`` when the port is held by something else. A Ctrl+C (or SIGTERM)
+        after the bind stops and closes the app, then the ``KeyboardInterrupt`` goes on.
         """
         out = out or sys.stdout
         try:
@@ -190,55 +210,66 @@ class App:
                 if _is_cast_tv("http://127.0.0.1:%d/api/status" % port):
                     raise AlreadyRunning(url)
             raise
-        app = cls(server, debug=debug)
-        app.sources["gphotos"].open_browser = browser   # the Google consent opens a tab on this machine, unless --no-browser
-        app.serve()
+        app = None
         try:
-            lan = local_ip("192.0.2.1")
-        except OSError:
-            lan = None
-        app.addresses = ["http://localhost:%d/ui/" % port]
-        if lan and lan != "127.0.0.1":
-            app.addresses.append("http://%s:%d/ui/" % (lan, port))
-            server.set_host(lan)
-        try:
-            others = [ip for _name, ip in lan_interfaces() if ip != lan]
-        except Exception:
-            others = []
-        app.addresses += ["http://%s:%d/ui/" % (ip, port) for ip in dict.fromkeys(others)]
-        for address in app.addresses:
-            print("  %s" % address, file=out, flush=True)
-        print("  If the TV never fetches a byte: %s" % firewall_advice(port), file=out, flush=True)
-        firewall_blocked()                   # starts the background question
-
-        def warn_if_blocked():
-            # a managed laptop's policy can block every inbound connection; say so before a cast fails
-            if firewall_blocked(wait=FirewallPolicy.TIMEOUT + 5):
-                print("\n  ! %s" % firewall_advice(port), file=out, flush=True)
-
-        threading.Thread(target=warn_if_blocked, name="firewall-warning", daemon=True).start()
-        print("  Ctrl+C ends it (playback stops on the TV too)", file=out, flush=True)
-        if tv:
+            end_on_sigterm()             # before the first line: whoever reads it may send a kill
+            app = cls(server, debug=debug)
+            app.sources["gphotos"].open_browser = browser   # the Google consent opens a tab on this machine, unless --no-browser
+            app.serve()
             try:
-                app.select_tv(tv)
-                print("  TV: %s (%s)" % (app.tv["name"], app.tv["ip"]), file=out, flush=True)
-            except TVError as e:
-                print("  %s" % e.message, file=out, flush=True)
-                app.errors.push(e)
-        else:
-            def find():
-                app.discover()
-                if app.tv and app.tv.get("avt"):
-                    print("  TV: %s (%s)" % (app.tv["name"], app.tv["ip"]), file=out, flush=True)
-                else:
-                    print("  No DLNA renderer answered. Switch the TV on and retry from the UI,\n"
-                          "  or name it directly: cast-tv -t 192.168.1.50", file=out, flush=True)
-            app._thread(find, "discover")
-        if browser:
+                lan = local_ip("192.0.2.1")
+            except OSError:
+                lan = None
+            app.addresses = ["http://localhost:%d/ui/" % port]
+            if lan and lan != "127.0.0.1":
+                app.addresses.append("http://%s:%d/ui/" % (lan, port))
+                server.set_host(lan)
             try:
-                webbrowser.open(app.addresses[0])
+                others = [ip for _name, ip in lan_interfaces() if ip != lan]
             except Exception:
-                pass
+                others = []
+            app.addresses += ["http://%s:%d/ui/" % (ip, port) for ip in dict.fromkeys(others)]
+            for address in app.addresses:
+                print("  %s" % address, file=out, flush=True)
+            print("  If the TV never fetches a byte: %s" % firewall_advice(port), file=out, flush=True)
+            firewall_blocked()                   # starts the background question
+
+            def warn_if_blocked():
+                # a managed laptop's policy can block every inbound connection; say so before a cast fails
+                if firewall_blocked(wait=FirewallPolicy.TIMEOUT + 5):
+                    print("\n  ! %s" % firewall_advice(port), file=out, flush=True)
+
+            threading.Thread(target=warn_if_blocked, name="firewall-warning", daemon=True).start()
+            print("  Ctrl+C ends it (playback stops on the TV too)", file=out, flush=True)
+            if tv:
+                try:
+                    app.select_tv(tv)
+                    print("  TV: %s (%s)" % (app.tv["name"], app.tv["ip"]), file=out, flush=True)
+                except TVError as e:
+                    print("  %s" % e.message, file=out, flush=True)
+                    app.errors.push(e)
+            else:
+                def find():
+                    app.discover()
+                    if app.tv and app.tv.get("avt"):
+                        print("  TV: %s (%s)" % (app.tv["name"], app.tv["ip"]), file=out, flush=True)
+                    else:
+                        print("  No DLNA renderer answered. Switch the TV on and retry from the UI,\n"
+                              "  or name it directly: cast-tv -t 192.168.1.50", file=out, flush=True)
+                app._thread(find, "discover")
+            if browser:
+                try:
+                    webbrowser.open(app.addresses[0])
+                except Exception:
+                    pass
+        except KeyboardInterrupt:
+            # Ctrl+C or a kill while starting ends cast-tv like any later one
+            if app is None:
+                server.server_close()
+            else:
+                app.interrupted()
+                app.close()
+            raise
         return app
 
     def serve(self) -> None:
@@ -279,17 +310,9 @@ class App:
         """Block until Ctrl+C (or SIGTERM); stops the TV and releases everything. Returns an exit code."""
         try:
             # inside the try: a Ctrl+C that lands while the handler is being installed
-            # still takes the path below (found by CI: SIGINT arrived in signal.signal)
-            if threading.current_thread() is threading.main_thread():
-                # a plain ``kill`` ends the process the way Ctrl+C does: the TV is stopped and
-                # every source closed (Google Photos deletes its picker sessions); neither
-                # ``close()`` nor ``atexit`` would run on the default SIGTERM disposition
-                def _term(signum, frame):
-                    raise KeyboardInterrupt
-                try:
-                    signal.signal(signal.SIGTERM, _term)
-                except (ValueError, OSError):
-                    pass
+            # still takes the path below (found by CI: SIGINT arrived in signal.signal).
+            # Installed here too: a CLI cast taken over from the UI comes here without start()
+            end_on_sigterm()
             while not main_wait(self._closed, 1.0):
                 pass
         except KeyboardInterrupt:

@@ -289,6 +289,82 @@ def test_cast_and_show_ctrl_c_in_their_wait_print_stopped(cli_env, tmp_path, mon
     assert "Stopped." in capsys.readouterr().out
 
 
+@pytest.fixture
+def start_env(monkeypatch, tmp_path):
+    """``App.start`` in this process: tmp config and cache, no discovery; pytest's SIGTERM handler is restored."""
+    from castlib import app as app_module, config
+    monkeypatch.setattr(config, "_CONFIG", str(tmp_path / "config"))
+    monkeypatch.setattr(config, "_CACHE", str(tmp_path / "cache"))
+    monkeypatch.setattr(config, "VIDEO_BASE", str(tmp_path))
+    monkeypatch.setattr(app_module, "discover", lambda **kw: [])
+    before = signal.getsignal(signal.SIGTERM)
+    try:
+        yield app_module
+    finally:
+        signal.signal(signal.SIGTERM, before)
+
+
+def _port_is_free(port):
+    s = socket.socket()
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    try:
+        s.bind(("0.0.0.0", port))
+        return True
+    except OSError:
+        return False
+    finally:
+        s.close()
+
+
+def test_start_installs_the_sigterm_handler_before_its_first_line(start_env):
+    """CI's SIGTERM test reads a line and sends a kill: the handler must already be there."""
+    seen = []
+
+    class Recorder:
+        def write(self, text):
+            if not seen:
+                seen.append(signal.getsignal(signal.SIGTERM))
+
+        def flush(self):
+            pass
+    app = start_env.App.start(_free_port(), browser=False, out=Recorder())
+    try:
+        (handler,) = seen[:1]
+        assert callable(handler)
+        with pytest.raises(KeyboardInterrupt):
+            handler(signal.SIGTERM, None)
+    finally:
+        app.close()
+
+
+def test_ctrl_c_during_start_stops_and_frees_the_port(start_env, monkeypatch, capsys):
+    port = _free_port()
+    monkeypatch.setattr(start_env, "firewall_blocked", _interrupted)   # called after the addresses are printed
+    assert cli.ui(port=port, browser=False) == 0
+    out = capsys.readouterr().out
+    assert "http://localhost:%d/ui/" % port in out and "Stopped." in out
+    assert _port_is_free(port)
+
+
+def test_ctrl_c_before_the_app_exists_frees_the_port(start_env, monkeypatch, capsys):
+    port = _free_port()
+    monkeypatch.setattr(start_env.App, "__init__", _interrupted)
+    assert cli.ui(port=port, browser=False) == 0
+    assert "Stopped." not in capsys.readouterr().out       # nothing had started, so nothing to stop
+    assert _port_is_free(port)
+
+
+def test_failed_bind_leaves_sigterm_alone(app, start_env, upstream):
+    from castlib.app import AlreadyRunning
+    before = signal.getsignal(signal.SIGTERM)
+    with pytest.raises(AlreadyRunning):
+        start_env.App.start(app.server.port, browser=False)
+    other = upstream(b"<html>", ctype="text/html")
+    with pytest.raises(OSError):
+        start_env.App.start(other.server_address[1], browser=False)
+    assert signal.getsignal(signal.SIGTERM) is before
+
+
 def test_version_names_the_client(monkeypatch, tmp_path, capsys):
     """``--version``: the version, where the Google Photos client would come from, the GoPro window's browser."""
     import castlib
