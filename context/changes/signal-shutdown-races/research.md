@@ -184,3 +184,19 @@ Code at `0e33b39` (phases 1-3), Fedora PC, project venv (Python 3.14.8), run by 
 `-t 127.0.0.1` was added to the plan's command so that the check could not send Stop to the
 living-room TV. It does not change the path being checked, and it makes the interrupt land
 during `App.start`.
+
+## Manual checks after the impl-review fixes, 2026-10-14 22:24-22:25
+
+Code at `e7173ec` (impl-review F1-F3 on top of phases 1-3), Fedora PC, project venv (Python
+3.14.8), run by Claude. Rows 3.6-3.8 had been reopened because `castlib/app.py` and
+`castlib/cli.py` changed.
+
+| Row | What was run | Result |
+| --- | --- | --- |
+| 3.6 | `race-probes.md` §1 under load (16 busy loops on 8 CPUs), SIGINT 0 s, 0.2 ms and 2 ms after the `does not expose` line, 25 runs each | `0.0 {'exit 0 Stopped': 25}`, `0.0002 {'exit 0 Stopped': 25}`, `0.002 {'exit 0 Stopped': 25}` |
+| 3.7 | `.venv/bin/cast-tv --no-browser -t 127.0.0.1` on a pseudo-terminal; `^C` written to the terminal when the `http://localhost:8895/ui/` line appeared | Output: the two addresses, the firewall line, `^C`, `Stopped.`; exit status 0, 0.28 s after the key |
+| 3.8 | The same command again; `kill <pid>` (SIGTERM) at the same line | Output: the addresses, the firewall line, `Stopped.`; exit status 0, 0.28 s after the kill |
+
+The first pseudo-terminal attempt reported "NO EXIT": the check script stopped reading when
+the closed terminal raised `EIO`, before it asked for the exit status. It was a fault in the
+script, not in cast-tv; the rerun above uses the corrected script.
