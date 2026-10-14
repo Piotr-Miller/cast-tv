@@ -110,3 +110,27 @@ signals: the `<title>`, which reads "Shared album - Piotr Miller - Google Photos
 the same thing more directly.
 
 Not measured: an album holding exactly one item, and an album whose cover is a video.
+
+## Manual acceptance on the Samsung, 2026-10-14 20:15-20:23
+
+Build: this branch at `eb50aae`, `.venv/bin/cast-tv` on the Fedora PC; TV `83" OLED`
+(192.168.50.142). The UI was driven by the agent in Chrome on the PC
+(`http://192.168.50.198:8895/ui/`); Piotr watched the TV and reported what it showed. The
+Google Photos consent was expired (`refresh_rejected`) throughout, which first hid the link
+field: fixed in `eb50aae` before these checks. Server-side states are from `/api/status`.
+
+| Row | Time | Link | UI | TV, as Piotr reported it |
+| --- | --- | --- | --- | --- |
+| 3.3 | 20:19 | `QT9rQWxXYDDfSpKD8` | one PHOTO tile, thumbnail of a church at night; play → `image/jpeg`, PLAYING | "zdjęcie kościoła nocne", upright; normal colours (confirmed at 20:27) |
+| 3.4 Photo | 20:20 | `Nj2VHaD5bqKviYhq6` | one PHOTO tile; play opened "Cast which variant?" with Photo (highlighted, "the still") and Clip ("Google's 1080p H.264 stream"); Photo → `image/jpeg`, PLAYING | the plaque photo ("Grzegorz Russak"), not a green rectangle |
+| 3.4 Clip | 20:21 | same | Clip → `video/mp4`, PLAYING to 0:00:01.4, then STOPPED | "klip był" |
+| 3.5 | 20:21 | `PpeVYpY5J4QkpYm99` | no tile; under the field: "That link is to an album, and album links are not cast yet; share a single photo or video instead." | - (UI only; Piotr confirmed the screenshot) |
+| 3.6 | 20:22 | `KwhGzcxkNtQpudc46` | one VIDEO tile; play → PLAYING 0:00:01 → 0:00:07.4 of 0:00:08, then STOPPED | the film played |
+| 3.7 | 20:23 | tiles of 3.3 and 3.4 | "2 items selected", Start show at 8 s: link-1 `image/jpeg`, then link-2 `image/jpeg` (the still, not the clip), show finished | both stills, one after the other |
+| 3.8 | 20:15 | `QT9rQWxXYDDfSpKD8` | `.venv/bin/cast-photos … --url-only`, exit 1: "That link is to a photo. cast-photos casts videos from links; to cast the photo, paste the link into the Google Photos tab of cast-tv's page." | - (terminal; Piotr confirmed the text) |
+
+Piotr confirmed rows 3.3-3.8 at 20:27, again at `f3ab375` (it changes only the rows'
+surface lines in plan.md; `git diff eb50aae f3ab375 -- castlib tests` is empty).
+
+Seen on the way, not part of S-09: `http://localhost:8895/ui/`, the first address the terminal
+prints, answered 403 `forbidden` in Chrome while the LAN address worked.
