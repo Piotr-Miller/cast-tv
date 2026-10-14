@@ -356,30 +356,30 @@ four for a video today. The photo itself is fetched whole by `photos.py`, as for
 
 #### Automated
 
-- [x] 1.1 The new classification tests pass — aed13dc
-- [x] 1.2 The whole suite passes — aed13dc
-- [x] 1.3 Pyflakes is clean — aed13dc
+- [x] 1.1 The new classification tests pass — d91f871
+- [x] 1.2 The whole suite passes — d91f871
+- [x] 1.3 Pyflakes is clean — d91f871
 
 ### Phase 2: List and cast photo links in the Google Photos tab
 
 #### Automated
 
-- [x] 2.1 The new source tests pass — 9111645
-- [x] 2.2 The whole suite passes — 9111645
-- [x] 2.3 Pyflakes is clean — 9111645
+- [x] 2.1 The new source tests pass — a74a1bc
+- [x] 2.2 The whole suite passes — a74a1bc
+- [x] 2.3 Pyflakes is clean — a74a1bc
 
 ### Phase 3: Wording, documents, and the TV
 
 #### Automated
 
-- [x] 3.1 No document still says share links cast videos only — 2c1c9f5
-- [x] 3.2 The whole suite passes — 2c1c9f5
+- [x] 3.1 No document still says share links cast videos only — 413773c
+- [x] 3.2 The whole suite passes — 413773c
 
 #### Manual
 
-- [x] 3.3 Plain photo link casts the photo — accepted at f3ab375fa40ea7fc1d660bda8a3b46ac5d82d010
-- [x] 3.4 Motion photo link offers Photo and Clip, both play — accepted at f3ab375fa40ea7fc1d660bda8a3b46ac5d82d010
-- [x] 3.5 Album link (several items) is refused under the field — accepted at f3ab375fa40ea7fc1d660bda8a3b46ac5d82d010
-- [x] 3.6 Video link still plays — accepted at f3ab375fa40ea7fc1d660bda8a3b46ac5d82d010
-- [x] 3.7 Slideshow of two link photos shows both stills — accepted at f3ab375fa40ea7fc1d660bda8a3b46ac5d82d010
-- [x] 3.8 cast-photos points a photo link to the tab — accepted at f3ab375fa40ea7fc1d660bda8a3b46ac5d82d010
+- [x] 3.3 Plain photo link casts the photo — accepted at 52940202874e2dd9797ea1dafd6f728591f28671
+- [x] 3.4 Motion photo link offers Photo and Clip, both play — accepted at 52940202874e2dd9797ea1dafd6f728591f28671
+- [x] 3.5 Album link (several items) is refused under the field — accepted at 52940202874e2dd9797ea1dafd6f728591f28671
+- [x] 3.6 Video link still plays — accepted at 52940202874e2dd9797ea1dafd6f728591f28671
+- [x] 3.7 Slideshow of two link photos shows both stills — accepted at 52940202874e2dd9797ea1dafd6f728591f28671
+- [x] 3.8 cast-photos points a photo link to the tab — accepted at 52940202874e2dd9797ea1dafd6f728591f28671
