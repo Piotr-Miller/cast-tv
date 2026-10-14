@@ -8,7 +8,7 @@ import time
 import pytest
 
 from castlib import cli, dlna
-from tests.conftest import FakeTV
+from tests.conftest import FakeTV, finish_or_dump
 
 
 @pytest.fixture
@@ -164,7 +164,7 @@ def test_slideshow_refuses_addresses_and_subs(cli_env, tmp_path, capsys):
 @pytest.mark.skipif(sys.platform == "win32", reason="Windows cannot deliver SIGINT/SIGTERM to a child's handler")
 def test_ui_prints_addresses_and_exits_cleanly_on_sigint(tmp_path):
     port = _free_port()
-    env = dict(os.environ, HOME=str(tmp_path), PYTHONUNBUFFERED="1")
+    env = dict(os.environ, HOME=str(tmp_path), PYTHONUNBUFFERED="1", PYTHONFAULTHANDLER="1")   # a hang prints its threads
     proc = subprocess.Popen(
         [sys.executable, "-m", "castlib", "-p", str(port), "--no-browser", "-t", "127.0.0.1"],
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env,
@@ -180,8 +180,7 @@ def test_ui_prints_addresses_and_exits_cleanly_on_sigint(tmp_path):
             if "does not expose AVTransport" in line or "TV:" in line:
                 break
         proc.send_signal(signal.SIGINT)
-        rest, _ = proc.communicate(timeout=15)
-        lines.append(rest)
+        lines.append(finish_or_dump(proc, 15))
     finally:
         if proc.poll() is None:
             proc.kill()
@@ -191,6 +190,19 @@ def test_ui_prints_addresses_and_exits_cleanly_on_sigint(tmp_path):
     assert len(addresses) >= 1
     assert "Stopped." in out
     assert proc.returncode == 0, out
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="SIGABRT and faulthandler's dump are POSIX here")
+def test_finish_or_dump_names_the_waiting_frame():
+    proc = subprocess.Popen(
+        [sys.executable, "-c", "import threading; print('up', flush=True); threading.Event().wait()"],
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+        env=dict(os.environ, PYTHONFAULTHANDLER="1"))
+    assert proc.stdout.readline().strip() == "up"
+    with pytest.raises(pytest.fail.Exception) as failed:
+        finish_or_dump(proc, 1)
+    text = str(failed.value)
+    assert ("Current thread" in text or "Thread 0x" in text) and "in wait" in text, text
 
 
 def test_ctrl_c_while_the_handler_is_installed_still_stops(app, monkeypatch, capsys):
