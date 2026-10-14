@@ -1033,7 +1033,8 @@ def test_share_link_paste_lists_a_video(fake, monkeypatch, server):
     src = GPhotosSource()
     _connect(src, fake)
     resolved = []
-    monkeypatch.setattr(sharelink, "resolve", lambda link, cookies_path=None: resolved.append(link) or fake.base + "/public/x=dv")
+    monkeypatch.setattr(sharelink, "shared", lambda link, cookies_path=None: resolved.append(link)
+                        or sharelink.Shared("video", fake.base + "/public/x=dv"))
     fake.sig = 0
     with pytest.raises(ConfigError):
         src.link({"link": "photos.app.goo.gl/abc"})
@@ -1189,7 +1190,7 @@ def test_pick_and_link_over_api(fake, app, monkeypatch):
     assert [e["id"] for e in json.loads(body)["items"]] == ["a"]
     status, headers, body, conn = request(app.base_url, "GET", "/api/sources/gphotos/thumb/a", conn=conn)
     assert status == 200 and headers["Content-Type"] == "image/jpeg" and body == JPEG
-    monkeypatch.setattr(sharelink, "resolve", lambda link, cookies_path=None: fake.base + "/public/x=dv")
+    monkeypatch.setattr(sharelink, "shared", lambda link, cookies_path=None: sharelink.Shared("video", fake.base + "/public/x=dv"))
     status, _, body, conn = request(app.base_url, "GET", "/api/sources/gphotos/link", conn=conn)
     assert status == 405                                         # a step is a mutation
     import http.client
@@ -1211,7 +1212,8 @@ def test_share_link_needs_no_oauth_client(app, monkeypatch, tmp_path):
     src = app.sources["gphotos"]
     d = src.status()
     assert d == {"state": "disconnected", "detail": {"stored": False}}
-    monkeypatch.setattr(sharelink, "resolve", lambda link, cookies_path=None: "https://video-downloads.googleusercontent.com/v1")
+    monkeypatch.setattr(sharelink, "shared",
+                        lambda link, cookies_path=None: sharelink.Shared("video", "https://video-downloads.googleusercontent.com/v1"))
     c = http.client.HTTPConnection(app.base_url.split("://", 1)[1], timeout=5)
     c.request("POST", "/api/sources/gphotos/link", body=json.dumps({"link": LINK}).encode(),
               headers={"Content-Type": "application/json"})
@@ -1643,10 +1645,12 @@ def test_share_page_video_and_media_address_still_resolve(monkeypatch):
     assert sharelink.shared(MEDIA_BASE + "=w10") == sharelink.Shared("video", MEDIA_BASE + "=dv")
 
 
-def test_share_page_motion_photo_offers_its_clip(monkeypatch):
+@pytest.mark.parametrize("status", [200, 206])
+def test_share_page_motion_photo_offers_its_clip(monkeypatch, status):
     transport = _scripted_links(monkeypatch, {
         **_share_page(PHOTO_HEAD % MEDIA_BASE, 1, MEDIA_BASE), MEDIA_BASE + "=d": STILL,
-        MEDIA_BASE + "=m37": (302, {"Location": GOOGLEVIDEO}, b""), GOOGLEVIDEO: PROBED})
+        MEDIA_BASE + "=m37": (302, {"Location": GOOGLEVIDEO}, b""),
+        GOOGLEVIDEO: (status, PROBED[1], PROBED[2])})
     got = sharelink.shared(LINK)
     assert got.kind == "photo" and got.url == MEDIA_BASE + "=d"
     assert got.clip == MEDIA_BASE + "=m37" and got.thumb == MEDIA_BASE + "=w400-h400"
@@ -1659,13 +1663,19 @@ def test_share_page_motion_photo_offers_its_clip(monkeypatch):
     ((429, {"Content-Type": "text/html"}, b""), "429"),
     ((503, {}, b""), "503"),
     ((200, {"Content-Type": "text/html"}, b"<html>"), "text/html"),
-], ids=["403", "429", "503", "200-html"])
+    ((202, {"Content-Type": "video/mp4"}, b""), "202"),
+    ((204, {"Content-Type": "video/mp4"}, b""), "204"),
+    ((202, {"Content-Type": "application/mp4"}, b""), "202"),
+    ((204, {"Content-Type": "application/mp4"}, b""), "204"),
+], ids=["403", "429", "503", "200-html", "202-video", "204-video", "202-mp4", "204-mp4"])
 def test_share_page_motion_clip_probe_fails_on_any_other_answer(monkeypatch, answer, named):
     _scripted_links(monkeypatch, {**_share_page(PHOTO_HEAD % MEDIA_BASE, 1, MEDIA_BASE),
                                   MEDIA_BASE + "=d": STILL, MEDIA_BASE + "=m37": answer})
     with pytest.raises(UpstreamError) as err:
         sharelink.shared(LINK)
     assert err.value.code == "clip_probe_failed" and named in err.value.message
+    assert str(answer[0]) in err.value.message
+    assert (answer[1].get("Content-Type") or "no type") in err.value.message
 
 
 def test_share_page_motion_clip_probe_network_failure_fails_the_paste(monkeypatch):
@@ -1686,3 +1696,121 @@ def test_share_page_motion_clip_redirect_off_google_is_never_requested(monkeypat
         sharelink.shared(LINK)
     assert err.value.code == "redirect_refused"
     assert secret not in transport.seen
+
+
+# ---------------------------------------------------------------- photo links in the tab
+def _photo_link(monkeypatch, clip=NOT_FOUND, still=STILL, **routes):
+    """A photo share page behind ``LINK``; ``clip`` is what ``=m37`` answers (404: a plain photo)."""
+    return _scripted_links(monkeypatch, {**_share_page(PHOTO_HEAD % MEDIA_BASE, 1, MEDIA_BASE),
+                                         MEDIA_BASE + "=d": still, MEDIA_BASE + "=m37": clip, **routes})
+
+
+def _guarded(up):
+    return any(isinstance(h, sharelink._GooglePhotosOnly) for h in up.opener.handlers)
+
+
+def test_link_photo_tile_lists_a_still_with_its_thumb(monkeypatch):
+    _photo_link(monkeypatch)
+    src = GPhotosSource()
+    d = src.link({"link": LINK})["item"]
+    assert d["id"] == "link-1" and d["kind"] == "photo" and d["mime"] == "image/jpeg"
+    assert d["thumb"] == "/api/sources/gphotos/thumb/link-1" and d["variants"] is None
+    assert [e.as_dict() for e in src.list().items] == [d]
+    for quality in ("auto", "photo"):
+        item = src.resolve("link-1", quality)
+        assert item.kind == "photo" and item.mime == "image/jpeg" and not item.download
+        assert item.version == LINK + "=d"
+        up = item.resolve()
+        assert up.url == MEDIA_BASE + "=d" and up.headers == {} and _guarded(up)
+    up = src.thumb("link-1")
+    assert up.url == MEDIA_BASE + "=w400-h400" and _guarded(up)
+    assert src.thumb("link-9") is None
+
+
+def test_link_photo_tile_thumb_over_api_stays_on_google(app, monkeypatch):
+    secret = "http://127.0.0.1:9/secret"
+    transport = _photo_link(monkeypatch, **{MEDIA_BASE + "=w400-h400": (200, {"Content-Type": "image/jpeg"}, JPEG)})
+    app.sources["gphotos"].link({"link": LINK})
+    status, headers, body, _ = request(app.base_url, "GET", "/api/sources/gphotos/thumb/link-1")
+    assert status == 200 and headers["Content-Type"] == "image/jpeg" and body == JPEG
+    transport.routes[MEDIA_BASE + "=w400-h400"] = (302, {"Location": secret}, b"")
+    status, _, _, _ = request(app.base_url, "GET", "/api/sources/gphotos/thumb/link-1")
+    assert status == 502 and secret not in transport.seen        # the guard refused the hop
+
+
+def test_link_photo_tile_fetches_the_still_and_refreshes_through_the_page(monkeypatch):
+    transport = _photo_link(monkeypatch)
+    src = GPhotosSource()
+    src.link({"link": LINK})
+    item = src.resolve("link-1")
+    transport.routes[MEDIA_BASE + "=d"] = (403, {}, b"")         # the address went stale: the page is read again
+    transport.routes.update(_share_page(PHOTO_HEAD % MEDIA_BASE.replace("A", "C"), 1))
+    transport.routes[MEDIA_BASE.replace("A", "C") + "=d"] = (200, {"Content-Type": "image/jpeg"}, JPEG)
+    transport.routes[MEDIA_BASE.replace("A", "C") + "=m37"] = NOT_FOUND
+    assert photos._fetch(item) == JPEG
+    assert src.resolve("link-1").resolve().url == MEDIA_BASE.replace("A", "C") + "=d"
+    transport.routes.update(_share_page(VIDEO_HEAD % (MEDIA_BASE, MEDIA_BASE), 1, MEDIA_BASE))
+    transport.routes[MEDIA_BASE + "=dv"] = PROBED               # the link now holds a video: not cast as a photo
+    with pytest.raises(UpstreamError) as err:
+        item.refresh()
+    assert err.value.code == "link_changed"
+
+
+def test_link_motion_photo_offers_photo_and_clip(monkeypatch):
+    _photo_link(monkeypatch, clip=(302, {"Location": GOOGLEVIDEO}, b""), **{GOOGLEVIDEO: PROBED})
+    src = GPhotosSource()
+    d = src.link({"link": LINK})["item"]
+    assert d["kind"] == "photo" and d["thumb"] == "/api/sources/gphotos/thumb/link-1"
+    assert [(v["quality"], v["label"], v["default"]) for v in d["variants"]] == [
+        ("photo", "Photo", True), ("clip", "Clip", False)]
+    assert "1080p H.264" in d["variants"][1]["note"]
+    still, clip = src.resolve("link-1"), src.resolve("link-1", "clip")
+    assert still.kind == "photo" and still.resolve().url == MEDIA_BASE + "=d"
+    assert clip.kind == "video" and clip.mime == "video/mp4" and clip.download is False   # relayed
+    up = clip.resolve()
+    assert up.url == MEDIA_BASE + "=m37" and up.headers == {} and _guarded(up)
+    assert still.version == LINK + "=d" and clip.version == LINK + "=m37"   # never one cache entry
+    assert photos.cache_key(still) != photos.cache_key(clip)
+
+
+def test_link_motion_photo_clip_refreshes_through_the_page(monkeypatch):
+    transport = _photo_link(monkeypatch, clip=PROBED)
+    src = GPhotosSource()
+    src.link({"link": LINK})
+    clip = src.resolve("link-1", "clip")
+    assert clip.refresh().url == MEDIA_BASE + "=m37"
+    transport.routes[MEDIA_BASE + "=m37"] = NOT_FOUND           # the page now holds a plain photo
+    with pytest.raises(UpstreamError) as err:
+        clip.refresh()
+    assert err.value.code == "link_changed"
+
+
+@pytest.mark.parametrize("clip, quality", [(NOT_FOUND, "clip"), (PROBED, "original"), (PROBED, "stream"),
+                                           (PROBED, "bogus"), (NOT_FOUND, "")],
+                         ids=["clip-on-a-plain-photo", "original", "stream", "bogus", "empty"])
+def test_link_motion_photo_bad_quality(monkeypatch, clip, quality):
+    _photo_link(monkeypatch, clip=clip)
+    src = GPhotosSource()
+    src.link({"link": LINK})
+    with pytest.raises(ConfigError) as err:
+        src.resolve("link-1", quality)
+    assert err.value.code == "bad_quality"
+
+
+def test_link_photo_in_show(app, monkeypatch):
+    """A show sends no quality: a motion photo link joins it as its still."""
+    _photo_link(monkeypatch, clip=PROBED, still=(200, {"Content-Type": "image/jpeg"}, JPEG))
+    c = http.client.HTTPConnection(app.base_url.split("://", 1)[1], timeout=5)
+    c.request("POST", "/api/sources/gphotos/link", body=json.dumps({"link": LINK}).encode(),
+              headers={"Content-Type": "application/json"})
+    r = c.getresponse()
+    assert r.status == 200 and json.loads(r.read())["item"]["variants"]
+    c.request("POST", "/api/show", body=json.dumps({"items": [{"source": "gphotos", "id": "link-1"}]}).encode(),
+              headers={"Content-Type": "application/json"})
+    r = c.getresponse()
+    assert r.status == 202, r.read()
+    r.read()
+    (item,) = app.show_now.items
+    assert item.kind == "photo" and item.version == LINK + "=d"
+    wait_for(lambda: app.show_now.current is not None and app.show_now.current.sent.is_set())
+    assert app.tv_fake.uris

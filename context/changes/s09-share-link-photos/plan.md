@@ -144,6 +144,10 @@ refused, and an album is not mistaken for its cover.
   photo or video can be shared instead (one line first: the UI shows only the first line); then a
   `photo` page → probe base + `=d` with `kinds=("photo",)` (no answer → `NotMedia("no_media")`) and
   base + `=m37` for the clip; otherwise the existing video candidate probing, unchanged.
+  "No answer" on `=d` is `probe_media()` returning `None` (an HTTP error, or an answer that is
+  not a photo) → `no_media`; a network failure or timeout there raises
+  `UpstreamError("probe_failed")` and fails the paste (owner decision 2026-10-13; review
+  `reviews/impl-review-phase-1-aed13dc.md`).
 - The clip probe tells statuses apart, which `probe_media()` does not (it returns `None` on every
   `HTTPError`, `castlib/media.py:200`): a video answer → clip; **404 → no clip**; any other HTTP
   status, or a 200/206 whose type is not video, → `UpstreamError("clip_probe_failed")` naming the
@@ -352,17 +356,17 @@ four for a video today. The photo itself is fetched whole by `photos.py`, as for
 
 #### Automated
 
-- [x] 1.1 The new classification tests pass
-- [x] 1.2 The whole suite passes
-- [x] 1.3 Pyflakes is clean
+- [x] 1.1 The new classification tests pass — aed13dc
+- [x] 1.2 The whole suite passes — aed13dc
+- [x] 1.3 Pyflakes is clean — aed13dc
 
 ### Phase 2: List and cast photo links in the Google Photos tab
 
 #### Automated
 
-- [ ] 2.1 The new source tests pass
-- [ ] 2.2 The whole suite passes
-- [ ] 2.3 Pyflakes is clean
+- [x] 2.1 The new source tests pass
+- [x] 2.2 The whole suite passes
+- [x] 2.3 Pyflakes is clean
 
 ### Phase 3: Wording, documents, and the TV
 
