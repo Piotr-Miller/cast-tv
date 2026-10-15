@@ -3,7 +3,7 @@ project: cast-tv
 version: 1
 status: active
 created: 2026-09-19
-updated: 2026-10-14
+updated: 2026-10-15
 prd_version: 1
 main_goal: personal-use-then-share
 top_blocker: time
@@ -47,7 +47,7 @@ conversion and the cast supervisor. Delivered with `cloud-source-ui` (PR #1, 202
 | S-12 | (proposed) | run cast-tv as a desktop window on Windows and Linux, not only a browser tab | S-08 | — | proposed |
 | S-13 | s13-gopro-auth | connect GoPro without copying a token by hand | S-03 | FR-010 | merged (PR #40, 2026-10-12); only rows 5.11-5.12 open, at GoPro's first refusal |
 | S-14 | (proposed) | cast to Google TV and Chromecast devices, not only DLNA TVs | S-02 | — | proposed |
-| S-15 | (proposed) | cast an album from a share link | S-09 | FR-012 | proposed |
+| S-15 | s15-share-link-album | cast an album from a share link | S-09 | FR-012 | parked (2026-10-15): the picker covers the owner's own albums |
 
 ## Streams
 
@@ -200,6 +200,14 @@ plan. The ideas under each are starting points, not findings.
   video or that holds one item looks like (none measured).
 - **Ideas:** list the album's items as tiles in the Google Photos tab, each resolved like a pasted
   single-item link; a slideshow of the whole album.
+- **Parked 2026-10-15** (`context/archive/2026-10-14-s15-share-link-album/`, `frame.md` and
+  `research.md`). The albums the owner meant are his own and hold a few dozen items at most. In the picker, a
+  title search and one date checkbox selected a whole album (5 of 5 items, 2026-10-15), so
+  nothing needs building for him. The spikes stay valid for other people's albums. An item link
+  does not resolve as a single link (no Open Graph tags on item pages). The album page's data
+  entries hold every item's base, and its kind sits in undocumented keys (`"76647426"` video,
+  `"146008172"` motion photo). Reopen if albums from other people's libraries are wanted; large
+  albums (paging) were never measured.
 
 ## Open Roadmap Questions
 
@@ -210,6 +218,8 @@ None open. (Archiving `cloud-source-ui` was answered on 2026-09-20, #32.)
 - Google verification (S-10), code signing for the `.exe`, installers (MSI, rpm, AppImage),
   auto-update, macOS.
 - Audio casting from the UI; browsing local folders from the UI (exposure); a background service.
+- Albums from share links (S-15), 2026-10-15: the picker already selects the owner's own albums;
+  other people's albums would rest on undocumented page data.
 
 ## Done
 
