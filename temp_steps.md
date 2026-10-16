@@ -1,6 +1,6 @@
 # S-12: kroki tymczasowe (2026-10-16)
 
-Plik roboczy na czas restartu do Windows; usunąć po zakończeniu kroków. Stan: frame gotowy (`context/changes/s12-desktop-window/frame.md`),
+Stałe miejsce na kroki przy przerwie w pracy (restart, zmiana maszyny): zostaje w repo i jest nadpisywany przy następnej takiej sytuacji. Stan: frame gotowy (`context/changes/s12-desktop-window/frame.md`),
 pomiary na Linuksie zrobione (`research.md`, trzecia sekcja). Otwarta zostaje tylko weryfikacja na
 Windows 11.
 
@@ -43,4 +43,3 @@ py -3 run_spike.py
    - instalatory i ikona (`prd.md:175`);
    - „nic nie instalujesz” na Linuksie i lista zależności (`prd.md:59`, `prd.md:156`);
    - lista platform i macOS (`prd.md:154`, `prd.md:175`).
-6. **Ja:** usuń ten plik, gdy kroki są zrobione.
