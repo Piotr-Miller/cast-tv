@@ -1,0 +1,8 @@
+# produced on the laptop by run_spike.py
+ui/
+.venv-spike/
+build/
+dist/
+*.spec
+results.txt
+__pycache__/
