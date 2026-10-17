@@ -32,4 +32,5 @@ w.events.loaded += lambda: threading.Thread(target=probe, args=(w,), daemon=True
 threading.Timer(45, lambda: (result.setdefault("error", "timeout 45 s"), w.destroy())).start()
 webview.start()
 print("RESULT", result, "gui=%s" % getattr(webview, "guilib", None).__name__ if getattr(webview, "guilib", None) else "", "%.1fs" % (time.time() - t0), flush=True)
-os._exit(0 if result["ok"] else 1)
+# pywebview falls back to another backend quietly when Qt fails to load (2026-10-18): a pass needs gui=qt
+os._exit(0 if result["ok"] and getattr(getattr(webview, "guilib", None), "__name__", "").endswith(".qt") else 1)

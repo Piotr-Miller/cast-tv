@@ -56,7 +56,11 @@ srv.shutdown()
 # 2. venv with pywebview (WebView2), PySide6 and PyInstaller
 if not os.path.exists(PY):
     venv.create(VENV, with_pip=True)
-rc, dt, out = run([PY, "-m", "pip", "install", "-q", "pywebview==6.2.1", "PySide6==6.12.0", "pyinstaller==6.22.3"])
+# [pyside6] brings qtpy: without it pywebview falls back to WebView2 and probe_pwq tests nothing new.
+# WinError 32 (a fresh file held by another process, likely the virus scanner) failed the first try on 2026-10-18; retry.
+for attempt in range(3):
+    rc, dt, out = run([PY, "-m", "pip", "install", "-q", "pywebview[pyside6]==6.2.1", "PySide6==6.12.0", "pyinstaller==6.22.3"])
+    if rc == 0: break
 log("2 pip install: rc %d in %.0fs %s" % (rc, dt, " | ".join(out[-3:])))
 
 # 3. pywebview unfrozen (default Windows renderer: WebView2 / edgechromium)
@@ -66,7 +70,7 @@ log("3 pywebview unfrozen: rc %d in %.1fs %s" % (rc, dt, [l for l in out if "RES
 # 4. pywebview onefile, and 5. pywebview + Qt (PySide6) onefile
 for n, script in ((4, "probe.py"), (5, "probe_pwq.py")):
     name = "s12-" + os.path.splitext(script)[0]
-    rc, dt, out = run([PY, "-m", "PyInstaller", "--noconfirm", "--onefile", "--log-level", "WARN",
+    rc, dt, out = run([PY, "-m", "PyInstaller", "--noconfirm", "--clean", "--onefile", "--log-level", "WARN",
                        "--add-data", "ui;ui", "--name", name, script], timeout=1200)
     exe = os.path.join(HERE, "dist", name + ".exe")
     size = os.path.getsize(exe) if os.path.exists(exe) else 0

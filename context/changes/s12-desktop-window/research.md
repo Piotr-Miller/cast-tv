@@ -508,3 +508,61 @@ python3 -I appimage_probe.py <log> [--container NAME] <command>
 - **Electron's AppImage passes on both real desktops only with the alpha electron-builder
   27.** On Ubuntu 24.04 that build runs with `--no-sandbox`.
 - **Windows remains open for all candidates.**
+
+## Spike: the Windows 11 laptop run of `spike-kit/run_spike.py` (2026-10-18, 01:36)
+
+The last open row of `frame.md`'s Discriminator Check. Claude ran the kit on the owner's Windows
+11 laptop (Windows 11 Pro 10.0.26300, AMD64, Python 3.14.5, Edge 155, VC++ runtime 14.51
+installed). Packages: pywebview 6.2.1, PySide6 6.12.0, PyInstaller 6.22.3, pythonnet 3.2.1,
+QtPy 2.4.3.
+
+**Empirical half.**
+
+- **Edge `--app` on `/ui/`: passes.** `/api/status` came 2.3 s after launch (1.9 s on the
+  rerun). The requests were `/ui/`, `alpine.min.js`, `app.js`, `style.css`, `/api/status`,
+  `/favicon.ico`.
+- **pywebview unfrozen (WebView2, `gui=winforms`): passes.** Title `cast-tv`, Alpine an
+  `object`, user agent `Edg/155.0.0.0`; 9.8 s for the whole probe, which sleeps 3 s after load.
+  pythonnet installs and loads on Python 3.14.
+- **pywebview onefile (WebView2): passes.** 12,836,800 bytes, built in 34 s. 9.9 s per run.
+- **pywebview + PySide6 onefile (`gui=qt`): passes.** 227,218,128 bytes, built in 229 s with
+  `--clean`. User agent `QtWebEngine/6.140.0 Chrome/140.0.0.0`. 22.8 s and 22.2 s wall time for
+  two runs. The WebView2 exe needs 9.7 s, so about 13 s of the difference is the onefile
+  unpacking about 200 MB.
+- **The bundle carries the VC++ runtime.** Its `PKG-00.toc` lists `MSVCP140.dll`,
+  `MSVCP140_1.dll` and `MSVCP140_2.dll` from the PySide6 and shiboken6 wheels, and
+  `VCRUNTIME140.dll` and `VCRUNTIME140_1.dll`. The laptop also has the runtime installed, so
+  this run does not show the exe working without it.
+- **Two kit defects, found and fixed in this run.**
+  - **The first `pip install` failed with `WinError 32`**: "The process cannot access the file
+    because it is being used by another process", on a file pip had just unpacked
+    (`_pyinstaller_hooks_contrib/.../hook-reportlab.lib.utils.py`, then
+    `PyInstaller/hooks/hook-_ctypes.py`). The second try succeeded. The likely holder is the
+    virus scanner; this was not checked. `run_spike.py` now retries up to three times.
+  - **The first Qt build silently tested WebView2.** The kit installed `PySide6` without
+    `pywebview[pyside6]`, so `qtpy` was missing. `webview.platforms.qt` raised
+    `ModuleNotFoundError: No module named 'qtpy'`, and pywebview fell back to `winforms` with
+    no error exit. That exe was 12,836,273 bytes, the size of the WebView2 one. A rebuild
+    without `--clean` took 3 s and reused the cached analysis without Qt. The Linux runs
+    installed the extra (line 312), so their Qt results stand. `run_spike.py` now installs
+    `pywebview[pyside6]` and builds with `--clean`, and `probe_pwq.py` exits 1 unless the
+    backend is `webview.platforms.qt`.
+- **The probes were not rerun on a machine without the VC++ runtime** or on another Windows
+  account.
+
+**What this settles:**
+
+- **On Windows, every Python candidate meets dimension 2 from one artifact with nothing
+  installed beyond the OS:** Edge `--app`, and pywebview with WebView2, unfrozen and as a 12.8
+  MB onefile. WebView2 is part of Windows 11, as Edge is.
+- **Qt WebEngine also works on Windows, at 227 MB** and about 13 s more start-up per launch
+  from the onefile unpacking.
+- **A pywebview build must fail when its chosen backend is missing.** pywebview falls back
+  quietly, so a test that checks only that a window rendered can pass on the wrong engine.
+
+**Not yet checked:**
+
+- **The Qt exe on a Windows install without the VC++ runtime.**
+- **Tauri and Electron on Windows.** The kit does not include them.
+- **SmartScreen and Defender on a downloaded, unsigned 12.8 MB or 227 MB exe.** All runs were
+  local builds; nothing was downloaded.
