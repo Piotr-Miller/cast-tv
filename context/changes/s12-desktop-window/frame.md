@@ -103,7 +103,7 @@ The proposed experiments come from `research.md`'s "Not yet checked" lists:
 
 | Proposed experiment | Separates | Conflates | Cost (money / irreversible / wait) | Already answered by |
 | --- | --- | --- | --- | --- |
-| **Windows 11 laptop run:** Edge `--app` on `/ui/`, pywebview/WebView2, the PySide6 onefile | Whether each candidate meets dimension 2 under the dimension 4 criterion on Windows | Nothing, if each candidate is run on its own | 0 / no / the owner's time at the laptop: unknown | **Still open**; the kit is ready. **Partly answered:** an Edge `--app` window from `castlib/auth/browser.py` ran on that laptop for GoPro (`context/changes/s13-gopro-auth/research.md:688-699`, cost 0). It did not show `/ui/`, so it does not dominate. |
+| **Windows 11 laptop run:** Edge `--app` on `/ui/`, pywebview/WebView2, the PySide6 onefile | Whether each candidate meets dimension 2 under the dimension 4 criterion on Windows | Nothing, if each candidate is run on its own | 0 / no / the owner's time at the laptop: unknown | **Run 2026-10-18** (`research.md`, last section). Edge `--app`, pywebview/WebView2 unfrozen and as a 12.8 MB onefile, and pywebview + PySide6 as a 227 MB onefile all passed. The first Qt build had silently fallen back to WebView2, because `qtpy` was missing; it was fixed and rebuilt. |
 | **Tauri 2 and Electron AppImages** in the five-distribution matrix | Whether an AppImage with its own engine meets dimension 4 on Linux | The **AppImage runtime** (FUSE, user namespaces) and **the bundled engine** | 0 / no / unknown (two toolchains to install, two builds) | **Run 2026-10-16** (`research.md:392`). Tauri 2.12.4 AppImage carries WebKitGTK 4.1; it passed on the Fedora desktop (FUSE 3 only) and on an Ubuntu 24.04 VM. Electron with electron-builder 26.15.3 needs `libfuse.so.2` and failed on both; with 27.0.0-alpha.10 it passed on both, and runs `--no-sandbox` on Ubuntu 24.04. |
 | **Qt onefile without the bundled `libgbm` and `libstdc++`, GPU on** | Whether the GPU failure is a bundling artifact or inherent to the bundle | **`libgbm`** and **`libstdc++`**, removed together | 0 / no / about 10 min (101 s build plus matrix, measured 2026-10-15) | **Run 2026-10-16, one library at a time as the owner asked** (`research.md:392`). The bundled `libstdc++` causes the abort, and the bundled `libgbm` breaks GBM. Without both, the bundle passed with the GPU on: Fedora desktop and 5/5 containers. |
 | **Qt onefile on a real Ubuntu 24.04 desktop** | Whether Ubuntu 24.04's user-namespace restriction (AppArmor) breaks Qt WebEngine's sandbox, against the container result | Nothing | 0 / no / unknown (needs a machine or VM) | **Run 2026-10-16 on an Ubuntu 24.04 VM**, AppArmor restriction on, no GPU (`research.md:392`). The Qt bundle without both libraries passed. The user-namespace layer was denied; the renderer runs with `Seccomp: 2`. |
@@ -160,8 +160,8 @@ toolkit.
   `castlib/ui/app.js:106-111`; `castlib/server.py:195-198`; `castlib/auth/browser.py:41,153`;
   `.github/workflows/release.yml:37-48`; `context/foundation/prd.md:59-60,70,154-156,175`;
   `context/foundation/roadmap.md:139-147`.
-- **Related research:** `context/changes/s12-desktop-window/research.md` (two spikes,
-  2026-10-15).
+- **Related research:** `context/changes/s12-desktop-window/research.md` (spikes of
+  2026-10-15, 2026-10-16 and the Windows run of 2026-10-18).
 - **Investigation:** dimensions 1 and 3 delegated to one search agent, dimension 2 to another;
   dimension 4 from the spikes.
 - **Pressure test:**
