@@ -615,8 +615,8 @@ Doing); CI on the PR (row 1.7) is the two-OS gate.
 
 Windows laptop (Windows 11 Pro 10.0.26300), a venv with `pip install -e ".[window]"`, commit
 a33a8a0 (PR #61; on main as 1083431). The owner ran `cast-tv` in PowerShell and confirmed the
-row as written: a window titled cast-tv opened on the UI, not a browser tab, and the console printed the
-addresses. Reported in the session as "1.8 potwierdzone", then with the whole PowerShell log:
+row as written: a window titled cast-tv opened on the UI, not a browser tab, and the console
+printed the addresses. Reported in the session as "1.8 potwierdzone", then with the whole PowerShell log:
 
 - Command: `python -m venv $env:TEMP\ctv-win`, then `pip install -e ".[window]"` and
   `cast-tv.exe` from that venv. Python 3.14 (cp314 wheels). The extra resolved to
@@ -628,3 +628,47 @@ addresses. Reported in the session as "1.8 potwierdzone", then with the whole Po
   ("TV: 83" OLED").
 - On closing the window the console printed `Stopped.` and the PowerShell prompt returned.
   Nothing was playing, so this does not stand in for row 1.13 (X with a video playing).
+
+Re-confirmed at ffa982c (`main`): d2dd0ca, the revision first accepted, left the history when
+PR #61 was merged by rebase (`change.md` Notes). In the same venv the owner ran `cast-tv` in
+PowerShell; "okno się otworzyło, 1.8 potwierdzone" ("the window opened, 1.8 confirmed").
+
+## Manual rows 1.16 and 1.13 (2026-10-18)
+
+Windows laptop (Windows 11 Pro 10.0.26300), the same venv as row 1.8 (`$env:TEMP\ctv-win`,
+`pip install -e ".[window]"`), the checkout on `main`; the castlib tree is the same as 1083431.
+The owner reported both rows as "1.16 potwierdzone, 1.13 tez" ("1.16 confirmed, 1.13 too") and
+then confirmed them as written at ffa982c (`main`; it differs from 1083431 only in `AGENTS.md`
+and `CLAUDE.md`):
+
+- 1.16: from the phone, at `http://192.168.50.213:8895/ui/` (the laptop's Wi-Fi address), the UI
+  worked as before and showed no Quit cast-tv control.
+- 1.13: with a video playing on the TV (83" OLED), closing the cast-tv window with X stopped the
+  TV within 5 s; PowerShell printed `Stopped.` and its prompt returned.
+
+These are the owner's reports of what they saw; the agent did not observe the TV or the phone.
+
+## Manual row 1.15 (2026-10-18)
+
+Windows laptop, the same venv and revision as rows 1.16 and 1.13 (ffa982c). With the cast-tv
+window open behind another window, the owner ran `cast-tv` again in a second PowerShell window
+(the same venv) and reported "1.15 tez" ("1.15 too"), confirming the row as written: the cast-tv
+window came to the front and the second command exited at once.
+This is the owner's report; the agent did not see the screen.
+
+## Manual rows 1.11 and 1.14, Windows part (2026-10-18)
+
+Windows laptop, the same venv and revision as rows 1.16 and 1.13 (ffa982c). The owner was given
+three steps and answered "potwierdzone" ("confirmed") to all of them:
+
+- 1.11: `cast-tv --no-window` opened a browser tab at `http://127.0.0.1:8895/ui/`, not a window,
+  with the Quit cast-tv control in the header; Ctrl+C in the PowerShell window ended it.
+- 1.14, Ctrl+C: with a video playing from the cast-tv window, Ctrl+C in the PowerShell window
+  running cast-tv stopped the TV and closed the window.
+- 1.14, sign-out: with a video playing from the cast-tv window, Start → account → Sign out without
+  closing cast-tv; after signing back in the TV had stopped playing and
+  `Get-Process cast-tv -ErrorAction SilentlyContinue` printed nothing. The agent's own check after
+  the owner resumed the session agreed: `Get-Process cast-tv` found no process.
+
+These are the owner's reports, apart from the last `Get-Process` check. Row 1.14 stays open: its
+Fedora part (`kill <pid>` from another terminal) is still to be done.
