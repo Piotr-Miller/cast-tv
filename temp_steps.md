@@ -9,17 +9,44 @@ recorded row, the PR or commit.
 ## Where it stands
 
 - S-12 Phase 1 ("The window owns the session") is on `main` (1083431, PR #61; bookkeeping #62).
-- Phase 1 manual rows confirmed on the Windows laptop at `main` ffa982c (PR #64): 1.8, 1.11, 1.13,
-  1.15, 1.16, and the Windows part of 1.14 (Ctrl+C, sign-out). Observations in
-  `context/changes/s12-desktop-window/research.md`.
-- Left for Phase 1, all on Fedora: 1.9, 1.10, 1.12 and the `kill` part of 1.14.
+- The Phase 1 review (`reviews/impl-review-phase-1-1083431.md`) found F1-F3; the fixes are in
+  PR #66. They change `castlib/cli.py` and `castlib/window.py`, so rows 1.8, 1.11, 1.13 and 1.15
+  were reopened and need confirming again; 1.16 stays confirmed (ffa982c).
+- Left for Phase 1: on Windows 1.8, 1.11, 1.13, 1.15 and the Windows part of 1.14 again (step 1b);
+  on Fedora 1.9, 1.10, 1.12 and the `kill` part of 1.14.
 - Most work stays on the Windows 11 laptop; Fedora is visited for the Linux-only manual rows,
   best once per phase.
 
 ## Now
 
-- [ ] 1. **Windows 11, a new Claude Code session:** `/rune-impl-review s12-desktop-window phase 1`. If it
-   finds problems, Claude fixes them in a separate PR and you merge it.
+- [x] 1. **Windows 11, a new Claude Code session:** `/rune-impl-review s12-desktop-window phase 1`. If it
+   finds problems, Claude fixes them in a separate PR and you merge it. — done 2026-10-18: three
+   warnings (F1 termination before the window state, F2 session-end deadline, F3 full suite),
+   all fixed; PR #66.
+- [ ] 1a. **You:** merge PR #66 (Rebase and merge).
+- [ ] 1b. **Windows 11, after 1a**, in PowerShell:
+   ```powershell
+   cd C:\Source\cast-tv
+   git switch main
+   git pull
+   & $env:TEMP\ctv-win\Scripts\Activate.ps1
+   cast-tv
+   ```
+   - [ ] **1.8:** a window titled cast-tv opens on the UI and PowerShell prints the addresses.
+   - [ ] **1.13:** start a video on the TV from the window, then close the window with X: the TV
+     stops within 5 s, PowerShell prints `Stopped.` and its prompt returns.
+   - [ ] **1.15:** run `cast-tv` again and click the PowerShell window so it covers the cast-tv
+     window. In a **second** PowerShell window run the same five lines: the cast-tv window comes
+     to the front and the second PowerShell prints "Its window is in front." and returns at once.
+     Close the cast-tv window with X.
+   - [ ] **1.11:** `cast-tv --no-window` opens a browser tab at http://127.0.0.1:8895/ui/ with
+     "Quit cast-tv" in the header, not a window. Press Ctrl+C in the PowerShell window.
+   - [ ] **1.14 (Ctrl+C):** `cast-tv`, start a video from the window, then Ctrl+C in the
+     PowerShell window: the TV stops and the window closes.
+   - [ ] **1.14 (sign-out), last:** `cast-tv`, start a video from the window, then Start → account
+     → Sign out without closing cast-tv. After signing back in: has the TV stopped? In a new
+     PowerShell window, `Get-Process cast-tv -ErrorAction SilentlyContinue` prints nothing.
+     Come back with `claude --resume` in `C:\Source\cast-tv`.
 - [ ] 2. **Fedora, Phase 1 manual rows.** In a terminal, in the cast-tv checkout:
    ```bash
    git switch main && git pull

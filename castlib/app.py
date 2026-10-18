@@ -198,6 +198,9 @@ class App:
         self._shutdown_lock = threading.Lock()
         self._shutdown: threading.Thread | None = None   # the one stop-and-close, whoever asked first
         self._shut_down = threading.Event()
+        self._shutdown_deadline: float | None = None
+        self._close_started = False
+        self._close_done = threading.Event()
 
     # ------------------------------------------------------------ lifecycle
     @classmethod
@@ -338,7 +341,7 @@ class App:
             while not main_wait(self._closed, 1.0):
                 pass
         except KeyboardInterrupt:
-            self.interrupted()
+            self.shutdown()
         finally:
             if self._shutdown is not None:   # Quit from the UI: its worker stops and closes; the process waits for it
                 self.shutdown()
@@ -352,32 +355,63 @@ class App:
         self.stop()
         print("   Stopped.", flush=True)
 
-    def shutdown(self, timeout: float | None = None) -> bool:
+    def shutdown(self, timeout: float | None = None, *, deadline: float | None = None) -> bool:
         """``interrupted()`` and ``close()``, exactly once, whoever asks first; True once that is done.
 
         Closing the window, the UI's Quit and a Windows sign-out can each ask,
         and they race the GUI loop's own return. The first caller starts the
         work on a thread of its own; every caller then waits ``timeout``
-        seconds for it (``None``: until it is done, in short steps the main
-        thread's Ctrl+C can still interrupt).
+        seconds for it. A session-end ``deadline`` is absolute monotonic time,
+        shared by every Stop/cleanup wait; a later caller may shorten it even
+        while ordinary shutdown is in progress. Blocking calls run once on
+        daemon workers so a stalled call cannot prevent the remaining attempts.
         """
         with self._shutdown_lock:
+            if deadline is not None:
+                self._shutdown_deadline = (deadline if self._shutdown_deadline is None
+                                           else min(deadline, self._shutdown_deadline))
             first = self._shutdown is None
             if first:
                 self._shutdown = threading.Thread(target=self._shut, name="shutdown", daemon=True)
         if first:
             self._shutdown.start()
-        if timeout is not None:
-            return main_wait(self._shut_down, timeout)
-        while not main_wait(self._shut_down, 1.0):
-            pass
+        return self._wait_cleanup(self._shut_down, timeout=timeout)
+
+    def _wait_cleanup(self, done: threading.Event, remaining: int = 1,
+                      timeout: float | None = None) -> bool:
+        """Wait for one action's share of the budget, re-reading a deadline set by another caller."""
+        started = time.monotonic()
+        until = None if timeout is None else started + timeout
+        allocated_deadline = None
+        while not done.is_set():
+            now = time.monotonic()
+            deadline = self._shutdown_deadline
+            if deadline is not None and deadline != allocated_deadline:
+                share = now + max(0, deadline - now) / remaining
+                until = share if until is None else min(until, share)
+                allocated_deadline = deadline
+            if until is not None and now >= until:
+                return False
+            time.sleep(MAIN_WAIT_STEP if until is None else min(MAIN_WAIT_STEP, max(0, until - now)))
         return True
+
+    def _cleanup_step(self, action, remaining: int = 1) -> None:
+        done = threading.Event()
+
+        def run():
+            try:
+                action()
+            except Exception:
+                pass
+            finally:
+                done.set()
+
+        threading.Thread(target=run, name="shutdown-action", daemon=True).start()
+        self._wait_cleanup(done, remaining)
 
     def _shut(self) -> None:
         try:
-            self.interrupted()
-        except Exception:
-            pass
+            self._cleanup_step(self.interrupted, remaining=2)  # reserve half the remaining budget for close
         finally:
             try:
                 self.close()
@@ -394,9 +428,27 @@ class App:
         self.shutdown(timeout=0)
 
     def close(self) -> None:
-        if self._closed.is_set():
+        with self._shutdown_lock:
+            first = not self._close_started
+            self._close_started = True
+        if not first:
+            self._wait_cleanup(self._close_done)
             return
         self._closed.set()
+        steps = [self._cancel_tasks,
+                 lambda: self._executor.shutdown(wait=False, cancel_futures=True),
+                 self.stay_awake.close]
+        steps.extend(close for src in self.sources.values() if (close := getattr(src, "close", None)) is not None)
+        steps.extend([self.server.shutdown, self.server.server_close,
+                      config.remove_photo_tmp_dir, config.remove_video_tmp_dir])
+        try:
+            for index, action in enumerate(steps):
+                self._cleanup_step(action, remaining=len(steps) - index)
+        finally:
+            self._close_done.set()
+
+    def _cancel_tasks(self) -> None:
+        """Invalidate preparing work and cancel playback before releasing sources and the server."""
         with self.lock:
             self.generation += 1            # any task still preparing is stale now
             owner, self.owner = self.owner, None
@@ -407,22 +459,6 @@ class App:
             cast.cancel()
         for item in self.registry.items():
             self.registry.retire(item.id)
-        self._executor.shutdown(wait=False, cancel_futures=True)
-        self.stay_awake.close()             # Ctrl+C releases the inhibitor even mid-cast
-        for src in self.sources.values():
-            close = getattr(src, "close", None)   # Google Photos deletes its picker sessions
-            if close is not None:
-                try:
-                    close()
-                except Exception:
-                    pass
-        try:
-            self.server.shutdown()
-            self.server.server_close()
-        except Exception:
-            pass
-        config.remove_photo_tmp_dir()
-        config.remove_video_tmp_dir()
 
     # ------------------------------------------------------------------ TV
     def discover(self) -> list[dict]:
