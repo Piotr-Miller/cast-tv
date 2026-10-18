@@ -300,8 +300,7 @@ def ui(port=DEFAULT_PORT, tv=None, debug=False, browser=True, windowed=True):
             return 0
         return app.run_forever()
     except KeyboardInterrupt:              # Ctrl+C in the instant before run_forever took over
-        app.interrupted()
-        app.close()
+        app.shutdown()
         return 0
 
 
@@ -313,20 +312,24 @@ def _in_window(app):
     shutdown (``SessionEnd``, with its own bounded wait). When no window can
     open, the reason goes to Diagnostics and the console, and the tab opens.
     """
-    def session_end():
+    def session_end(deadline):
         window.destroy()
-        app.shutdown()
+        app.shutdown(deadline=deadline)
 
-    end_on_sigterm(on_end=window.destroy)
-    platform.console_close_ends(window.destroy)
-    session = platform.end_on_session_end(session_end)
-    try:
-        result = window.run(app, "http://127.0.0.1:%d/ui/" % app.server.port)   # not localhost: it may be ::1 first
-    finally:
-        if session is not None:
-            session.release()
-        platform.console_close_ends(None)
-        end_on_sigterm()
+    with window.termination_scope() as request:
+        session = None
+        try:
+            end_on_sigterm(on_end=window.destroy)
+            platform.console_close_ends(window.destroy)
+            session = platform.end_on_session_end(session_end)
+            result = window.run(app, "http://127.0.0.1:%d/ui/" % app.server.port)   # not localhost: it may be ::1 first
+        finally:
+            if session is not None:
+                session.release()
+            platform.console_close_ends(None)
+            end_on_sigterm()
+        if request.end_requested:
+            result = "closed"
     if result == "closed":
         app.shutdown()
         return result

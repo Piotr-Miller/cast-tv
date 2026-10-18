@@ -226,14 +226,11 @@ def test_ctrl_c_before_run_forever_takes_over(monkeypatch):
         def run_forever(self):
             raise KeyboardInterrupt              # arrived before run_forever's own try
 
-        def interrupted(self):
-            done.append("interrupted")
-
-        def close(self):
-            done.append("close")
+        def shutdown(self):
+            done.append("shutdown")
     monkeypatch.setattr(cli.App, "start", classmethod(lambda cls, *a, **k: Early()))
     assert cli.ui(port=1, browser=False) == 0
-    assert done == ["interrupted", "close"]
+    assert done == ["shutdown"]
 
 
 def _interrupted(*a, **kw):

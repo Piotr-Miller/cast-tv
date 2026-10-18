@@ -383,7 +383,7 @@ class SessionEnd:
 
     The query is answered yes and nothing is cleaned up yet: the session end
     may still be cancelled. ``WM_ENDSESSION`` with a true ``wParam`` runs
-    ``on_end`` on a worker, once, and waits for it at most ``deadline`` seconds
+    ``on_end(absolute_deadline)`` on a worker, once, and waits for it at most ``deadline`` seconds
     counted from the first such message: Windows ends the process soon after
     the message is answered, and a TV that does not answer must not hold up
     the sign-out. A false ``wParam`` means the end was cancelled; cast-tv goes on.
@@ -431,7 +431,7 @@ class SessionEnd:
 
     def _run(self, done: threading.Event) -> None:
         try:
-            self._on_end()
+            self._on_end(self._started_at + self.deadline)
         except Exception:
             pass
         finally:
@@ -570,7 +570,7 @@ class Win32SessionWindow:
 
 
 def end_on_session_end(on_end) -> SessionEnd | None:
-    """Windows: install ``SessionEnd`` for the window's lifetime; the caller releases it. None elsewhere."""
+    """Windows: call on_end(absolute monotonic deadline) at session end. Caller releases the hook; None elsewhere."""
     if sys.platform != "win32":
         return None
     hook = SessionEnd(on_end)

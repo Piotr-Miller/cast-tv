@@ -174,6 +174,76 @@ def test_forced_fallback_opens_no_window(fake_webview, monkeypatch):
     assert fake_webview.windows == []
 
 
+@pytest.mark.parametrize("fails", [False, True])
+def test_end_during_backend_import_stops_without_fallback(window_cli, monkeypatch, fails):
+    def importing():
+        signal.getsignal(signal.SIGTERM)(signal.SIGTERM, None)
+        if fails:
+            raise ImportError("backend unavailable")
+        return window_cli.fake
+
+    monkeypatch.setattr(window, "_webview", importing)
+    assert cli.ui(port=window_cli.app.server.port) == 0
+    assert window_cli.stops == ["interrupted"] and window_cli.app._closed.is_set()
+    assert window_cli.app.tv_fake.actions().count("Stop") == 1
+    assert window_cli.tabs == [] and window_cli.served == [] and window_cli.fake.windows == []
+    assert _closers() == [] and not window.exists()
+
+
+@pytest.mark.parametrize("source", ["sigterm", "console", "session"])
+def test_end_during_hook_setup_stops_without_a_window(window_cli, monkeypatch, source):
+    def console(on_end):
+        if source == "console" and on_end is not None:
+            on_end()
+
+    def session(on_end):
+        if source == "sigterm":
+            signal.getsignal(signal.SIGTERM)(signal.SIGTERM, None)
+        elif source == "session":
+            on_end(time.monotonic() + SessionEnd.DEADLINE)
+        return None
+
+    monkeypatch.setattr(platform, "console_close_ends", console)
+    monkeypatch.setattr(platform, "end_on_session_end", session)
+    assert cli.ui(port=window_cli.app.server.port) == 0
+    assert window_cli.stops == ["interrupted"] and window_cli.app._closed.is_set()
+    assert window_cli.app.tv_fake.actions().count("Stop") == 1
+    assert window_cli.tabs == [] and window_cli.served == [] and window_cli.fake.windows == []
+    assert _closers() == [] and not window.exists()
+
+
+def test_direct_run_retains_end_during_import_and_clears_it(fake_webview, monkeypatch):
+    original = window._webview
+
+    def importing():
+        window.destroy()
+        raise ImportError("backend unavailable")
+
+    monkeypatch.setattr(window, "_webview", importing)
+    assert window.run(object(), "http://127.0.0.1:1/ui/") == "closed"
+    monkeypatch.setattr(window, "_webview", original)
+    fake_webview.user_closes = True
+    window.destroy()  # outside the scope: must not poison the next run
+    assert window.run(object(), "http://127.0.0.1:1/ui/") == "closed"
+    assert len(fake_webview.windows) == 1 and _closers() == []
+
+
+def test_hook_setup_exception_clears_termination_state(window_cli, monkeypatch):
+    def session(on_end):
+        window.destroy()
+        raise RuntimeError("hook failed")
+
+    monkeypatch.setattr(platform, "end_on_session_end", session)
+    with pytest.raises(RuntimeError, match="hook failed"):
+        cli.ui(port=window_cli.app.server.port)
+    handler = signal.getsignal(signal.SIGTERM)
+    with pytest.raises(KeyboardInterrupt):
+        handler(signal.SIGTERM, None)
+    window_cli.fake.user_closes = True
+    assert window.run(object(), "http://127.0.0.1:1/ui/") == "closed"
+    assert len(window_cli.fake.windows) == 1 and _closers() == []
+
+
 def test_destroy_while_starting_waits_for_shown(fake_webview):
     """A kill between create_window and shown returns at once, and the window is destroyed only once shown."""
     fake_webview.show_gate = threading.Event()
@@ -386,7 +456,7 @@ QUERY, END = SessionEnd.WM_QUERYENDSESSION, SessionEnd.WM_ENDSESSION
 
 def test_session_query_and_cancel_keep_playing():
     ended = []
-    hook = SessionEnd(lambda: ended.append(True), native=FakeNative())
+    hook = SessionEnd(lambda deadline: ended.append(True), native=FakeNative())
     assert hook.handle(QUERY, 0) == 1                          # yes, without cleaning up: it may be cancelled
     assert hook.handle(END, 0) == 0                            # cancelled
     assert hook.handle(0x0001, 0) is None                      # anything else: DefWindowProc
@@ -395,10 +465,10 @@ def test_session_query_and_cancel_keep_playing():
 
 def test_session_end_runs_once():
     ended = []
-    hook = SessionEnd(lambda: ended.append(True), native=FakeNative())
+    hook = SessionEnd(lambda deadline: ended.append(deadline), native=FakeNative())
     assert hook.handle(END, 1) == 0
     assert hook.handle(END, 1) == 0
-    assert ended == [True]
+    assert len(ended) == 1 and time.monotonic() < ended[0] <= time.monotonic() + SessionEnd.DEADLINE
 
 
 def test_session_end_waits_within_the_deadline():
@@ -411,13 +481,20 @@ def test_session_end_waits_within_the_deadline():
         clock[0] += timeout
         return event.is_set()
     stalled = threading.Event()
-    hook = SessionEnd(lambda: stalled.wait(5), native=FakeNative(), clock=lambda: clock[0], wait=wait)
+    deadlines = []
+
+    def cleanup(deadline):
+        deadlines.append(deadline)
+        stalled.wait(5)
+
+    hook = SessionEnd(cleanup, native=FakeNative(), clock=lambda: clock[0], wait=wait)
     assert hook.end() is False
     assert waits == [SessionEnd.DEADLINE] and SessionEnd.DEADLINE <= 4
     assert hook.end() is False                                 # repeated: the budget is spent, no second wait
     assert waits == [SessionEnd.DEADLINE]
     stalled.set()
-    quick = SessionEnd(lambda: stalled.wait(5) and time.sleep(5), native=FakeNative(), deadline=0.2)
+    assert hook._done.wait(1) and deadlines == [104.0]  # same absolute deadline, even if the worker ran later
+    quick = SessionEnd(lambda deadline: stalled.wait(5) and time.sleep(5), native=FakeNative(), deadline=0.2)
     t0 = time.perf_counter()
     assert quick.handle(END, 1) == 0
     assert time.perf_counter() - t0 < 1.5
@@ -425,13 +502,13 @@ def test_session_end_waits_within_the_deadline():
 
 def test_session_hook_registration_and_release():
     native = FakeNative()
-    hook = SessionEnd(lambda: None, native=native)
+    hook = SessionEnd(lambda deadline: None, native=native)
     assert hook.install() is True
     assert hook._callback is native.started and hook._callback(QUERY, 0) == 1   # kept alive while registered
     hook.release()
     hook.release()
     assert native.stopped == 1 and hook._callback is None
-    failing = SessionEnd(lambda: None, native=FakeNative(ok=False))
+    failing = SessionEnd(lambda deadline: None, native=FakeNative(ok=False))
     assert failing.install() is False and failing._callback is None
 
 
@@ -459,6 +536,107 @@ def test_session_end_races_the_gui_teardown(window_cli, monkeypatch):
     assert window_cli.app.tv_fake.actions().count("Stop") == 1 and window_cli.app._closed.is_set()
 
 
+def test_gui_interrupt_racing_quit_stops_once(window_cli, monkeypatch):
+    def interrupted_start(**kwargs):
+        window_cli.app.quit()
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(window_cli.fake, "start", interrupted_start)
+    assert cli.ui(port=window_cli.app.server.port) == 0
+    assert window_cli.stops == ["interrupted"] and window_cli.app._close_done.is_set()
+    assert window_cli.app.tv_fake.actions().count("Stop") == 1
+
+
+def test_tab_interrupt_racing_quit_stops_once(window_cli, monkeypatch):
+    from castlib import app as app_module
+
+    def interrupted_install():
+        window_cli.app.quit()
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(app_module, "end_on_sigterm", interrupted_install)
+    # The fixture normally replaces run_forever so a fallback cannot block.
+    assert app_module.App.run_forever(window_cli.app) == 0
+    assert window_cli.stops == ["interrupted"] and window_cli.app._close_done.is_set()
+    assert window_cli.app.tv_fake.actions().count("Stop") == 1
+
+
+@pytest.mark.parametrize("ordinary_first", [False, True])
+def test_session_deadline_reaches_cleanup_despite_stalled_stop(window_cli, monkeypatch, ordinary_first):
+    """A stalled Stop and source must not starve cancellation, other sources or either server close call."""
+    from castlib import dlna
+
+    app = window_cli.app
+    release = threading.Event()
+    stopping = threading.Event()
+    stop_returned = threading.Event()
+    source_returned = threading.Event()
+    calls = []
+    soap = dlna.soap
+
+    def stalled_soap(avt, service, action, *args, **kwargs):
+        if action != "Stop":
+            return soap(avt, service, action, *args, **kwargs)
+        calls.append("Stop")
+        stopping.set()
+        try:
+            assert release.wait(5)
+        finally:
+            stop_returned.set()
+
+    def first_source():
+        calls.append("first source")
+        try:
+            assert release.wait(5)
+        finally:
+            source_returned.set()
+
+    monkeypatch.setattr(dlna, "soap", stalled_soap)
+    app.sources = {"first": types.SimpleNamespace(close=first_source),
+                   "second": types.SimpleNamespace(close=lambda: calls.append("second source"))}
+    shutdown, server_close = app.server.shutdown, app.server.server_close
+    monkeypatch.setattr(app.server, "shutdown", lambda: calls.append("server shutdown") or shutdown())
+    monkeypatch.setattr(app.server, "server_close", lambda: calls.append("server close") or server_close())
+    hooks = []
+
+    def install(on_end):
+        hook = SessionEnd(on_end, native=FakeNative(), deadline=0.6)
+        hook.install()
+        hooks.append(hook)
+        return hook
+
+    monkeypatch.setattr(platform, "end_on_session_end", install)
+    answered = []
+
+    def sign_out():
+        assert window_cli.fake.on_shown.wait(5)
+        if ordinary_first:
+            app.quit()
+            assert stopping.wait(5)
+        started = time.monotonic()
+        hooks[0].handle(END, 1)
+        hooks[0].handle(END, 1)  # the budget and attempts must not restart
+        answered.append(time.monotonic() - started)
+
+    t = _in_thread(sign_out)
+    try:
+        assert cli.ui(port=app.server.port) == 0
+        t.join(2)
+        assert answered and answered[0] < 1.2
+        assert not release.is_set() and app.current.terminal
+        assert calls.count("Stop") == 1
+        for name in ("first source", "second source", "server shutdown", "server close"):
+            assert calls.count(name) == 1
+        assert window_cli.stops == ["interrupted"] and window_cli.tabs == []
+        assert app._closed.is_set() and window_cli.fake.windows[0].destroys == 1
+    finally:
+        release.set()
+        t.join(5)
+        assert stop_returned.wait(5) and source_returned.wait(5)
+        assert app._shut_down.wait(5)
+        wait_for(lambda: not any(worker.name == "shutdown-action" for worker in threading.enumerate()))
+
+
 @pytest.mark.skipif(sys.platform != "win32", reason="a real hidden window needs user32")
 def test_session_hook_with_a_real_hidden_window():
     import ctypes
@@ -467,7 +645,7 @@ def test_session_hook_with_a_real_hidden_window():
     u32.SendMessageW.restype = ctypes.c_ssize_t
     u32.SendMessageW.argtypes = (wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM)
     ended = []
-    hook = SessionEnd(lambda: ended.append(True), deadline=1)
+    hook = SessionEnd(lambda deadline: ended.append(True), deadline=1)
     assert hook.install() is True
     native = hook._native
     try:

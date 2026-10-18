@@ -25,6 +25,7 @@ import signal
 import sys
 import threading
 import time
+from contextlib import contextmanager
 
 TITLE = "cast-tv"
 SIZE = (1180, 820)
@@ -106,6 +107,26 @@ class _Run:
 _current: _Run | None = None
 
 
+@contextmanager
+def termination_scope():
+    """Retain end requests before installing handlers, through backend loading and GUI teardown.
+
+    The CLI owns the outer scope; direct run() callers get one automatically.
+    Nested scopes share the request and only the outer scope clears it.
+    """
+    global _current
+    owns = _current is None
+    if owns:
+        _current = _Run()
+    try:
+        yield _current
+    finally:
+        if owns:
+            _current.finished = True
+            _current.window = None
+            _current = None
+
+
 def _closer(run: _Run) -> None:
     """Destroy the window once it is shown and someone asked; never before, never twice."""
     while not run.finished:
@@ -127,7 +148,14 @@ def run(app, url: str) -> str:
     the browser tab instead. A ``destroy()`` that came while the window was
     starting wins over a failure to start: the answer is then ``"closed"``.
     """
-    global _current
+    with termination_scope() as current:
+        result = _run(current, url)
+        return "closed" if current.end_requested else result
+
+
+def _run(current: _Run, url: str) -> str:
+    if current.end_requested:
+        return "closed"
     if os.environ.get(FAIL_ENV) == "1":
         return "unavailable: " + FAIL_ENV
     expected = expected_renderer()
@@ -138,7 +166,8 @@ def run(app, url: str) -> str:
     except Exception as e:
         return "unavailable: %s" % _reason(e)
 
-    current = _Run()
+    if current.end_requested:
+        return "closed"
 
     def check(renderer):
         if renderer != expected:
@@ -155,7 +184,6 @@ def run(app, url: str) -> str:
     def restored():
         current.minimized = False
 
-    _current = current
     closer = threading.Thread(target=_closer, args=(current,), name="window-closer", daemon=True)
     interrupt = signal.getsignal(signal.SIGINT)  # both backends install their own; the tab path needs Python's back
     failure = None
@@ -176,7 +204,6 @@ def run(app, url: str) -> str:
         if closer.is_alive():
             closer.join(1)
         current.window = None
-        _current = None
         try:
             signal.signal(signal.SIGINT, interrupt)
         except (ValueError, OSError, TypeError):
@@ -217,7 +244,7 @@ def show() -> bool:
 
 
 def destroy() -> None:
-    """Ask the window to close, from any thread or a signal handler; idempotent, a no-op outside ``run()``.
+    """Ask the window to close; idempotent, a no-op outside its termination scope.
 
     Only a flag is written: the closer destroys the window once it is shown,
     and ``run()`` answers ``"closed"`` even if the window never came up.
