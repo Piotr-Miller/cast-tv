@@ -800,17 +800,17 @@ The Progress Manual rows, run on the Windows laptop and the Fedora desktop, each
 
 #### Automated
 
-- [x] 1.1 Lint passes — a33a8a0
-- [x] 1.2 The window module's tests pass with a fake webview — a33a8a0
-- [x] 1.3 CLI wiring tests pass — a33a8a0
-- [x] 1.4 Host-only routes refuse the LAN — a33a8a0
-- [x] 1.5 The Quit control's logic, through the node driver — a33a8a0
-- [x] 1.6 The full suite passes — a33a8a0
-- [x] 1.7 CI on the PR is green on both OSes — a33a8a0
+- [x] 1.1 Lint passes — 1083431
+- [x] 1.2 The window module's tests pass with a fake webview — 1083431
+- [x] 1.3 CLI wiring tests pass — 1083431
+- [x] 1.4 Host-only routes refuse the LAN — 1083431
+- [x] 1.5 The Quit control's logic, through the node driver — 1083431
+- [x] 1.6 The full suite passes — 1083431
+- [x] 1.7 CI on the PR is green on both OSes — 1083431
 
 #### Manual
 
-- [ ] 1.8 Windows venv with [window]: cast-tv opens a window on the UI
+- [x] 1.8 Windows venv with [window]: cast-tv opens a window on the UI — accepted at d2dd0cac9773909f62f3e10dbc7601369690a337
 - [ ] 1.9 Fedora pipx with [window]: cast-tv opens a Qt window
 - [ ] 1.10 Without the extra: tab as today, with a working Quit control
 - [ ] 1.11 --no-window opens the tab
