@@ -3,7 +3,8 @@
 Dispatch happens before any lookup: ``/m/<token>/<id>`` serves registered
 media (the token is the only credential the TV can carry); ``/api`` and
 ``/ui`` sit behind the Origin/Host check so a web page open in the user's
-browser cannot drive the TV. Every generated response carries an exact
+browser cannot drive the TV; the window and Quit routes answer loopback
+clients only (``from_loopback``). Every generated response carries an exact
 ``Content-Length`` so keep-alive framing stays correct; nothing here calls
 ``send_error``.
 """
@@ -27,6 +28,7 @@ from castlib.media import dlna_headers
 CHUNK = 256 * 1024
 MEDIA_TIMEOUT = 600        # a paused TV may hold a transfer open this long
 MAX_DRAIN = 1 << 20        # request bodies we read and discard before answering
+LOOPBACK = {"127.0.0.1", "::1"}   # the client addresses the host-only routes answer
 
 # The UI is four files served from an exact-match map: no directory listing,
 # no path traversal, nothing else under /ui/ exists.
@@ -143,6 +145,25 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self._json_error(403, "forbidden",
                              "This address may only be used from the cast-tv UI on this network.")
         return ok
+
+    def from_loopback(self):
+        """The request came from this machine's loopback address: only it may drive the window or end cast-tv.
+
+        The client's address, not ``Host``: a phone may name any allowed host,
+        and this machine's own LAN address does not count either.
+        """
+        addr = str((self.client_address or ("",))[0])
+        if addr.startswith("::ffff:"):
+            addr = addr[len("::ffff:"):]
+        return addr in LOOPBACK
+
+    def _check_host_only(self):
+        """``_check_origin`` passed already; refuse anything but loopback with 403 JSON, returning False."""
+        if self.from_loopback():
+            return True
+        self._drain()
+        self._json_error(403, "forbidden_host_only", "Only the computer running cast-tv can do this.")
+        return False
 
     # ------------------------------------------------------------- dispatch
     def do_GET(self):

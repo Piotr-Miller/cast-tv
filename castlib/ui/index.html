@@ -17,6 +17,8 @@
     <span class="badge" x-show="showActive()">Slideshow</span>
   </div>
   <div class="right">
+    <!-- only a tab on the computer running cast-tv: the window ends it by closing, the phone never -->
+    <button class="ghost quit" x-show="canQuit()" x-cloak @click="quitApp()" :disabled="busy.quit" title="Stop the TV and end cast-tv" x-text="busy.quit ? 'Quitting…' : 'Quit cast-tv'"></button>
     <button class="ghost diag" @click="togglePanel()" title="Diagnostics">
       <span class="lbl">Diagnostics</span>
       <span class="count" :class="{zero: !status.errors}" x-text="status.errors || 0"></span>
@@ -63,8 +65,11 @@
 <div class="banner" x-show="busy.discover" x-cloak>
   <div class="text"><span class="dot busy" style="display:inline-block; margin-right: 8px"></span>Looking for a TV…</div>
 </div>
-<div class="banner warn" x-show="offline" x-cloak>
+<div class="banner warn" x-show="offline && !ended" x-cloak>
   <div class="text"><div class="title">cast-tv is not answering</div><div class="small muted">The process may have stopped. Start it again and reload this page.</div></div>
+</div>
+<div class="banner" :class="{warn: !ended}" x-show="quitNote" x-cloak>
+  <div class="text"><div class="title" x-text="quitNote"></div></div>
 </div>
 
 <main>

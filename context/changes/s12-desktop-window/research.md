@@ -566,3 +566,47 @@ QtPy 2.4.3.
 - **Tauri and Electron on Windows.** The kit does not include them.
 - **SmartScreen and Defender on a downloaded, unsigned 12.8 MB or 227 MB exe.** All runs were
   local builds; nothing was downloaded.
+
+## Plan-review triage: verification environment (2026-10-18)
+
+F6 follow-up: the global, pipx and spike interpreters lacked pytest/pyflakes. Created the
+gitignored repository `.venv` with `python -m venv .venv`, then installed the core and test
+extra with `.\.venv\Scripts\python.exe -m pip install -e ".[test]"` (exit 0). No window extra
+was installed and no application source was changed. Commands below ran sequentially from
+`C:\Source\cast-tv` using `.venv\Scripts\python.exe` as `python`, with Node on PATH.
+
+Environment: Windows laptop, Python 3.14.5 (64-bit); pytest 9.1.1, pyflakes 4.0.3,
+Pillow 13.0.0, pillow-heif 1.8.1, ifaddr 0.2.0, platformdirs 4.13.4. CI remains Python 3.12
+on Windows and Linux; this local baseline is not the two-OS CI or native-window acceptance.
+
+| Command | Exit | Observed result |
+| --- | --- | --- |
+| `python -m pyflakes castlib tests` | 0 | No findings |
+| `python -m pyflakes castlib tests packaging` | 0 | No findings |
+| `python -m pytest tests/test_cli.py` | 0 | 25 passed, 2 skipped |
+| `python -m pytest tests/test_api.py` | 0 | 15 passed |
+| `python -m pytest tests/test_ui.py` | 0 | 11 passed |
+| `python -m pytest tests/test_ui.py::test_static_exact_match_only` | 0 | 1 passed |
+| `python -m pytest tests/test_platform.py` | 0 | 25 passed |
+| `python -m pytest tests/test_ui.py tests/test_api.py` | 0 | 26 passed |
+| `python -m pytest` | 0 | 382 passed, 5 skipped in 86.83 s |
+
+All nine commands completed. Eight match their historical planning exit 0; the full suite
+improves from the recorded exit 1 to exit 0, with no reproduction of the earlier OneDrive
+failure. CLI's two skips are explicitly Windows exclusions for child signal delivery and
+POSIX SIGABRT/faulthandler. Baseline tests do not prove tests/features described for later
+S-12 phases; all Progress rows remain pending. Raw local logs and command results are under
+`.venv/s12-review-check-1.log` through `s12-review-check-9.log` and
+`.venv/s12-review-results.json`; this table is the persistent evidence if that venv is removed.
+
+## Phase 1 gate: the flaky OneDrive test (2026-10-18)
+
+Windows laptop, `.venv` (Python 3.14.5, no `[window]` extra), Phase 1 working tree. Rows 1.1-1.5
+exit 0 (`pyflakes castlib tests`; `test_window.py` 25 passed; `test_cli.py` 29 passed, 2 skipped;
+`test_api.py` 19 passed; `test_ui.py` 13 passed). The full suite exited 1 twice, each time with
+only `tests/test_onedrive.py::test_token_file_mode_0600` failing (`wait_for` on the stored
+`account`, 5 s), 419 passed, 5 skipped. The same test alone: 1 of 3 passed on the Phase 1 tree;
+on a clean `git worktree` of `HEAD` (404d0cf, castlib imported from the worktree) 2 of 4 passed.
+It fails as often without this change, and Phase 1 touches no OneDrive code. With that one test
+deselected the full suite is 419 passed, 5 skipped, exit 0. Not fixed here (plan, What We're NOT
+Doing); CI on the PR (row 1.7) is the two-OS gate.

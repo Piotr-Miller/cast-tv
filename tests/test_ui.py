@@ -212,6 +212,44 @@ def test_gphotos_links_stay_usable_after_the_consent_expires():
     assert visible is True and [it["id"] for it in items] == ["link-1"]
 
 
+def _host_status(host, window):
+    return dict(_status({"state": "disconnected", "detail": {"stored": False}}), host=host, window=window)
+
+
+def test_quit_control_only_in_a_host_tab():
+    """Quit shows in a browser tab on the computer running cast-tv; not in the window, not on the phone."""
+    html = _ui_text("index.html")
+    assert 'x-show="canQuit()"' in html and 'quitApp()' in html and 'x-text="quitNote"' in html
+    assert 'x-show="offline && !ended"' in html
+    out = drive_ui([
+        {"status": _host_status(True, False)}, {"call": "refresh"}, {"read": "canQuit"},
+        {"status": _host_status(True, True)}, {"call": "refresh"}, {"read": "canQuit"},
+        {"status": _host_status(False, False)}, {"call": "refresh"}, {"read": "canQuit"},
+    ])
+    assert out["reads"] == [True, False, False]
+
+
+def test_quit_keeps_its_message_across_polls():
+    """Quit's answer is its own state (lessons.md): no poll overwrites it, and none is sent once it ended."""
+    out = drive_ui([
+        {"status": _host_status(True, False)}, {"call": "refresh"},
+        {"answer": {"path": "/api/quit", "body": {"error": {"code": "internal", "message": "cast-tv hit an internal error: x"}}}},
+        {"call": "quitApp"}, {"call": "refresh"},
+        {"read": "quitNote"}, {"read": "ended"}, {"read": "canQuit"},
+        {"answer": {"path": "/api/quit", "body": {"ok": True}}},
+        {"call": "quitApp"},
+        {"read": "quitNote"}, {"read": "ended"}, {"read": "canQuit"},
+        {"call": "refresh"}, {"call": "refresh"},
+        {"read": "quitNote"}, {"read": "offline"},
+    ])
+    failed, failed_ended, still_offered, note, ended, offered, kept, offline = out["reads"]
+    assert failed == "cast-tv hit an internal error: x" and failed_ended is False and still_offered is True
+    assert note == "cast-tv has ended; you can close this tab." and ended is True and offered is False
+    assert kept == note and offline is False
+    assert out["requests"].count("POST /api/quit") == 2
+    assert out["requests"][-1] == "POST /api/quit"         # nothing polled after it ended
+
+
 def open_ui_bytes():
     from castlib.server import UI_DIR
     import os

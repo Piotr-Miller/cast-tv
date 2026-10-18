@@ -23,12 +23,13 @@ hints:
 | Server | `http.server` handlers on a `socketserver.ThreadingTCPServer`, one process and one port (8895) for the TV, the UI and the API |
 | TV control | UPnP/DLNA over SOAP (`AVTransport:1`), SSDP discovery on every interface (`ifaddr`) |
 | UI | one `index.html`, `app.js`, `style.css`; Alpine.js vendored; no build step, nothing from a CDN |
+| Window | the same `/ui/` in a pywebview window (optional `window` extra): WebView2 on Windows, Qt WebEngine (PySide6) on Linux; the phone keeps the browser |
 | Photos | Pillow + pillow-heif: EXIF transpose, HEIC/WebP to JPEG, 4096 px cap |
 | Config paths | `platformdirs` (`~/.config/cast-tv`, `%APPDATA%\cast-tv`) |
 | OneDrive | Microsoft Graph over device code, no SDK; the owner's Entra client id ships in the code |
 | Google Photos | Picker API over the desktop loopback flow with PKCE; the client ships in release builds only |
 | GoPro | `api.gopro.com` with a token pasted from a logged-in browser |
-| Windows specifics | `SetThreadExecutionState` against sleep, a console-close handler, firewall policy detection |
+| Windows specifics | `SetThreadExecutionState` against sleep, a console-close handler, a session-end hook in window mode, firewall policy detection |
 | Tests | pytest + pyflakes, fakes for the TV's SOAP and for Google/Graph/GoPro |
 | Release | PyInstaller onefile, built and smoke-tested by `.github/workflows/release.yml` on a `v*` tag |
 
@@ -48,5 +49,17 @@ seeks from the remote and the laptop stays idle. Photos are the exception - they
 the TV cannot show HEIC or a rotated JPEG as-is.
 
 The release is a PyInstaller onefile because a new PC must work without Python
-(`standalone-install/change.md`); the spike built a 22.5 MB `.exe` in 17 s. The console window
-stays, because Ctrl+C and closing it are how the user stops the TV.
+(`standalone-install/change.md`); the spike built a 22.5 MB `.exe` in 17 s.
+
+Since S-12 (2026-10-18, `s12-desktop-window`) the host shows the UI in an app window, and closing
+it is how the user stops the TV; Ctrl+C in a terminal still works. The release stays one console
+executable: the console is hidden when the program owns it (a double-click, a menu entry) and
+kept when it was started from a terminal, so `cast-tv film.mkv` works from the same download.
+Windows uses WebView2, which ships with Windows 11 (a 12.8 MB onefile in the spike). Linux uses
+Qt WebEngine because it is the one candidate the PyInstaller onefile can carry that rendered on
+all five tested distributions and both real desktops - once the bundle leaves out its own
+`libgbm` and `libstdc++` - at about 230 MB. A onefile cannot carry WebKitGTK, and Chromium
+`--app` has no default browser to use on Linux; Tauri and Electron were not chosen (owner,
+2026-10-18; `s12-desktop-window/research.md` and `plan.md`). pywebview falls
+back to another engine quietly, so cast-tv checks that the expected one loaded and otherwise
+opens the browser tab.

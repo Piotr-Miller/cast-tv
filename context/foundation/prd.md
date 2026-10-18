@@ -57,7 +57,8 @@ or create cloud projects.
 ### Secondary
 
 - **A new PC works after one download** (Windows `.exe`, Linux binary), nothing else installed
-  or copied (`standalone-install`).
+  or copied (`standalone-install`); started by double-click it opens one cast-tv window
+  (S-12, `s12-desktop-window`).
 - **The command line still works**: `cast-tv film.mkv` finds the TV and plays, as it did before
   the UI.
 
@@ -67,7 +68,8 @@ or create cloud projects.
   `Host` is this machine and whose `Origin` matches; media URLs carry a per-process token.
 - **No secret in the public repository**: tokens live in the per-user config dir (0600 on
   Linux); the Google client secret enters only release builds.
-- **Nothing stays on screen or on disk by accident**: Ctrl+C or closing the window stops the TV;
+- **Nothing stays on screen or on disk by accident**: Ctrl+C or closing the window stops the TV -
+  the cast-tv app window since S-12 (2026-10-18), the console when cast-tv runs without one;
   converted photos and downloaded videos are per-process and removed at exit.
 - **Linux and Windows both**: nothing that works on Fedora may break for Windows, and back.
 
@@ -151,10 +153,13 @@ or create cloud projects.
 
 ## Non-Functional Requirements
 
-- **Platforms:** Fedora (current) and Windows 11; the Linux binary targets glibc 2.35+.
+- **Platforms:** the Linux family (Fedora, Ubuntu 24.04, Debian 13, Arch and openSUSE tested,
+  2026-10-16) and Windows 11; the Linux binary targets glibc 2.35+. macOS stays a Non-Goal
+  (owner, 2026-10-18).
 - **No transcoding, no TV app**; the process stays in the foreground while it streams.
 - **Dependencies:** standard library plus pillow, pillow-heif, ifaddr, platformdirs; no web
-  framework, no frontend build step.
+  framework, no frontend build step. The optional `window` extra (pywebview, with PySide6 on
+  Linux) draws the cast-tv window; the release always carries it (S-12, 2026-10-18).
 - **Latency:** a 20-megapixel HEIC reaches the TV in about 6 s from the click (README).
 - **Language:** repository, code, docs and UI in English.
 
@@ -172,7 +177,8 @@ or create cloud projects.
 - No Google OAuth verification for now (no domain; decision 2026-09-19).
 - No GoPro-sanctioned client: no publicly documented, self-serve sign-in for third-party
   applications was found (checked 2026-09-20); the connection is the person's own browser session.
-- No code signing, installers, auto-update or macOS for now.
+- No code signing, installers, auto-update or macOS for now. A menu entry the app writes itself,
+  on request from its window, is not an installer (S-12, 2026-10-18).
 - No background service; no persistence of Google picks across restarts.
 
 ## Open Questions

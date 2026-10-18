@@ -9,6 +9,7 @@ from castlib import discovery, platform
 from castlib.platform import ConsoleClose, ExecutionState, StayAwake, SystemdInhibit
 from castlib.platform import default_backend as real_default_backend   # bound before conftest swaps it
 from castlib.platform import end_on_console_close as real_end_on_console_close   # likewise
+from castlib.platform import end_on_session_end as real_end_on_session_end       # likewise
 
 
 # ------------------------------------------------------------- discovery
@@ -239,6 +240,52 @@ def test_console_close_registers_a_callback_that_outlives_install():
     (cb, add), = registered
     assert add is True and cb is handler._callback  # held, or ctypes would free it
     assert cb(2) and not cb(0)
+
+
+def test_console_close_in_window_mode_calls_on_end(monkeypatch):
+    """The main thread sits in the GUI loop: the handler destroys the window instead of interrupting it."""
+    calls = []
+    handler = ConsoleClose(interrupt=lambda: calls.append("interrupt"),
+                           sleep=lambda s: calls.append(("sleep", s)), on_end=lambda: calls.append("on_end"))
+    assert handler.handle(2) is True
+    assert calls == ["on_end", ("sleep", ConsoleClose.GRACE)]
+    assert handler.handle(0) is False and len(calls) == 2
+    plain = ConsoleClose(interrupt=lambda: calls.append("interrupt"), sleep=lambda s: None)
+    monkeypatch.setattr(platform, "_console_close", plain)
+    platform.console_close_ends(lambda: calls.append("destroy"))
+    plain.handle(6)
+    platform.console_close_ends(None)                 # the window is gone: Ctrl+C's way again
+    plain.handle(6)
+    assert calls[-2:] == ["destroy", "interrupt"]
+    monkeypatch.setattr(platform, "_console_close", None)
+    platform.console_close_ends(lambda: None)        # not installed (Linux): nothing to set
+
+
+def test_sigterm_on_end_variant():
+    import signal
+    from castlib.app import end_on_sigterm
+    before = signal.getsignal(signal.SIGTERM)
+    ended = []
+    try:
+        end_on_sigterm(on_end=lambda: ended.append(True))
+        signal.getsignal(signal.SIGTERM)(signal.SIGTERM, None)   # no KeyboardInterrupt: the GUI loop would lose it
+        assert ended == [True]
+        end_on_sigterm()
+        with pytest.raises(KeyboardInterrupt):
+            signal.getsignal(signal.SIGTERM)(signal.SIGTERM, None)
+    finally:
+        signal.signal(signal.SIGTERM, before)
+
+
+def test_end_on_session_end_only_on_windows(monkeypatch):
+    class Fake(platform.SessionEnd):
+        def install(self):
+            return True
+    monkeypatch.setattr(platform, "SessionEnd", Fake)
+    monkeypatch.setattr(platform, "sys", types.SimpleNamespace(platform="linux"))
+    assert real_end_on_session_end(lambda: None) is None
+    monkeypatch.setattr(platform, "sys", types.SimpleNamespace(platform="win32"))
+    assert isinstance(real_end_on_session_end(lambda: None), Fake)
 
 
 def test_end_on_console_close_only_on_windows_and_once(monkeypatch):

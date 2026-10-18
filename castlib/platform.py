@@ -1,4 +1,4 @@
-"""What differs per operating system: firewall advice, staying awake, a closed console.
+"""What differs per operating system: firewall advice, staying awake, a closed console, the session's end.
 
 ``StayAwake`` is counted: the supervisor holds it once per promoted cast and
 once per running show, and the machine is kept awake while the count is above
@@ -7,7 +7,9 @@ zero. The backend is ``systemd-inhibit`` on Linux and
 fails, staying awake is best effort and never stops a cast.
 
 ``end_on_console_close`` makes closing the console window on Windows end
-cast-tv the way Ctrl+C does, instead of the process simply being ended.
+cast-tv the way Ctrl+C does, instead of the process simply being ended;
+``end_on_session_end`` does the same for logging off and shutting down while
+the cast-tv window is open.
 
 ``use_system_ca_bundle`` points the Linux release binary at this machine's
 CA certificates: it carries the OpenSSL of the distribution it was built on,
@@ -23,6 +25,7 @@ import subprocess
 import sys
 import threading
 import time
+from types import SimpleNamespace
 
 
 def firewall_hint(port: int) -> str:
@@ -305,22 +308,30 @@ class ConsoleClose:
     which ends the process with the handler still waiting. Measured behind the
     pipx launcher and the venv's ``python.exe``: both let the Python process
     run out its handler before they go.
+
+    In window mode the main thread sits in the GUI loop, where an interrupt
+    would only break ``webview.start()`` and leave the window up: ``on_end``
+    (the window's ``destroy``) is called instead, and the main thread stops
+    the TV once the GUI loop returns. WinForms loads user32, after which
+    Windows no longer sends the logoff and shutdown events here; ``SessionEnd``
+    takes those over.
     """
 
     CLOSE_EVENTS = (2, 5, 6)        # CTRL_CLOSE_EVENT, CTRL_LOGOFF_EVENT, CTRL_SHUTDOWN_EVENT
     GRACE = 4.5                     # seconds; Windows ends the process at about 5
 
-    def __init__(self, kernel32=None, interrupt=_thread.interrupt_main, sleep=time.sleep):
+    def __init__(self, kernel32=None, interrupt=_thread.interrupt_main, sleep=time.sleep, on_end=None):
         self._kernel32 = kernel32
         self._interrupt = interrupt
         self._sleep = sleep
+        self.on_end = on_end        # None: interrupt the main thread, as Ctrl+C would
         self._callback = None       # the ctypes callback must outlive the registration
 
     def handle(self, event: int) -> bool:
         """True when the event is ours; Ctrl+C and Ctrl+Break go on to Python's own handler."""
         if event not in self.CLOSE_EVENTS:
             return False
-        self._interrupt()
+        (self.on_end or self._interrupt)()
         self._sleep(self.GRACE)
         return True
 
@@ -352,6 +363,223 @@ def end_on_console_close() -> bool:
         return False
     _console_close = handler
     return True
+
+
+def console_close_ends(on_end) -> None:
+    """What a closed console does from now on: ``on_end()``, or Ctrl+C's interrupt again for None."""
+    if _console_close is not None:
+        _console_close.on_end = on_end
+
+
+class SessionEnd:
+    """Windows, window mode: logging off or shutting down ends cast-tv like closing its window.
+
+    Once WinForms has loaded user32, ``SetConsoleCtrlHandler`` no longer
+    receives ``CTRL_LOGOFF_EVENT`` or ``CTRL_SHUTDOWN_EVENT``; Windows sends
+    ``WM_QUERYENDSESSION`` and ``WM_ENDSESSION`` to every top-level window
+    instead (https://learn.microsoft.com/en-us/windows/console/registering-a-control-handler-function).
+    The native side owns a hidden top-level window - a message-only one gets
+    no broadcast - and its message loop, on a thread of its own.
+
+    The query is answered yes and nothing is cleaned up yet: the session end
+    may still be cancelled. ``WM_ENDSESSION`` with a true ``wParam`` runs
+    ``on_end`` on a worker, once, and waits for it at most ``deadline`` seconds
+    counted from the first such message: Windows ends the process soon after
+    the message is answered, and a TV that does not answer must not hold up
+    the sign-out. A false ``wParam`` means the end was cancelled; cast-tv goes on.
+    """
+
+    WM_QUERYENDSESSION = 0x0011
+    WM_ENDSESSION = 0x0016
+    DEADLINE = 4.0                  # seconds, Stop and cleanup included; under the ~5 s Windows allows
+
+    def __init__(self, on_end, native=None, deadline=DEADLINE, clock=time.monotonic,
+                 wait=lambda event, timeout: event.wait(timeout)):
+        self._on_end = on_end
+        self._native = native
+        self.deadline = deadline
+        self._clock = clock
+        self._wait = wait
+        self._lock = threading.Lock()
+        self._done: threading.Event | None = None
+        self._started_at = 0.0
+        self._callback = None       # the window procedure must outlive the registration
+
+    def handle(self, msg: int, wparam: int) -> int | None:
+        """The window procedure's answer to ``msg``, or None for ``DefWindowProcW``."""
+        if msg == self.WM_QUERYENDSESSION:
+            return 1
+        if msg == self.WM_ENDSESSION:
+            if wparam:
+                self.end()
+            return 0
+        return None
+
+    def end(self) -> bool:
+        """Run ``on_end`` once and wait for it within the deadline; True when it finished in time."""
+        with self._lock:
+            if self._done is None:
+                self._done = threading.Event()
+                self._started_at = self._clock()
+                threading.Thread(target=self._run, args=(self._done,), name="session-end",
+                                 daemon=True).start()
+            done, started = self._done, self._started_at
+        left = self.deadline - (self._clock() - started)
+        if left <= 0:
+            return done.is_set()
+        return bool(self._wait(done, left))
+
+    def _run(self, done: threading.Event) -> None:
+        try:
+            self._on_end()
+        except Exception:
+            pass
+        finally:
+            done.set()
+
+    def install(self) -> bool:
+        native = self._native
+        if native is None:
+            native = self._native = Win32SessionWindow()
+        self._callback = native.window_procedure(self.handle)
+        if native.start(self._callback):
+            return True
+        self._callback = None
+        return False
+
+    def release(self) -> None:
+        if self._native is not None and self._callback is not None:
+            try:
+                self._native.stop()
+            finally:
+                self._callback = None
+
+
+class Win32SessionWindow:
+    """``SessionEnd``'s native side: a hidden top-level window and its message loop, through ctypes."""
+
+    WM_DESTROY = 0x0002
+    WM_CLOSE = 0x0010
+
+    def __init__(self):
+        self._hwnd = None
+        self._thread: threading.Thread | None = None
+        self._ready = threading.Event()
+        self._api = None
+
+    def _user32(self):
+        if self._api is not None:
+            return self._api
+        import ctypes
+        from ctypes import wintypes
+        lresult = ctypes.c_ssize_t
+        wndproc = ctypes.WINFUNCTYPE(lresult, wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM)
+
+        class WNDCLASSEXW(ctypes.Structure):
+            _fields_ = [("cbSize", wintypes.UINT), ("style", wintypes.UINT), ("lpfnWndProc", wndproc),
+                        ("cbClsExtra", ctypes.c_int), ("cbWndExtra", ctypes.c_int),
+                        ("hInstance", wintypes.HINSTANCE), ("hIcon", wintypes.HICON),
+                        ("hCursor", wintypes.HANDLE), ("hbrBackground", wintypes.HBRUSH),
+                        ("lpszMenuName", wintypes.LPCWSTR), ("lpszClassName", wintypes.LPCWSTR),
+                        ("hIconSm", wintypes.HICON)]
+
+        u32 = ctypes.WinDLL("user32", use_last_error=True)
+        k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        k32.GetModuleHandleW.restype = wintypes.HMODULE
+        k32.GetModuleHandleW.argtypes = (wintypes.LPCWSTR,)
+        u32.DefWindowProcW.restype = lresult
+        u32.DefWindowProcW.argtypes = (wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM)
+        u32.RegisterClassExW.restype = wintypes.ATOM
+        u32.RegisterClassExW.argtypes = (ctypes.POINTER(WNDCLASSEXW),)
+        u32.UnregisterClassW.argtypes = (wintypes.LPCWSTR, wintypes.HINSTANCE)
+        u32.CreateWindowExW.restype = wintypes.HWND
+        u32.CreateWindowExW.argtypes = (wintypes.DWORD, wintypes.LPCWSTR, wintypes.LPCWSTR, wintypes.DWORD,
+                                        ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int,
+                                        wintypes.HWND, wintypes.HMENU, wintypes.HINSTANCE, wintypes.LPVOID)
+        u32.GetMessageW.restype = wintypes.BOOL
+        u32.GetMessageW.argtypes = (ctypes.POINTER(wintypes.MSG), wintypes.HWND, wintypes.UINT, wintypes.UINT)
+        u32.TranslateMessage.argtypes = (ctypes.POINTER(wintypes.MSG),)
+        u32.DispatchMessageW.restype = lresult
+        u32.DispatchMessageW.argtypes = (ctypes.POINTER(wintypes.MSG),)
+        u32.PostMessageW.restype = wintypes.BOOL
+        u32.PostMessageW.argtypes = (wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM)
+        u32.PostQuitMessage.argtypes = (ctypes.c_int,)
+        self._api = SimpleNamespace(ctypes=ctypes, wintypes=wintypes, u32=u32, k32=k32,
+                                    WNDPROC=wndproc, WNDCLASSEXW=WNDCLASSEXW)
+        return self._api
+
+    def window_procedure(self, handle):
+        """A ctypes ``WNDPROC`` that asks ``handle(msg, wparam)`` and lets ``DefWindowProcW`` answer the rest."""
+        api = self._user32()
+
+        def procedure(hwnd, msg, wparam, lparam):
+            if msg == self.WM_DESTROY:
+                api.u32.PostQuitMessage(0)
+                return 0
+            try:
+                answer = handle(msg, wparam)
+            except Exception:
+                answer = None
+            if answer is None:
+                return api.u32.DefWindowProcW(hwnd, msg, wparam, lparam)
+            return answer
+
+        return api.WNDPROC(procedure)
+
+    def start(self, procedure) -> bool:
+        """Create the window and run its loop on a thread of its own; False when the window could not be made."""
+        self._thread = threading.Thread(target=self._loop, args=(procedure,), name="session-end-window",
+                                        daemon=True)
+        self._thread.start()
+        self._ready.wait(5)
+        return self._hwnd is not None
+
+    def _loop(self, procedure) -> None:
+        api = self._user32()
+        name = "cast-tv-session-%d" % os.getpid()
+        instance = api.k32.GetModuleHandleW(None)
+        try:
+            wc = api.WNDCLASSEXW()
+            wc.cbSize = api.ctypes.sizeof(api.WNDCLASSEXW)
+            wc.lpfnWndProc = procedure
+            wc.hInstance = instance
+            wc.lpszClassName = name
+            if not api.u32.RegisterClassExW(api.ctypes.byref(wc)):
+                return
+            # no WS_VISIBLE: never shown, but top-level, so the session messages reach it
+            self._hwnd = api.u32.CreateWindowExW(0, name, "cast-tv", 0, 0, 0, 0, 0,
+                                                 None, None, instance, None) or None
+            if self._hwnd is None:
+                api.u32.UnregisterClassW(name, instance)
+                return
+        finally:
+            self._ready.set()
+        msg = api.wintypes.MSG()
+        while api.u32.GetMessageW(api.ctypes.byref(msg), None, 0, 0) > 0:
+            api.u32.TranslateMessage(api.ctypes.byref(msg))
+            api.u32.DispatchMessageW(api.ctypes.byref(msg))
+        api.u32.UnregisterClassW(name, instance)
+
+    def stop(self) -> None:
+        hwnd, thread = self._hwnd, self._thread
+        self._hwnd = None
+        if hwnd is not None:
+            self._user32().u32.PostMessageW(hwnd, self.WM_CLOSE, 0, 0)   # DefWindowProc destroys; WM_DESTROY quits the loop
+        if thread is not None:
+            thread.join(2)
+
+
+def end_on_session_end(on_end) -> SessionEnd | None:
+    """Windows: install ``SessionEnd`` for the window's lifetime; the caller releases it. None elsewhere."""
+    if sys.platform != "win32":
+        return None
+    hook = SessionEnd(on_end)
+    try:
+        if hook.install():
+            return hook
+    except Exception:
+        pass
+    return None
 
 
 # Where Linux distributions keep the CA bundle. Debian, Ubuntu and Arch come first; Fedora 44

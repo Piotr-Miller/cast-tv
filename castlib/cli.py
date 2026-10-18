@@ -1,6 +1,7 @@
 """The three commands, on top of ``App`` and the cast supervisor.
 
-``cast-tv`` with no arguments starts the long-lived server and opens the UI;
+``cast-tv`` with no arguments starts the long-lived server and opens the UI,
+in the cast-tv window when the ``window`` extra is installed, else in a tab;
 ``cast-tv film.mkv`` casts one file and follows it as the one-shot script
 did; ``cast-tv a.jpg b.heic c.mp4`` runs a slideshow through the same
 engine the UI uses. ``cast-gopro`` and ``cast-photos`` resolve in process and
@@ -10,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import http.cookiejar
+import json
 import os
 import sys
 import urllib.parse
@@ -17,9 +19,9 @@ import urllib.request
 import webbrowser
 
 import castlib
-from castlib import net, platform
+from castlib import net, platform, window
 from castlib.auth import browser, loopback
-from castlib.app import AlreadyRunning, App, main_wait
+from castlib.app import ENDS_HINT, AlreadyRunning, App, end_on_sigterm, main_wait
 from castlib.diagnostics import check_codecs
 from castlib.discovery import control_urls, discover
 from castlib.dlna import AVT, soap
@@ -261,13 +263,28 @@ def show(sources, interval=None, tv=None, port=DEFAULT_PORT, debug=False):
         app.close()
 
 
-def ui(port=DEFAULT_PORT, tv=None, debug=False, browser=True):
-    """The long-lived server with the UI; returns when Ctrl+C ends it."""
+WINDOW_ENDS = "Close the window or press Ctrl+C to end it (playback stops on the TV too)"
+
+
+def ui(port=DEFAULT_PORT, tv=None, debug=False, browser=True, windowed=True):
+    """The long-lived server with the UI; returns when the window closes or Ctrl+C ends it.
+
+    The UI opens in the cast-tv window when the ``window`` extra is installed
+    and the expected engine loads, else in a browser tab, as before the
+    window existed. ``windowed=False`` (``--no-window``) always takes the tab;
+    ``browser=False`` (``--no-browser``) opens neither, nor the Google consent.
+    """
+    ask_window = windowed and browser      # a second launch asks even without the extra: the first may have a window
+    windowed = ask_window and window.installed()
     try:
-        app = App.start(port, tv=tv, debug=debug, browser=browser)
+        app = App.start(port, tv=tv, debug=debug, browser=browser, open_ui=browser and not windowed,
+                        ends=WINDOW_ENDS if windowed else ENDS_HINT)
     except AlreadyRunning as e:
         print("cast-tv is already running: %s" % e.url)
         if browser:
+            if ask_window and _bring_forward(port):
+                print("Its window is in front.")
+                return 0
             try:
                 webbrowser.open(e.url)
             except Exception:
@@ -279,11 +296,57 @@ def ui(port=DEFAULT_PORT, tv=None, debug=False, browser=True):
     except KeyboardInterrupt:              # Ctrl+C while starting: start() already stopped and closed it,
         return 0                           # or closed only its socket before serve() returned
     try:
+        if windowed and _in_window(app) == "closed":
+            return 0
         return app.run_forever()
     except KeyboardInterrupt:              # Ctrl+C in the instant before run_forever took over
         app.interrupted()
         app.close()
         return 0
+
+
+def _in_window(app):
+    """Run the UI in the cast-tv window; ``"closed"`` once it closed and the app stopped, else the browser tab is open.
+
+    Every other end destroys the window and lets this return stop the TV: a
+    kill, a closed console, the UI's Quit and, on Windows, a sign-out or
+    shutdown (``SessionEnd``, with its own bounded wait). When no window can
+    open, the reason goes to Diagnostics and the console, and the tab opens.
+    """
+    def session_end():
+        window.destroy()
+        app.shutdown()
+
+    end_on_sigterm(on_end=window.destroy)
+    platform.console_close_ends(window.destroy)
+    session = platform.end_on_session_end(session_end)
+    try:
+        result = window.run(app, "http://127.0.0.1:%d/ui/" % app.server.port)   # not localhost: it may be ::1 first
+    finally:
+        if session is not None:
+            session.release()
+        platform.console_close_ends(None)
+        end_on_sigterm()
+    if result == "closed":
+        app.shutdown()
+        return result
+    reason = result.split(": ", 1)[-1]
+    app.errors.push(CastError("window_unavailable", "No cast-tv window: %s." % reason,
+                              hint="The UI opened in the browser instead; Ctrl+C here ends cast-tv."))
+    print("  No cast-tv window (%s); the UI opens in the browser. %s" % (reason, ENDS_HINT), flush=True)
+    app.open_tab()
+    return result
+
+
+def _bring_forward(port):
+    """Ask the cast-tv already on ``port`` to bring its window to the front; False when it has none."""
+    req = urllib.request.Request("http://127.0.0.1:%d/api/window" % port, data=b"{}", method="POST",
+                                 headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=3) as r:
+            return json.loads(r.read(4096).decode("utf-8", "replace")).get("window") is True
+    except Exception:
+        return False
 
 
 def version_text() -> str:
@@ -340,7 +403,9 @@ def main_tv(argv=None):
     ap.add_argument("--list", dest="list_devices", action="store_true",
                     help="list discovered renderers")
     ap.add_argument("--no-browser", action="store_true",
-                    help="do not open the UI in a browser")
+                    help="open neither the cast-tv window nor a browser tab")
+    ap.add_argument("--no-window", action="store_true",
+                    help="open the UI in a browser tab, not in the cast-tv window")
     ap.add_argument("-c", "--cookies", metavar="FILE",
                     help="Netscape cookie jar, for material behind a login")
     ap.add_argument("--version", action="store_true",
@@ -373,7 +438,8 @@ def main_tv(argv=None):
     if sources == ["ui"] and not os.path.exists("ui"):
         sources = []                      # python -m castlib ui, from a checkout
     if not sources:
-        return ui(port=args.port, tv=args.tv, debug=args.debug, browser=not args.no_browser)
+        return ui(port=args.port, tv=args.tv, debug=args.debug, browser=not args.no_browser,
+                  windowed=not args.no_window)
     if len(sources) > 1 or args.show:
         if args.subs:
             ap.error("subtitles go with a single file, not a slideshow")
