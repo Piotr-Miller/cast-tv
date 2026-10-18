@@ -1,20 +1,23 @@
-# Next steps (2026-10-18, S-12 Phase 1 manual rows)
+# Next steps (2026-10-18, S-12 after Phase 1)
 
 The standing note for a pause in the work (a reboot, a switch of machine): it stays in the
 repository and is overwritten at the next pause.
 
-## S-12: where it stands
+## Where it stands
 
-- Phase 1 ("The window owns the session") is on `main` (1083431, PR #61; bookkeeping PR #62).
-- Manual rows confirmed on the Windows laptop at `main` ffa982c: 1.8, 1.11, 1.13, 1.15, 1.16, and
-  the Windows part of 1.14 (Ctrl+C, sign-out). Observations in
+- S-12 Phase 1 ("The window owns the session") is on `main` (1083431, PR #61; bookkeeping #62).
+- Phase 1 manual rows confirmed on the Windows laptop at `main` ffa982c (PR #64): 1.8, 1.11, 1.13,
+  1.15, 1.16, and the Windows part of 1.14 (Ctrl+C, sign-out). Observations in
   `context/changes/s12-desktop-window/research.md`.
-- Left, all on Fedora: 1.9, 1.10, 1.12 and the `kill` part of 1.14.
+- Left for Phase 1, all on Fedora: 1.9, 1.10, 1.12 and the `kill` part of 1.14.
+- Most work stays on the Windows 11 laptop; Fedora is visited for the Linux-only manual rows,
+  best once per phase.
 
-## S-12: next steps
+## Now
 
-1. **You:** merge the pull request that records these rows (Rebase and merge).
-2. **You, on the Fedora desktop**, in a terminal, in the cast-tv checkout:
+1. **Windows 11, a new Claude Code session:** `/rune-impl-review s12-desktop-window phase 1`. If it
+   finds problems, Claude fixes them in a separate PR and you merge it.
+2. **Fedora, Phase 1 manual rows.** In a terminal, in the cast-tv checkout:
    ```bash
    git switch main && git pull
    ```
@@ -46,21 +49,75 @@ repository and is overwritten at the next pause.
      Expected: a browser tab instead of a window; the terminal prints
      "No cast-tv window (unavailable: CAST_TV_WINDOW_FAIL); the UI opens in the browser…";
      **Diagnostics** (top right of the tab) shows `window_unavailable`.
-3. Tell Claude what you saw for each row, also when it differed. Claude writes the observation
-   into `research.md`, runs `--check-recordable` and only then ticks the row. Do not merge
-   anything into `main` while the rows are being confirmed: they are recorded at the `main` SHA.
-4. Then `/rune-impl-review s12-desktop-window phase 1` (a separate session), and
-   `/rune-implement s12-desktop-window phase 2`.
+   - Tell Claude (in a session on Fedora) what you saw for each row, also when it differed.
+     Claude writes the observation into `research.md`, runs `--check-recordable`, ticks the row and
+     opens a PR; you merge it. Do not merge anything into `main` while rows are being confirmed:
+     they are recorded at the `main` SHA.
+3. **Windows 11, 2026-10-19 before about 22:55:** S-13 rows 5.12 and 5.11 (see "S-13" below).
+
+Steps 1 and 2 do not depend on each other; do them in either order.
+
+## Phase 2: the release carries the window
+
+4. **Windows 11:** `/rune-implement s12-desktop-window phase 2`. Claude writes the code; the PR's
+   CI builds the exe and the Linux binary; Claude opens the PR.
+5. **Windows 11, row 2.6:** the PR run's `cast-tv-windows-x64.exe`, downloaded into
+   `Downloads\s12-phase2` and started from PowerShell, opens the window; `--version` shows
+   `Window: edgechromium`. Record the file size and the time from Enter to a rendered UI.
+6. **Fedora:**
+   - **2.7:** the PR run's `cast-tv-linux-x64`, after `chmod +x`, opens a Qt window with the GPU
+     on; `--version` shows `Window: qtwebengine`. Record the size and the start time.
+   - **2.8:** a HEIC photo cast through the window shows upright on the TV.
+   - **2.9:** on the Ubuntu 24.04 VM from the spike, if it still exists, the binary opens its
+     window; otherwise record that it was not run, and why.
+7. **You:** merge the Phase 2 PR.
+
+Claude gives the exact commands for these rows when the PR's files exist.
+
+## Phase 3: the console's information moves into the window, and the console hides
+
+8. **Windows 11:** `/rune-implement s12-desktop-window phase 3`, then its PR.
+9. **Windows 11:**
+   - **3.6:** the "Open on your phone" panel lists the Wi-Fi address first; its QR code opens the
+     UI on the phone.
+   - **3.7:** the phone shows no phone panel and no Quit control.
+   - **3.8:** with Wi-Fi off, the panel says there is no network address.
+   - **3.10:** double-clicking the exe in Explorer shows only the window; closing it stops the TV.
+   - **3.11:** from PowerShell the exe prints the addresses and opens the window; Ctrl+C stops the
+     TV and closes the window.
+   - **3.12:** a forced fallback with a hidden console shows the console again next to the tab.
+10. **Fedora, row 3.9:** the same panel and QR codes work in the Qt window.
+11. **You:** merge the Phase 3 PR.
+
+## Phase 4: icon and menu entry
+
+12. **Windows 11:** `/rune-implement s12-desktop-window phase 4`, then its PR.
+13. **Windows 11:**
+    - **4.5:** the icon on the exe, the window and the taskbar button.
+    - **4.8:** "Add to Start menu" puts a shortcut in Start that starts with no console; pinning to
+      the taskbar works.
+    - **4.9:** after moving the exe to another folder, "Update menu entry" repoints the shortcut.
+    - **4.10:** "Remove from menu" removes the entry.
+14. **Fedora:**
+    - **4.6:** the window's dash and taskbar entry show the cast-tv icon.
+    - **4.7:** "Add to menu" puts an entry in the GNOME overview that starts with no terminal;
+      repeat for a pipx install and a checkout launch.
+    - **4.10:** "Remove from menu" removes the entry.
+15. **You:** merge the Phase 4 PR.
+
+## Closing S-12
+
+16. **Windows 11:** review Phases 2-4 (`/rune-impl-review`) and fix what it finds.
+17. **You:** decide on the release tag (e.g. `v0.5.0`); the release workflow builds and publishes
+    the files on GitHub Releases.
+18. **Windows 11:** `/rune-archive s12-desktop-window`; S-12 becomes `done` in the roadmap.
 
 ## To decide, no hurry
 
 - **Fedora:** whether to delete the VM disk in `~/.cache/cast-tv-s12-spike` (7.1 GB, VM stopped)
-  and the 20 podman images `localhost/spike-*`.
+  and the 20 podman images `localhost/spike-*`. Not before row 2.9: it may need that VM.
 - **Windows:** whether to delete `.venv-spike`, `build` and `dist` in
   `C:\Source\cast-tv\context\changes\s12-desktop-window\spike-kit` (gitignored, 1.2 GB).
-- Whether to delete `C:\Source\cast-tv\temp_steps-2026-10-13.md` (an old untracked note).
-- The local and remote branch `s12-desktop-window` still point at the merged df4900f; it is reset
-  to `main` before Phase 2.
 
 ## S-13: rows 5.11 and 5.12, when GoPro first rejects the session (Windows)
 
