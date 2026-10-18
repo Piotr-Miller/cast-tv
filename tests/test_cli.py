@@ -410,6 +410,93 @@ def test_failed_bind_leaves_sigterm_alone(app, start_env, upstream):
     assert signal.getsignal(signal.SIGTERM) is before
 
 
+def test_no_window_extra_keeps_tab(start_env, monkeypatch, capsys):
+    """pipx without ``[window]``: the tab and the console, as before S-12."""
+    from castlib import window
+    monkeypatch.setitem(sys.modules, "webview", None)
+    assert not window.installed()
+    opened, served = [], []
+    monkeypatch.setattr(start_env.webbrowser, "open", opened.append)
+    monkeypatch.setattr(start_env.App, "run_forever", lambda self: served.append(self) or 0)
+    port = _free_port()
+    assert cli.ui(port=port) == 0
+    (app,) = served
+    app.close()
+    assert opened == ["http://localhost:%d/ui/" % port]
+    assert "Ctrl+C ends it (playback stops on the TV too)" in capsys.readouterr().out
+
+
+def test_second_launch_asks_for_the_window(app, start_env, monkeypatch, capsys):
+    """The running cast-tv brings its window forward and the new launch exits; with no window, a tab."""
+    from castlib import window
+    opened = []
+    monkeypatch.setattr(cli.webbrowser, "open", opened.append)
+    port = app.server.port
+    assert cli.ui(port=port) == 0                          # the running one has no window: POST answers false
+    assert opened == ["http://127.0.0.1:%d/ui/" % port]
+    monkeypatch.setattr(window, "show", lambda: True)
+    opened.clear()
+    assert cli.ui(port=port) == 0
+    assert opened == []
+    assert "Its window is in front." in capsys.readouterr().out
+    assert cli.ui(port=port, windowed=False) == 0          # --no-window: the tab, without asking
+    assert opened == ["http://127.0.0.1:%d/ui/" % port]
+    opened.clear()
+    assert cli.ui(port=port, browser=False) == 0           # --no-browser: neither
+    assert opened == []
+
+
+@pytest.fixture
+def consent_env(start_env, monkeypatch, tmp_path):
+    """A Google client file and recorders for the UI tab and for the consent browser."""
+    import json
+    from castlib.auth import loopback
+    client = tmp_path / "client.json"
+    client.write_text(json.dumps({"installed": {"client_id": "client-test", "client_secret": "secret-test",
+                                                "redirect_uris": ["http://localhost"]}}), encoding="utf-8")
+    monkeypatch.setenv("GOOGLE_CLIENT_JSON", str(client))
+    tabs, consents = [], []
+    monkeypatch.setattr(start_env.webbrowser, "open", tabs.append)
+    monkeypatch.setattr(loopback, "open_browser", lambda url: consents.append(url) or True)
+    return start_env, tabs, consents
+
+
+def test_ui_tab_and_consent_browser_are_separate(consent_env):
+    """The window turns the UI tab off but keeps Google's consent; --no-browser turns off both."""
+    import io
+    start_env, tabs, consents = consent_env
+    cases = (({"browser": True, "open_ui": False}, False, True),      # window mode
+             ({"browser": False, "open_ui": False}, False, False),    # --no-browser
+             ({"browser": True}, True, True),                         # callers without open_ui: as before
+             ({"browser": False}, False, False))
+    for kw, tab, consent in cases:
+        app = start_env.App.start(_free_port(), out=io.StringIO(), **kw)
+        try:
+            d = app.sources["gphotos"].connect({})
+            assert d["step"] == "consent", kw
+        finally:
+            app.close()
+        assert bool(tabs) is tab and bool(consents) is consent, kw
+        tabs.clear()
+        consents.clear()
+
+
+def test_ui_passes_the_window_policy_to_start(monkeypatch):
+    """Normal window mode keeps the consent browser; explicit --no-browser opens neither UI nor consent."""
+    from castlib import window
+    seen = []
+
+    class Tab:
+        def run_forever(self):
+            return 0
+    monkeypatch.setattr(cli.App, "start", classmethod(lambda cls, port, **kw: seen.append(kw) or Tab()))
+    monkeypatch.setattr(cli, "_in_window", lambda app: "unavailable: test")
+    monkeypatch.setattr(window, "installed", lambda: True)
+    assert cli.ui(port=1) == 0
+    assert cli.ui(port=1, browser=False) == 0
+    assert [(kw["browser"], kw["open_ui"]) for kw in seen] == [(True, False), (False, False)]
+
+
 def test_version_names_the_client(monkeypatch, tmp_path, capsys):
     """``--version``: the version, where the Google Photos client would come from, the GoPro window's browser."""
     import castlib

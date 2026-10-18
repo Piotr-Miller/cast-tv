@@ -1,6 +1,7 @@
 """The JSON surface the UI polls and drives.
 
-Every route arrives here after the handler's Origin/Host check. Mutations
+Every route arrives here after the handler's Origin/Host check; the host-only
+routes (``HOST_ONLY``) also need a loopback client address. Mutations
 are POST; every answer carries an exact ``Content-Length`` (the handler's
 ``_json``); errors are ``{"error": {code, message, hint}}`` with a status
 chosen from the error's class.
@@ -15,6 +16,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+from castlib import window
 from castlib.errors import AuthError, CastError, ConfigError, NotMedia, TVError, UpstreamError
 from castlib.net import BEARER_SAFE
 
@@ -26,6 +28,7 @@ THUMB_LOOSE = ("", "application/octet-stream", "binary/octet-stream")   # CDNs t
 SHOW_CONTROLS = ("pause", "resume", "next", "prev", "stop")
 _SOURCE = re.compile(r"^/api/sources/([A-Za-z0-9_-]+)(?:/(status|connect|disconnect|list|thumb|pick|link))?(?:/(.+))?$")
 SOURCE_EXTRAS = ("pick", "link")   # POST steps a source may offer beyond the contract (Google Photos does)
+HOST_ONLY = ("/api/window", "/api/quit")   # loopback only: a second launch, the UI's Quit; never the phone
 
 
 class BadRequest(Exception):
@@ -104,7 +107,16 @@ def _route(app, handler, method: str, path: str, params: dict) -> None:
     if path == "/api/status":
         if _method(handler, method, ("GET",)):
             handler._drain()
-            handler._json(200, app.status())
+            handler._json(200, dict(app.status(), host=handler.from_loopback()))   # which controls the page offers
+        return
+    if path in HOST_ONLY:
+        if _method(handler, method, ("POST",)) and handler._check_host_only():
+            _body(handler)
+            if path == "/api/window":
+                handler._json(200, {"window": window.show()})
+            else:
+                handler._json(200, {"ok": True})
+                app.quit()                       # after the answer is written: the server goes down with it
         return
     if path == "/api/tv/discover":
         if _method(handler, method, ("POST",)):

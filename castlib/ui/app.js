@@ -68,13 +68,15 @@ async function api(method, path, body, opts) {
 
 function castTv() {
   return {
-    status: { tv: null, tvs: [], interfaces: [], cast: null, show: null, sources: {}, session: [], errors: 0, settings: { interval: 8 }, firewall_hint: '', firewall_blocked: null, firewall_advice: '' },
+    status: { tv: null, tvs: [], interfaces: [], cast: null, show: null, sources: {}, session: [], errors: 0, settings: { interval: 8 }, firewall_hint: '', firewall_blocked: null, firewall_advice: '', host: false, window: false },
     errors: [],
     lists: {},               // per source: { items, next, loaded, loading, error }
     tokenInput: '',
     linkInput: '',
     pickNote: '',            // the outcome of the last pick that did not land (timeout, error)
     linkNote: '',            // why the last pasted share link was refused; the status poll leaves it alone
+    quitNote: '',            // what the last Quit answered; the status poll leaves it alone
+    ended: false,            // Quit went through: cast-tv is gone, nothing is polled any more
     _picksSeq: null,         // picks_seq of the Google Photos list this page has fetched
     chooser: null,           // key of the tile whose variant chooser is open
     selection: [],
@@ -87,7 +89,7 @@ function castTv() {
     panel: false,
     toast: '',
     offline: false,
-    busy: { discover: false, connect: false, show: false, stop: false, cast: false },
+    busy: { discover: false, connect: false, show: false, stop: false, cast: false, quit: false },
     gateNote: {},
     dismissedCast: null,
     dismissedShowId: null,
@@ -112,6 +114,7 @@ function castTv() {
     },
 
     async refresh() {
+      if (this.ended) return;               // after Quit the server is gone on purpose: no "not answering" banner
       if (this._refreshing) return;         // one status request in flight: an old answer never lands on a newer one
       this._refreshing = true;
       try {
@@ -572,12 +575,27 @@ function castTv() {
       this.panel = !this.panel;
       if (this.panel) this.loadErrors();
     },
+    // a browser tab on the computer running cast-tv is the only way to end it from the UI; the window
+    // ends it by closing, and the phone may not end it at all (the server refuses it too)
+    canQuit() { return !!this.status.host && !this.status.window && !this.ended; },
+    async quitApp() {
+      if (this.busy.quit) return;
+      this.busy.quit = true;
+      try {
+        await api('POST', '/api/quit');
+        this.ended = true;
+        this.quitNote = 'cast-tv has ended; you can close this tab.';
+      } catch (e) {
+        this.quitNote = String(e.message || '').split('\n')[0] || 'cast-tv did not end.';
+      }
+      this.busy.quit = false;
+    },
     cardClass(e) {
       if (['tv_fetched_nothing', 'tv_unreachable', 'tv_rejected', 'tv_never_started', 'no_tv'].includes(e.code)) return 'bad';
       if (['dts_audio', 'token_rejected', 'no_token', 'refresh_rejected', 'graph_unauthorized', 'expired_token',
            'authorization_declined', 'bad_verification_code', 'no_client_id', 'picker_unauthorized',
            'consent_timeout', 'consent_declined', 'no_google_client', 'repick_needed',
-           'no_browser', 'browser_failed', 'browser_closed', 'browser_timeout'].includes(e.code)) return 'warn';
+           'no_browser', 'browser_failed', 'browser_closed', 'browser_timeout', 'window_unavailable'].includes(e.code)) return 'warn';
       return '';
     },
 

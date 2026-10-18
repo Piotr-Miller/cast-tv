@@ -47,6 +47,58 @@ def test_status_shape(app):
     assert isinstance(d["addresses"], list) and d["errors"] == 0 and d["errors_seq"] == 0
     assert d["settings"]["interval"] == 8
     assert "firewall_hint" in d
+    assert d["window"] is False and d["host"] is True     # a tab on this machine: the UI offers Quit
+
+
+def _from_the_lan(monkeypatch):
+    from castlib.server import Handler
+    monkeypatch.setattr(Handler, "from_loopback", lambda self: False)
+
+
+def test_window_show_is_loopback_only(app, monkeypatch):
+    from castlib import window
+    status, _, d = _json(app.base_url, "POST", "/api/window")
+    assert status == 200 and d == {"window": False}       # no window in this process
+    monkeypatch.setattr(window, "show", lambda: True)
+    assert _json(app.base_url, "POST", "/api/window")[2] == {"window": True}
+    status, headers, d = _json(app.base_url, "GET", "/api/window")
+    assert status == 405 and headers["Allow"] == "POST"
+    _from_the_lan(monkeypatch)
+    status, _, d = _json(app.base_url, "POST", "/api/window")
+    assert status == 403 and d["error"]["code"] == "forbidden_host_only"
+
+
+def test_host_only_routes_refuse_lan(app, monkeypatch):
+    """The phone (any address but loopback, this machine's LAN address included) gets 403 and nothing happens."""
+    _from_the_lan(monkeypatch)
+    for path in ("/api/window", "/api/quit"):
+        status, _, d = _json(app.base_url, "POST", path, {})
+        assert status == 403 and d["error"]["code"] == "forbidden_host_only", path
+    _, _, s = _json(app.base_url, "GET", "/api/status")
+    assert s["host"] is False                             # the phone's UI shows no Quit
+    assert not app._closed.is_set() and "Stop" not in app.tv_fake.actions()
+
+
+def test_loopback_predicate():
+    import types
+    from castlib.server import Handler
+    for addr, ok in (("127.0.0.1", True), ("::1", True), ("::ffff:127.0.0.1", True),
+                     ("192.168.1.5", False), ("10.0.0.2", False), ("", False)):
+        assert Handler.from_loopback(types.SimpleNamespace(client_address=(addr, 1234))) is ok, addr
+
+
+def test_quit_stops_the_tv_and_ends(app, tmp_path):
+    clip = tmp_path / "clip.mp4"
+    clip.write_bytes(b"\0" * 100)
+    app.tv_fake.video_script = ["PLAYING"]
+    cast = app.cast(item_for_path(str(clip)))
+    assert cast.sent.wait(5)
+    status, _, d = _json(app.base_url, "POST", "/api/quit")
+    assert status == 200 and d == {"ok": True}
+    wait_for(app._shut_down.is_set)
+    assert app._closed.is_set() and app.tv_fake.actions().count("Stop") == 1
+    app.quit()                                            # idempotent
+    assert app.tv_fake.actions().count("Stop") == 1
 
 
 def test_settings_interval_bounds(app, tmp_path):

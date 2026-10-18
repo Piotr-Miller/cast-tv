@@ -21,7 +21,7 @@ import urllib.request
 import webbrowser
 from concurrent.futures import ThreadPoolExecutor
 
-from castlib import __version__, config, dlna, downloads, photos
+from castlib import __version__, config, dlna, downloads, photos, window
 from castlib.discovery import control_urls, discover, lan_interfaces, local_ip, renderer_name
 from castlib.dlna import AVT
 from castlib.errors import CastError, ConfigError, NotMedia, TVError
@@ -42,23 +42,28 @@ INTERVAL_MIN, INTERVAL_MAX = 2, 600
 # a port in use: EADDRINUSE on POSIX; Windows sockets report WSAEADDRINUSE (10048)
 ADDR_IN_USE = {errno.EADDRINUSE, getattr(errno, "WSAEADDRINUSE", 10048)}
 MAIN_WAIT_STEP = 0.05      # seconds main_wait sleeps between looks at the flag
+ENDS_HINT = "Ctrl+C ends it (playback stops on the TV too)"
 
 
 def _term(signum, frame):
     raise KeyboardInterrupt
 
 
-def end_on_sigterm() -> None:
+def end_on_sigterm(on_end=None) -> None:
     """A plain ``kill`` ends the process the way Ctrl+C does, from the main thread only.
 
     The TV is stopped and every source closed (Google Photos deletes its picker
     sessions); neither ``close()`` nor ``atexit`` would run on the default
-    SIGTERM disposition. Installing it again is harmless.
+    SIGTERM disposition. Installing it again is harmless. In window mode the
+    main thread sits in the GUI loop, where a ``KeyboardInterrupt`` is lost
+    (PySide6 swallows it inside a slot): ``on_end`` - the window's
+    ``destroy`` - is called instead, and the GUI loop's return stops the TV.
     """
     if threading.current_thread() is not threading.main_thread():
         return
+    handler = _term if on_end is None else (lambda signum, frame: on_end())
     try:
-        signal.signal(signal.SIGTERM, _term)
+        signal.signal(signal.SIGTERM, handler)
     except (ValueError, OSError):
         pass
 
@@ -190,18 +195,29 @@ class App:
         self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="playback")
         self._closed = threading.Event()
         self._threads: list[threading.Thread] = []
+        self._shutdown_lock = threading.Lock()
+        self._shutdown: threading.Thread | None = None   # the one stop-and-close, whoever asked first
+        self._shut_down = threading.Event()
 
     # ------------------------------------------------------------ lifecycle
     @classmethod
     def start(cls, port: int, tv: str | None = None, debug: bool = False,
-              browser: bool = True, out=None) -> "App":
+              browser: bool = True, out=None, *, open_ui: bool | None = None,
+              ends: str = ENDS_HINT) -> "App":
         """Bind first, then discover in the background, print the addresses, open the browser.
+
+        ``browser`` lets the Google consent open a tab on this machine (off with
+        ``--no-browser``); ``open_ui`` opens the UI itself in a tab, and follows
+        ``browser`` when not given - the cast-tv window turns it off and keeps
+        the consent. ``ends`` is the line that says how to end it.
 
         Raises ``AlreadyRunning`` when another cast-tv answers on the port, and
         ``OSError`` when the port is held by something else. A Ctrl+C (or SIGTERM)
         once ``serve()`` has returned stops and closes the app; between the bind and
         that point only the socket is closed. Either way the ``KeyboardInterrupt`` goes on.
         """
+        if open_ui is None:
+            open_ui = browser
         out = out or sys.stdout
         try:
             server = Server(("0.0.0.0", port))
@@ -242,7 +258,7 @@ class App:
                     print("\n  ! %s" % firewall_advice(port), file=out, flush=True)
 
             threading.Thread(target=warn_if_blocked, name="firewall-warning", daemon=True).start()
-            print("  Ctrl+C ends it (playback stops on the TV too)", file=out, flush=True)
+            print("  %s" % ends, file=out, flush=True)
             if tv:
                 try:
                     app.select_tv(tv)
@@ -259,11 +275,8 @@ class App:
                         print("  No DLNA renderer answered. Switch the TV on and retry from the UI,\n"
                               "  or name it directly: cast-tv -t 192.168.1.50", file=out, flush=True)
                 app._thread(find, "discover")
-            if browser:
-                try:
-                    webbrowser.open(app.addresses[0])
-                except Exception:
-                    pass
+            if open_ui:
+                app.open_tab()
         except KeyboardInterrupt:
             # Ctrl+C or a kill while starting ends cast-tv like any later one
             if running is None:          # not serving yet: shutdown() would wait for a loop that never ran
@@ -273,6 +286,13 @@ class App:
                 running.close()
             raise
         return app
+
+    def open_tab(self) -> None:
+        """The UI in this machine's browser, at the first address printed (localhost)."""
+        try:
+            webbrowser.open(self.addresses[0])
+        except Exception:
+            pass
 
     def serve(self) -> None:
         """Run the HTTP server, the eviction ticker and the TV watch in daemon threads."""
@@ -320,7 +340,10 @@ class App:
         except KeyboardInterrupt:
             self.interrupted()
         finally:
-            self.close()
+            if self._shutdown is not None:   # Quit from the UI: its worker stops and closes; the process waits for it
+                self.shutdown()
+            else:
+                self.close()
         return 0
 
     def interrupted(self) -> None:
@@ -328,6 +351,47 @@ class App:
         print()
         self.stop()
         print("   Stopped.", flush=True)
+
+    def shutdown(self, timeout: float | None = None) -> bool:
+        """``interrupted()`` and ``close()``, exactly once, whoever asks first; True once that is done.
+
+        Closing the window, the UI's Quit and a Windows sign-out can each ask,
+        and they race the GUI loop's own return. The first caller starts the
+        work on a thread of its own; every caller then waits ``timeout``
+        seconds for it (``None``: until it is done, in short steps the main
+        thread's Ctrl+C can still interrupt).
+        """
+        with self._shutdown_lock:
+            first = self._shutdown is None
+            if first:
+                self._shutdown = threading.Thread(target=self._shut, name="shutdown", daemon=True)
+        if first:
+            self._shutdown.start()
+        if timeout is not None:
+            return main_wait(self._shut_down, timeout)
+        while not main_wait(self._shut_down, 1.0):
+            pass
+        return True
+
+    def _shut(self) -> None:
+        try:
+            self.interrupted()
+        except Exception:
+            pass
+        finally:
+            try:
+                self.close()
+            finally:
+                self._shut_down.set()
+
+    def quit(self) -> None:
+        """The UI's Quit: stop the TV, close the window if there is one, and end; idempotent, any thread.
+
+        It returns at once: ``run_forever()`` (the browser tab) or the GUI
+        loop's return (the window) waits for the stop and close to finish.
+        """
+        window.destroy()
+        self.shutdown(timeout=0)
 
     def close(self) -> None:
         if self._closed.is_set():
@@ -571,6 +635,7 @@ class App:
                 "firewall_hint": firewall_hint(self.server.port),
                 "firewall_blocked": firewall_blocked(),
                 "firewall_advice": firewall_advice(self.server.port),
+                "window": window.exists(),
                 "uptime": round(time.time() - self.started_at)}
 
     def api(self, handler, path: str, query: str) -> None:

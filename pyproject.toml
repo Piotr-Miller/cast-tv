@@ -18,6 +18,10 @@ cast-photos = "castlib.cli:main_photos"
 
 [project.optional-dependencies]
 test = ["pytest", "pyflakes"]
+# the cast-tv window: WebView2 on Windows (pywebview pulls pythonnet), Qt WebEngine on Linux;
+# the release always carries it, the core install and the test job do not
+window = ["pywebview>=6.2.1,<7", "QtPy>=2.4; sys_platform == 'linux'",
+          "PySide6>=6.12,<7; sys_platform == 'linux'"]
 
 [tool.setuptools]
 packages = ["castlib", "castlib.auth", "castlib.sources"]

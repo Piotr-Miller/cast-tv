@@ -213,7 +213,7 @@ def _no_browser_launch(args, **kwargs):
 
 @pytest.fixture(autouse=True)
 def _no_stay_awake(monkeypatch):
-    """No test spawns ``systemd-inhibit``, touches the Windows execution state, hooks the console or launches a browser.
+    """No test spawns ``systemd-inhibit``, touches the Windows execution state, hooks the console or the session, or launches a browser.
 
     A GoPro round started without a fake ``Handoff`` would otherwise open a
     real Chrome on the developer's desktop (it did once, 2026-09-22); with
@@ -224,6 +224,7 @@ def _no_stay_awake(monkeypatch):
     from castlib.auth import browser
     monkeypatch.setattr(platform, "default_backend", lambda: platform.NullBackend())
     monkeypatch.setattr(platform, "end_on_console_close", lambda: False)
+    monkeypatch.setattr(platform, "end_on_session_end", lambda on_end: None)   # no hidden native window
     monkeypatch.setattr(platform, "firewall_policy", platform.FirewallPolicy(platform="none"))
     monkeypatch.setattr(browser, "launch", _no_browser_launch)
 
