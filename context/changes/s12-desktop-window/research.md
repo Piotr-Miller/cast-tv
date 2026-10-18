@@ -672,3 +672,26 @@ three steps and answered "potwierdzone" ("confirmed") to all of them:
 
 These are the owner's reports, apart from the last `Get-Process` check. Row 1.14 stays open: its
 Fedora part (`kill <pid>` from another terminal) is still to be done.
+
+## Manual rows 1.8, 1.11, 1.13 and 1.15 again, after the review fixes (2026-10-18)
+
+The impl-review fixes F1-F3 (PR #66, `main` 104dd71) changed `castlib/cli.py` and
+`castlib/window.py`, which reopened these rows. Windows laptop, the same venv as before
+(`$env:TEMP\ctv-win`, `pip install -e ".[window]"`), the checkout at 104dd71. The owner was given
+the steps for 1.8, 1.13, 1.15, 1.11 and both Windows parts of 1.14, answered "Wszystko dziala"
+("everything works") at about 23:26, and then confirmed the rows at 104dd71:
+
+- 1.8: a window titled cast-tv opened on the UI and PowerShell printed the addresses.
+- 1.13: with a video playing from the window, X stopped the TV within 5 s; PowerShell printed
+  `Stopped.` and its prompt returned.
+- 1.15: with the window covered, `cast-tv` in a second PowerShell window brought it to the front
+  and that command exited at once.
+- 1.11: `cast-tv --no-window` opened the tab at `http://127.0.0.1:8895/ui/` with Quit cast-tv in
+  the header; Ctrl+C ended it.
+- 1.14, Ctrl+C: with a video playing from the window, Ctrl+C in PowerShell stopped the TV and
+  closed the window.
+
+These are the owner's reports; the agent did not see the TV or the screen. 1.14 stays open (its
+Fedora `kill` part). The sign-out part at 104dd71 is not recorded yet: the owner said it was done
+too, but `explorer.exe` on the laptop had started at 22:37:04, before the PR #66 merge at 23:21,
+and a sign-out restarts it; asked the owner to clarify.
