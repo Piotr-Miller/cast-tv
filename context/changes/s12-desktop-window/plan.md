@@ -376,15 +376,15 @@ state, not the poll's (lessons.md, "A message from a user action…").
 
 #### Manual Verification:
 
-- On the Windows laptop, in a venv with `pip install -e ".[window]"`: in PowerShell, `cast-tv` opens a window titled cast-tv on the UI (not a browser tab), and the console prints the addresses
-- On the Fedora desktop, after `pipx install --force "<checkout>[window]"`: `cast-tv` in a terminal opens a Qt window on the UI
-- With pipx without the extra, on either machine: `cast-tv` opens a browser tab, as today, and the tab shows the Quit control; clicking it stops the TV and ends the process
-- `cast-tv --no-window` opens the tab even with the extra installed
-- A forced fallback: on Fedora, in a terminal, `CAST_TV_WINDOW_FAIL=1 cast-tv` opens the browser tab, not a window. The terminal prints why, and Diagnostics in the tab shows `window_unavailable`
+- On the Windows laptop, in a venv with `pip install -e ".[window]"`: in PowerShell, `cast-tv` opens a window titled cast-tv on the UI (not a browser tab), and the console prints the addresses (owner decision 2026-10-18: surface declared) — surface: castlib/window.py, castlib/cli.py, castlib/app.py
+- On the Fedora desktop, after `pipx install --force "<checkout>[window]"`: `cast-tv` in a terminal opens a Qt window on the UI (owner decision 2026-10-18: surface declared) — surface: castlib/window.py, castlib/cli.py, castlib/app.py
+- With pipx without the extra, on either machine: `cast-tv` opens a browser tab, as today, and the tab shows the Quit control; clicking it stops the TV and ends the process (owner decision 2026-10-18: surface declared) — surface: castlib/cli.py, castlib/app.py, castlib/api.py, castlib/server.py, castlib/ui/app.js, castlib/ui/index.html
+- `cast-tv --no-window` opens the tab even with the extra installed (owner decision 2026-10-18: surface declared) — surface: castlib/window.py, castlib/cli.py, castlib/app.py
+- A forced fallback: on Fedora, in a terminal, `CAST_TV_WINDOW_FAIL=1 cast-tv` opens the browser tab, not a window. The terminal prints why, and Diagnostics in the tab shows `window_unavailable` (owner decision 2026-10-18: surface declared) — surface: castlib/window.py, castlib/cli.py, castlib/app.py
 - With a video playing on the TV: closing the window with X stops the TV within 5 s and the PowerShell prompt returns — surface: castlib/window.py, castlib/cli.py, castlib/app.py
 - With a video playing: Ctrl+C in the terminal window running cast-tv stops the TV and closes the window; on Fedora, `kill <pid>` from another terminal does the same. Also on the Windows laptop, with a saved-work session and a video playing from the cast-tv window: Start menu → account menu → Sign out, without closing cast-tv first; observe whether TV playback stops. After signing back in, record the observed result and confirm no cast-tv process remains. This extends row 1.14's intent to real Windows session end; its Progress title stays unchanged — surface: castlib/window.py, castlib/app.py, castlib/platform.py
 - With the window open behind another window: running `cast-tv` again in a second terminal brings the window to the front and the second command exits at once — surface: castlib/window.py, castlib/cli.py, castlib/api.py
-- From the phone, the UI works as before and shows no Quit control
+- From the phone, the UI works as before and shows no Quit control (owner decision 2026-10-18: surface declared) — surface: castlib/api.py, castlib/server.py, castlib/ui/app.js, castlib/ui/index.html
 
 **Implementation Note**: manual rows are run with the exact window named (lessons.md, "A step for
 the person names exactly where to act"). Each observation goes into `research.md` before its row
@@ -800,13 +800,13 @@ The Progress Manual rows, run on the Windows laptop and the Fedora desktop, each
 
 #### Automated
 
-- [x] 1.1 Lint passes
-- [x] 1.2 The window module's tests pass with a fake webview
-- [x] 1.3 CLI wiring tests pass
-- [x] 1.4 Host-only routes refuse the LAN
-- [x] 1.5 The Quit control's logic, through the node driver
-- [x] 1.6 The full suite passes
-- [ ] 1.7 CI on the PR is green on both OSes
+- [x] 1.1 Lint passes — a33a8a0
+- [x] 1.2 The window module's tests pass with a fake webview — a33a8a0
+- [x] 1.3 CLI wiring tests pass — a33a8a0
+- [x] 1.4 Host-only routes refuse the LAN — a33a8a0
+- [x] 1.5 The Quit control's logic, through the node driver — a33a8a0
+- [x] 1.6 The full suite passes — a33a8a0
+- [x] 1.7 CI on the PR is green on both OSes — a33a8a0
 
 #### Manual
 

@@ -610,3 +610,10 @@ on a clean `git worktree` of `HEAD` (404d0cf, castlib imported from the worktree
 It fails as often without this change, and Phase 1 touches no OneDrive code. With that one test
 deselected the full suite is 419 passed, 5 skipped, exit 0. Not fixed here (plan, What We're NOT
 Doing); CI on the PR (row 1.7) is the two-OS gate.
+
+## Manual row 1.8 (2026-10-18)
+
+Windows laptop (Windows 11 Pro 10.0.26300), a venv with `pip install -e ".[window]"`, commit
+a33a8a0 (PR #61). The owner ran `cast-tv` in PowerShell and confirmed the row as written: a
+window titled cast-tv opened on the UI, not a browser tab, and the console printed the
+addresses. Reported in the session as "1.8 potwierdzone"; no further detail was given.
