@@ -83,6 +83,20 @@ recorded row, the PR or commit.
      Claude writes the observation into `research.md`, runs `--check-recordable`, ticks the row and
      opens a PR; you merge it. Do not merge anything into `main` while rows are being confirmed:
      they are recorded at the `main` SHA.
+   - For Claude: record each row at the `main` SHA the owner ran (`--check-recordable` with
+     `HEAD` on that commit, on a fresh branch from `main`), keep the edits uncommitted until the
+     batch ends, then one commit and one PR. A row accepted at a branch commit goes stale after
+     the owner's Rebase and merge. 1.14 is ticked only now: its Windows part (Ctrl+C, sign-out)
+     is already recorded in `research.md` at 104dd71.
+- [ ] 2a. **Any machine, open question:** in OneDrive → Pictures → OM Workspace, some folders
+   (e.g. `2026_07_10`) show "Nothing castable here." and a count of 0. Raw stills and GIFs are
+   hidden by design (`context/foundation/prd.md`, Non-Goals: "no GIF or raw stills"), and OM
+   Workspace folders usually hold `.ORF` raw files. To check: open such a folder in cast-tv and
+   copy the `! onedrive: hiding an item of unknown kind …` lines from the terminal (PowerShell on
+   Windows) running cast-tv, or list the file extensions of that folder on
+   https://onedrive.live.com. Only raw files → by design, but the empty message misleads: a
+   small separate change could say how many files are hidden and why. JPEG or video files → a
+   bug to investigate before Phase 2.
 - [ ] 3. **Windows 11, 2026-10-19 before about 22:55:** S-13 rows 5.12 and 5.11 (see "S-13" below).
 
 Steps 1 and 2 do not depend on each other; do them in either order.
