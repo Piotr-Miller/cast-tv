@@ -614,6 +614,17 @@ Doing); CI on the PR (row 1.7) is the two-OS gate.
 ## Manual row 1.8 (2026-10-18)
 
 Windows laptop (Windows 11 Pro 10.0.26300), a venv with `pip install -e ".[window]"`, commit
-a33a8a0 (PR #61). The owner ran `cast-tv` in PowerShell and confirmed the row as written: a
-window titled cast-tv opened on the UI, not a browser tab, and the console printed the
-addresses. Reported in the session as "1.8 potwierdzone"; no further detail was given.
+a33a8a0 (PR #61; on main as 1083431). The owner ran `cast-tv` in PowerShell and confirmed the
+row as written: a window titled cast-tv opened on the UI, not a browser tab, and the console printed the
+addresses. Reported in the session as "1.8 potwierdzone", then with the whole PowerShell log:
+
+- Command: `python -m venv $env:TEMP\ctv-win`, then `pip install -e ".[window]"` and
+  `cast-tv.exe` from that venv. Python 3.14 (cp314 wheels). The extra resolved to
+  pywebview 6.2.1, pythonnet 3.2.1, clr_loader 0.3.1, bottle 0.13.4, proxy_tools 0.1.0 and
+  typing_extensions 4.16.0. No PySide6 on Windows, as intended.
+- Console: three addresses (`http://localhost:8895/ui/`, the Wi-Fi LAN address and a
+  192.168.16.x virtual adapter), the firewall line, the window-mode hint "Close the window
+  or press Ctrl+C to end it (playback stops on the TV too)", and the TV found by discovery
+  ("TV: 83" OLED").
+- On closing the window the console printed `Stopped.` and the PowerShell prompt returned.
+  Nothing was playing, so this does not stand in for row 1.13 (X with a video playing).
