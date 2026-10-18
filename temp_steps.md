@@ -9,11 +9,11 @@ recorded row, the PR or commit.
 ## Where it stands
 
 - S-12 Phase 1 ("The window owns the session") is on `main` (1083431, PR #61; bookkeeping #62).
-- The Phase 1 review (`reviews/impl-review-phase-1-1083431.md`) found F1-F3; the fixes are in
-  PR #66. They change `castlib/cli.py` and `castlib/window.py`, so rows 1.8, 1.11, 1.13 and 1.15
-  were reopened and need confirming again; 1.16 stays confirmed (ffa982c).
-- Left for Phase 1: on Windows 1.8, 1.11, 1.13, 1.15 and the Windows part of 1.14 again (step 1b);
-  on Fedora 1.9, 1.10, 1.12 and the `kill` part of 1.14.
+- The Phase 1 review (`reviews/impl-review-phase-1-1083431.md`) found F1-F3, fixed in PR #66
+  (`main` 104dd71). The rows it reopened were confirmed again at 104dd71 (PR #67): 1.8, 1.11,
+  1.13, 1.15; 1.16 stays confirmed at ffa982c. The Windows part of 1.14 (Ctrl+C, sign-out) is
+  done on the fixed code.
+- Left for Phase 1, all on Fedora: 1.9, 1.10, 1.12 and the `kill` part of 1.14.
 - Most work stays on the Windows 11 laptop; Fedora is visited for the Linux-only manual rows,
   best once per phase.
 
@@ -24,7 +24,7 @@ recorded row, the PR or commit.
    warnings (F1 termination before the window state, F2 session-end deadline, F3 full suite),
    all fixed; PR #66.
 - [x] 1a. **You:** merge PR #66 (Rebase and merge). — done 2026-10-18 (`main` 104dd71).
-- [ ] 1b. **Windows 11, after 1a**, in PowerShell:
+- [x] 1b. **Windows 11, after 1a**, in PowerShell: — done 2026-10-18 at 104dd71 (PR #67; sign-out 23:35)
    ```powershell
    cd C:\Source\cast-tv
    git switch main
@@ -43,7 +43,7 @@ recorded row, the PR or commit.
      "Quit cast-tv" in the header, not a window. Press Ctrl+C in the PowerShell window.
    - [x] **1.14 (Ctrl+C):** `cast-tv`, start a video from the window, then Ctrl+C in the
      PowerShell window: the TV stops and the window closes.
-   - [ ] **1.14 (sign-out), last:** `cast-tv`, start a video from the window, then Start → account
+   - [x] **1.14 (sign-out), last:** `cast-tv`, start a video from the window, then Start → account
      → Sign out without closing cast-tv. After signing back in: has the TV stopped? In a new
      PowerShell window, `Get-Process cast-tv -ErrorAction SilentlyContinue` prints nothing.
      Come back with `claude --resume` in `C:\Source\cast-tv`.

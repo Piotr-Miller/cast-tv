@@ -695,3 +695,15 @@ These are the owner's reports; the agent did not see the TV or the screen. 1.14 
 Fedora `kill` part). The sign-out part at 104dd71 is not recorded yet: the owner said it was done
 too, but `explorer.exe` on the laptop had started at 22:37:04, before the PR #66 merge at 23:21,
 and a sign-out restarts it; asked the owner to clarify.
+
+## Manual row 1.14, sign-out on the fixed code (2026-10-18)
+
+Windows laptop, the same venv, the checkout at `main` ac3e8fc (castlib identical to 104dd71, with
+the F1-F3 fixes). The owner started `cast-tv`, played a video from the window, signed out with
+Start → account → Sign out without closing cast-tv, signed back in and reported "dziala"
+("it works"): the TV had stopped. The agent's checks after the owner resumed the session agree
+that a real sign-out ran and nothing was left: System event 7002 (user logoff) at 23:35:38,
+`explorer.exe` started at 23:35:44, and `Get-Process cast-tv` found no process at 23:37:06.
+
+With the Ctrl+C part recorded above, the Windows part of 1.14 is done on the fixed code; the row
+stays open for its Fedora `kill` step.
