@@ -23,7 +23,7 @@ recorded row, the PR or commit.
    finds problems, Claude fixes them in a separate PR and you merge it. — done 2026-10-18: three
    warnings (F1 termination before the window state, F2 session-end deadline, F3 full suite),
    all fixed; PR #66.
-- [ ] 1a. **You:** merge PR #66 (Rebase and merge).
+- [x] 1a. **You:** merge PR #66 (Rebase and merge). — done 2026-10-18 (`main` 104dd71).
 - [ ] 1b. **Windows 11, after 1a**, in PowerShell:
    ```powershell
    cd C:\Source\cast-tv
@@ -32,16 +32,16 @@ recorded row, the PR or commit.
    & $env:TEMP\ctv-win\Scripts\Activate.ps1
    cast-tv
    ```
-   - [ ] **1.8:** a window titled cast-tv opens on the UI and PowerShell prints the addresses.
-   - [ ] **1.13:** start a video on the TV from the window, then close the window with X: the TV
+   - [x] **1.8:** a window titled cast-tv opens on the UI and PowerShell prints the addresses.
+   - [x] **1.13:** start a video on the TV from the window, then close the window with X: the TV
      stops within 5 s, PowerShell prints `Stopped.` and its prompt returns.
-   - [ ] **1.15:** run `cast-tv` again and click the PowerShell window so it covers the cast-tv
+   - [x] **1.15:** run `cast-tv` again and click the PowerShell window so it covers the cast-tv
      window. In a **second** PowerShell window run the same five lines: the cast-tv window comes
      to the front and the second PowerShell prints "Its window is in front." and returns at once.
      Close the cast-tv window with X.
-   - [ ] **1.11:** `cast-tv --no-window` opens a browser tab at http://127.0.0.1:8895/ui/ with
+   - [x] **1.11:** `cast-tv --no-window` opens a browser tab at http://127.0.0.1:8895/ui/ with
      "Quit cast-tv" in the header, not a window. Press Ctrl+C in the PowerShell window.
-   - [ ] **1.14 (Ctrl+C):** `cast-tv`, start a video from the window, then Ctrl+C in the
+   - [x] **1.14 (Ctrl+C):** `cast-tv`, start a video from the window, then Ctrl+C in the
      PowerShell window: the TV stops and the window closes.
    - [ ] **1.14 (sign-out), last:** `cast-tv`, start a video from the window, then Start → account
      → Sign out without closing cast-tv. After signing back in: has the TV stopped? In a new
