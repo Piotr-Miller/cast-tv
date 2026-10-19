@@ -707,3 +707,60 @@ that a real sign-out ran and nothing was left: System event 7002 (user logoff) a
 
 With the Ctrl+C part recorded above, the Windows part of 1.14 is done on the fixed code; the row
 stays open for its Fedora `kill` step.
+
+## Manual rows 1.10, 1.9, 1.14 (kill) and 1.12, Fedora (2026-10-19)
+
+Fedora 44 Workstation (GNOME 50.6, Wayland, kernel 7.2.11), Python 3.14.8, the checkout at `main`
+f04dfcb. The agent ran the commands and drove the UI; the owner watched the TV and the screen and
+confirmed each row in the session ("1 tak, 2 tak" twice: 1.10 and 1.9, then 1.14 and 1.12).
+
+**Deviation, pipx.** Fedora has no pipx (`command -v pipx` empty, `rpm -q pipx`: not installed),
+and `~/.local/bin/cast-tv` is the owner's symlink to the checkout's shim, which a real
+`pipx install --force` would replace. pipx 1.18.4 ran from a venv in the session scratchpad with
+`PIPX_HOME`, `PIPX_BIN_DIR` and `PIPX_MAN_DIR` there; the install is a normal pipx venv built from
+the checkout, and the owner's symlink was left alone. The rows' commands ran as
+`$PIPX_BIN_DIR/cast-tv` from a directory outside the checkout.
+
+**Found: the `[window]` spec in zsh.** `pipx install --force "$PWD[window]"`, as `temp_steps.md`
+wrote it, installs cast-tv **without** the extra in zsh (Fedora's and the owner's shell) and
+still exits 0: zsh reads `$PWD[window]` as a subscript and expands it to an empty string
+(`echo "[$PWD[window]]"` prints `[]`; bash prints the path). pipx's metadata then had no extras
+and the venv had no PySide6. `"${PWD}[window]"` works: pipx logged the spec
+`/home/piotrmiller/Source/cast-tv[window]` and installed PySide6 6.12.0, pywebview 6.2.1 and
+QtPy 2.4.3.
+
+- **1.10, without the extra** (21:13): the console printed the addresses, the firewall line and
+  "Ctrl+C ends it (playback stops on the TV too)", and a tab opened in Chrome (the default
+  browser). The agent used its own tab on the same `http://127.0.0.1:8895/ui/` (a direct
+  navigation from the extension is refused with 403 `forbidden`, the cross-site check; a
+  same-origin navigation from that page loads the UI). "Quit cast-tv" was at the right of the
+  header. A video (OneDrive, `Dokumenty/Videos/Przejazd - SuperCars.mp4`) was started by clicking
+  it at 21:17:03 and reached `PLAYING` at 21:17:16. Quit was clicked at 21:17:26: the console
+  printed `Stopped.`, the process exited 0 at 21:17:26, and the tab showed "cast-tv has ended;
+  you can close this tab." The owner confirmed that the TV played the video and stopped.
+  Seen too: the tab's now-playing bar stayed at "Przejazd - SuperCars.mp4 playing 0:00:12" after
+  the end, the last state before the server went away.
+- **1.9, with the extra** (21:19): the console printed the window-mode hint "Close the window or
+  press Ctrl+C to end it (playback stops on the TV too)" and three Qt warnings
+  `qt.qpa.wayland.textinput: … disableSurface … Trying to disable … but 0x0 is focused`;
+  `/api/status` reported `window: true`. The owner confirmed a window titled cast-tv showing the
+  UI, not a browser tab.
+- **1.14, kill** (21:20, the same window): the video was started through `POST /api/cast` from
+  loopback (curl), the endpoint the window's page calls; the agent cannot click inside a Qt
+  window on Wayland, so this replaces "start a video from the window". `PLAYING` at 21:20:24.
+  `pgrep -af cast-tv` printed six lines: the Python process (220134), four `QtWebEngineProcess`
+  helpers and `systemd-inhibit … --who=cast-tv`, all matching because the pipx path contains
+  `cast-tv`; the first column of the first line was the main process. `kill 220134` at 21:20:40.6:
+  the process was gone by 21:20:41.6, printed `Stopped.` and exited 0; no helper and no
+  `systemd-inhibit` was left. The owner confirmed that the TV stopped and the window closed.
+- **1.12, forced fallback** (21:20:57): `CAST_TV_WINDOW_FAIL=1` gave a Chrome tab, not a window
+  (owner confirmed). The console printed the window-mode hint first and then "No cast-tv window
+  (CAST_TV_WINDOW_FAIL); the UI opens in the browser. Ctrl+C ends it (playback stops on the TV
+  too)"; `temp_steps.md` had expected "(unavailable: CAST_TV_WINDOW_FAIL)". `/api/status` said
+  `window: false`; Diagnostics in the tab showed the card `window_unavailable`: "No cast-tv
+  window: CAST_TV_WINDOW_FAIL." with the hint "The UI opened in the browser instead; Ctrl+C here
+  ends cast-tv." SIGINT at 21:21:48 (the Ctrl+C the hint names): `Stopped.`, exit 0.
+
+Two console texts for a later phase, not failures of these rows: in a fallback the console first
+says "Close the window" and then that there is no window; and the Qt warnings land on the
+console that Phase 3 hides.

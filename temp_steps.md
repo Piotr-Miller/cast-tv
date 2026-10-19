@@ -13,7 +13,8 @@ recorded row, the PR or commit.
   (`main` 104dd71). The rows it reopened were confirmed again at 104dd71 (PR #67): 1.8, 1.11,
   1.13, 1.15; 1.16 stays confirmed at ffa982c. The Windows part of 1.14 (Ctrl+C, sign-out) is
   done on the fixed code.
-- Left for Phase 1, all on Fedora: 1.9, 1.10, 1.12 and the `kill` part of 1.14.
+- Every Phase 1 manual row is accepted; the Fedora ones (1.9, 1.10, 1.12, the `kill` part of
+  1.14) at `main` f04dfcb on 2026-10-19 (PR #70).
 - Most work stays on the Windows 11 laptop; Fedora is visited for the Linux-only manual rows,
   best once per phase.
 
@@ -47,12 +48,13 @@ recorded row, the PR or commit.
      → Sign out without closing cast-tv. After signing back in: has the TV stopped? In a new
      PowerShell window, `Get-Process cast-tv -ErrorAction SilentlyContinue` prints nothing.
      Come back with `claude --resume` in `C:\Source\cast-tv`.
-- [ ] 2. **Fedora, Phase 1 manual rows.** In a terminal, in the cast-tv checkout:
+- [x] 2. **Fedora, Phase 1 manual rows.** In a terminal, in the cast-tv checkout: — done 2026-10-19
+   at f04dfcb (PR #70); Fedora has no pipx, so it ran from the session scratchpad (`research.md`).
    ```bash
    git switch main && git pull
    ```
    Then, in this order:
-   - [ ] **1.10 (without the extra):**
+   - [x] **1.10 (without the extra):**
      ```bash
      pipx install --force "$PWD"
      cast-tv
@@ -60,19 +62,20 @@ recorded row, the PR or commit.
      Expected: a browser tab at http://127.0.0.1:8895/ui/ with a "Quit cast-tv" button at the
      right of the header. Start a video on the TV, then click "Quit cast-tv": the TV stops, the tab
      shows "cast-tv has ended; you can close this tab." and the terminal prompt returns.
-   - [ ] **1.9 (with the extra):**
+   - [x] **1.9 (with the extra):**
      ```bash
-     pipx install --force "$PWD[window]"
+     pipx install --force "${PWD}[window]"
      cast-tv
      ```
-     Expected: a Qt window titled cast-tv showing the UI, not a browser tab.
-   - [ ] **1.14 (kill):** in the cast-tv window, start a video on the TV. In a **second** terminal:
+     Expected: a Qt window titled cast-tv showing the UI, not a browser tab. Keep the braces: in
+     zsh `"$PWD[window]"` expands to an empty string and installs without the extra, exit 0.
+   - [x] **1.14 (kill):** in the cast-tv window, start a video on the TV. In a **second** terminal:
      ```bash
      pgrep -af cast-tv
      kill <the pid in the first column>
      ```
      Expected: the TV stops, the cast-tv window closes and the prompt returns in the first terminal.
-   - [ ] **1.12 (forced fallback):**
+   - [x] **1.12 (forced fallback):**
      ```bash
      CAST_TV_WINDOW_FAIL=1 cast-tv
      ```
@@ -97,6 +100,10 @@ recorded row, the PR or commit.
    https://onedrive.live.com. Only raw files → by design, but the empty message misleads: a
    small separate change could say how many files are hidden and why. JPEG or video files → a
    bug to investigate before Phase 2.
+   2026-10-19, Fedora: `2026_07_10` (8 items) shows "Nothing castable here." under All too, and the
+   terminal printed one line, `! onedrive: hiding an item of unknown kind 'application/octet-stream'`
+   (logged once per kind per session, `castlib/media.py`). So the items have no image facet and that
+   MIME type, which fits `.ORF`; their extensions are still to be seen on https://onedrive.live.com.
 - [ ] 3. **Windows 11, 2026-10-19 before about 22:55:** S-13 rows 5.12 and 5.11 (see "S-13" below).
 
 Steps 1 and 2 do not depend on each other; do them in either order.
