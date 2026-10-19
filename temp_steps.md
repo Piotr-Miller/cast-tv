@@ -91,7 +91,7 @@ recorded row, the PR or commit.
      batch ends, then one commit and one PR. A row accepted at a branch commit goes stale after
      the owner's Rebase and merge. 1.14 is ticked only now: its Windows part (Ctrl+C, sign-out)
      is already recorded in `research.md` at 104dd71.
-- [ ] 2a. **Any machine, open question:** in OneDrive → Pictures → OM Workspace, some folders
+- [x] 2a. **Any machine, open question:** in OneDrive → Pictures → OM Workspace, some folders
    (e.g. `2026_07_10`) show "Nothing castable here." and a count of 0. Raw stills and GIFs are
    hidden by design (`context/foundation/prd.md`, Non-Goals: "no GIF or raw stills"), and OM
    Workspace folders usually hold `.ORF` raw files. To check: open such a folder in cast-tv and
@@ -103,7 +103,10 @@ recorded row, the PR or commit.
    2026-10-19, Fedora: `2026_07_10` (8 items) shows "Nothing castable here." under All too, and the
    terminal printed one line, `! onedrive: hiding an item of unknown kind 'application/octet-stream'`
    (logged once per kind per session, `castlib/media.py`). So the items have no image facet and that
-   MIME type, which fits `.ORF`; their extensions are still to be seen on https://onedrive.live.com.
+   MIME type, which fits `.ORF`. — done 2026-10-19: the owner's local OneDrive sync of the folder
+   (`~/OneDrive/2026_07_10` on Fedora) holds exactly 8 files, all `.ORF` (`P7102190.ORF` to
+   `P7102198.ORF`, 18-22 MB each). Hidden by design, not a bug. The owner decided the same day
+   against a change that would say how many files are hidden: "Nothing castable here." stays.
 - [ ] 3. **Windows 11, 2026-10-19 before about 22:55:** S-13 rows 5.12 and 5.11 (see "S-13" below).
 
 Steps 1 and 2 do not depend on each other; do them in either order.
