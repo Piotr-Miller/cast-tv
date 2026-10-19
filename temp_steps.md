@@ -1,4 +1,4 @@
-# Next steps (2026-10-18, S-12 after Phase 1)
+# Next steps (2026-10-19, S-12 after Phase 1)
 
 The standing note for a pause in the work (a reboot, a switch of machine): it stays in the
 repository and is overwritten at the next pause.
@@ -14,7 +14,9 @@ recorded row, the PR or commit.
   1.13, 1.15; 1.16 stays confirmed at ffa982c. The Windows part of 1.14 (Ctrl+C, sign-out) is
   done on the fixed code.
 - Every Phase 1 manual row is accepted; the Fedora ones (1.9, 1.10, 1.12, the `kill` part of
-  1.14) at `main` f04dfcb on 2026-10-19 (PR #70).
+  1.14) at `main` f04dfcb on 2026-10-19 (PR #70). Phase 1 is done.
+- The OneDrive question (2a) is closed: raw files, hidden by design, no change (PR #71).
+- Next: S-13 rows 5.12 and 5.11 on Windows tonight (step 3, dated), then Phase 2 on Windows.
 - Most work stays on the Windows 11 laptop; Fedora is visited for the Linux-only manual rows,
   best once per phase.
 
@@ -108,8 +110,16 @@ recorded row, the PR or commit.
    `P7102198.ORF`, 18-22 MB each). Hidden by design, not a bug. The owner decided the same day
    against a change that would say how many files are hidden: "Nothing castable here." stays.
 - [ ] 3. **Windows 11, 2026-10-19 before about 22:55:** S-13 rows 5.12 and 5.11 (see "S-13" below).
+   First, in PowerShell, bring this note up to date:
+   ```powershell
+   cd C:\Source\cast-tv
+   git switch main
+   git pull
+   ```
+   Then follow "S-13" below and come back with "co dalej" in a new Claude Code session in
+   `C:\Source\cast-tv`, with the date, the Diagnostics text and the result of its step 4.
 
-Steps 1 and 2 do not depend on each other; do them in either order.
+Step 3 has a deadline; Phase 2 waits for it.
 
 ## Phase 2: the release carries the window
 
@@ -155,7 +165,9 @@ Claude gives the exact commands for these rows when the PR's files exist.
 - [ ] 14. **Fedora:**
     - [ ] **4.6:** the window's dash and taskbar entry show the cast-tv icon.
     - [ ] **4.7:** "Add to menu" puts an entry in the GNOME overview that starts with no terminal;
-      repeat for a pipx install and a checkout launch.
+      repeat for a pipx install and a checkout launch. Fedora has no pipx (2026-10-19): install it
+      first (`sudo dnf install pipx`), or ask Claude for a scratchpad pipx as in Phase 1, which
+      leaves the `~/.local/bin/cast-tv` symlink alone.
     - [ ] **4.10:** "Remove from menu" removes the entry.
 - [ ] 15. **You:** merge the Phase 4 PR.
 
@@ -170,6 +182,8 @@ Claude gives the exact commands for these rows when the PR's files exist.
 
 - **Fedora:** whether to delete the VM disk in `~/.cache/cast-tv-s12-spike` (7.1 GB, VM stopped)
   and the 20 podman images `localhost/spike-*`. Not before row 2.9: it may need that VM.
+- **Fedora:** whether to delete the local branch `s12-desktop-window`: its 4 commits are on `main`
+  under rebased SHAs and the remote branch is gone.
 - **Windows:** whether to delete `.venv-spike`, `build` and `dist` in
   `C:\Source\cast-tv\context\changes\s12-desktop-window\spike-kit` (gitignored, 1.2 GB).
 
@@ -177,6 +191,12 @@ Claude gives the exact commands for these rows when the PR's files exist.
 
 The session from the Edge window is from 2026-10-12 22:55; its cookie expires **2026-10-19 around
 22:55**. Up to 2026-10-18 GoPro has not rejected it once (`first_401_at` empty).
+
+For comparison only, not row 5.12: Fedora's older window capture shows in Diagnostics (seen
+2026-10-19): "Session captured 2026-09-24 22:40. Worked for at least 1 min (last successful call).
+First refusal 19 days 21 h after capture. Cookie expires: 2026-10-01 22:40 (persistent)." That
+session was not used between those dates, so it says only that the refusal came somewhere between
+1 min and 19 days 21 h after capture.
 
 1. In PowerShell:
    ```powershell
