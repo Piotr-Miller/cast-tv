@@ -1,9 +1,9 @@
 ---
 change_id: ci-actions-node24
 title: "Move the workflows' GitHub actions off Node.js 20"
-status: new
+status: implemented
 created: 2026-10-25
-updated: 2026-10-25
+updated: 2026-10-26
 archived_at: null
 ---
 
@@ -19,3 +19,5 @@ be checked at planning (each action's `action.yml`, `runs.using`). lumina-clean-
 `setup-node@v5`, `cache@v5` and `upload-artifact@v7`.
 
 `release.yml` is release infrastructure: its change is fully proven only by the next real release run.
+
+2026-10-26: owner decisions — the newest majors (checkout v7, setup-python v7, upload-artifact v7, download-artifact v8); the `release` job is checked at the next real tag, not a trial one; plan.md Overview, What We're NOT Doing
