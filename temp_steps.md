@@ -1,4 +1,4 @@
-# Next steps (2026-10-19, S-12 after Phase 1)
+# Next steps (2026-10-26, S-12 after Phase 1)
 
 The standing note for a pause in the work (a reboot, a switch of machine): it stays in the
 repository and is overwritten at the next pause.
@@ -16,7 +16,8 @@ recorded row, the PR or commit.
 - Every Phase 1 manual row is accepted; the Fedora ones (1.9, 1.10, 1.12, the `kill` part of
   1.14) at `main` f04dfcb on 2026-10-19 (PR #70). Phase 1 is done.
 - The OneDrive question (2a) is closed: raw files, hidden by design, no change (PR #71).
-- Next: S-13 rows 5.12 and 5.11 on Windows tonight (step 3, dated), then Phase 2 on Windows.
+- S-13 rows 5.11 and 5.12 are recorded (step 3, 2026-10-26); S-13 can be archived.
+- Next: Phase 2 on Windows.
 - Most work stays on the Windows 11 laptop; Fedora is visited for the Linux-only manual rows,
   best once per phase.
 
@@ -109,7 +110,9 @@ recorded row, the PR or commit.
    (`~/OneDrive/2026_07_10` on Fedora) holds exactly 8 files, all `.ORF` (`P7102190.ORF` to
    `P7102198.ORF`, 18-22 MB each). Hidden by design, not a bug. The owner decided the same day
    against a change that would say how many files are hidden: "Nothing castable here." stays.
-- [ ] 3. **Windows 11, 2026-10-19 before about 22:55:** S-13 rows 5.12 and 5.11 (see "S-13" below).
+- [x] 3. **Windows 11, 2026-10-19 before about 22:55:** S-13 rows 5.12 and 5.11 (see "S-13" below).
+   — done 2026-10-26, late: GoPro had first refused the session on 2026-10-18 15:01, unseen; the
+   rows are recorded at `main` 385bf03 with that caveat (`s13-gopro-auth/research.md`).
    First, in PowerShell, bring this note up to date:
    ```powershell
    cd C:\Source\cast-tv
@@ -119,7 +122,7 @@ recorded row, the PR or commit.
    Then follow "S-13" below and come back with "co dalej" in a new Claude Code session in
    `C:\Source\cast-tv`, with the date, the Diagnostics text and the result of its step 4.
 
-Step 3 has a deadline; Phase 2 waits for it.
+Step 3 is done; Phase 2 is next.
 
 ## Phase 2: the release carries the window
 

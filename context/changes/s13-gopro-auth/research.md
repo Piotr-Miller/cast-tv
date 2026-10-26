@@ -697,6 +697,40 @@ One entry per ticked manual row (`lessons.md:5-10`): the row, the date, the mach
   password, no 2FA, no "Save password?" bubble in Edge ("1 nie, 2 haslo, no 2fa"). With
   Chrome on both systems and Edge here, row 5.9 has all its halves; row 5.10 is ticked on the
   entries above. This Edge capture is the one left live on the laptop (cast-tv pid 18940).
+- **Rows 5.11 and 5.12** (2026-10-26 19:44, Windows 11, the owner; recorded at `main` 385bf03).
+  The binary: `Downloads\s13-row-5.10\cast-tv-windows-x64.exe`, `cast-tv 0.3.0`, 22 843 699
+  bytes, SHA-256 `a4f1d971…aaa3f3b`, re-downloaded on 2026-10-13 from release-build run
+  38294412054 of PR #40's head 6ea5c62, whose tree is identical to `main` 385bf03 (the rebase
+  merge of PR #40). Not the 2026-10-12 copy hashed above (`0d22f1d7…`), which was gone from
+  `Downloads` by 2026-10-13. Between 385bf03 and `main` 6df0074 the GoPro code
+  (`castlib/sources/gopro.py`, `castlib/browser.py`, `castlib/cdp.py`) is unchanged.
+  Started with `CAST_TV_BROWSER` set to Edge, the profile holding the Edge capture of
+  2026-10-12 22:55.
+  - *When the refusal happened.* `gopro-session.json` on the laptop already held `first_401_at`
+    = 2026-10-18 15:01:31 local: the first refusal came in a cast-tv run that day (most likely
+    an S-12 Phase 1 run, which shares `%APPDATA%\cast-tv`), not seen by the owner then. These
+    rows were run 8 days later, after the cookie's expiry (2026-10-19 22:55), so they are not
+    "the moment of the first refusal" the plan asked for; see the caveat on 5.11.
+  - *Row 5.12, the Diagnostics card* (`token_rejected`, 19:44:44), copied by the owner from a
+    screenshot: "GoPro rejected the token (401) - expired or incomplete. Run cast-tv, open the
+    GoPro tab and press Open gopro.com. Or, from a signed-in browser: [the four paste steps] No
+    publicly documented, self-serve sign-in for third-party applications was found (checked
+    2026-09-20; see README, Limitations). Session captured 2026-10-12 22:55. Worked for at
+    least 1 min (last successful call). First refusal 5 days 16 h after capture. Cookie
+    expires: 2026-10-19 22:55 (persistent)." The hint carries all four fields the row names and
+    reads "worked for at least", never a lifetime.
+  - *Row 5.11, "Open gopro.com again".* The owner pressed it in the tab: an Edge window "Sign in
+    to gopro.com" opened on the GoPro Login form (email, password, Apple / Facebook / Google)
+    and did not close by itself; the owner typed nothing. Caveat: with the cookie past its
+    `expires`, a sign-in form is the expected outcome whatever the profile remembers, so this
+    observation does not tell whether the profile's remember-me would have carried a session
+    on the day of the first refusal. That narrower question stays unanswered; the row is
+    ticked on what it asks to record (closed without typing, or asked to sign in).
+  - *What the two captures say together.* Edge on Windows: unused between 22:56 on 2026-10-12
+    and the refusal, so the session lasted between 1 min and 5 days 16 h, and was refused about
+    1 day 8 h before its cookie's expiry. Chrome on Fedora (2026-09-24, seen 2026-10-19):
+    between 1 min and 19 days 21 h. Neither bounds the token's life from below; the narrower
+    upper bound is 5 days 16 h.
 
 ## Measurements
 
@@ -708,6 +742,6 @@ To be filled by the owner from Phase 5 of the plan; values only, never a token.
 | `cookie.session` / `cookie.expires` at capture | `false` / 1790886054.401 = 2026-10-01T20:20:54Z, 7.0 days after capture: a persistent cookie | 2026-09-24 |
 | Sign-in method and seconds to the list (Fedora, Chrome) | password, no 2FA, no "Save password?" bubble; 2 min 17 s from the button to the list including the typing (the last click was not timed) | 2026-09-24 |
 | Sign-in method and seconds to the list (Windows, the artifact) | Chrome 155.0.8059.40: password, no 2FA, no bubble; 49.4 s from the button to the capture including the typing, about 1 s from the last click to the window closing (owner's estimate); cookie persistent, 7.00 days. Edge 155.0.4283.45: password, no 2FA, no bubble; 63 s from the button to the capture; cookie 7.00 days | 2026-10-12 |
-| Worked for at least (last successful call after capture) | | |
-| First refusal (first 401 after capture) | | |
-| "Open gopro.com again" after the refusal: closed without typing, or asked to sign in | | |
+| Worked for at least (last successful call after capture) | Windows, Edge capture: at least 1 min (last success 2026-10-12 22:56:46, 76 s after capture); unused afterwards | 2026-10-26 |
+| First refusal (first 401 after capture) | Windows, Edge capture: 2026-10-18 15:01:31 local, 5 days 16 h after capture, about 1 day 8 h before the cookie's `expires` (2026-10-19 22:55); the Diagnostics card reads "First refusal 5 days 16 h after capture" | 2026-10-26 |
+| "Open gopro.com again" after the refusal: closed without typing, or asked to sign in | asked to sign in (the GoPro Login form in the Edge window); run after the cookie's expiry, so it does not settle whether the profile would have carried a session at the first refusal | 2026-10-26 |
