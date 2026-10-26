@@ -497,7 +497,7 @@ def test_ui_passes_the_window_policy_to_start(monkeypatch):
 def test_version_names_the_client(monkeypatch, tmp_path, capsys):
     """``--version``: the version, where the Google Photos client would come from, the GoPro window's browser."""
     import castlib
-    from castlib import config
+    from castlib import config, window
     from castlib.auth import _builtin_client
     monkeypatch.setattr(config, "_CONFIG", str(tmp_path / "config"))
     monkeypatch.delenv("GOOGLE_CLIENT_JSON", raising=False)
@@ -506,9 +506,11 @@ def test_version_names_the_client(monkeypatch, tmp_path, capsys):
     exe = tmp_path / "chrome"
     exe.write_text("", encoding="utf-8")
     monkeypatch.setenv("CAST_TV_BROWSER", str(exe))
+    monkeypatch.setattr(window, "describe", lambda: "Window: edgechromium")
     assert cli.main_tv(["--version"]) == 0
     assert capsys.readouterr().out.splitlines() == ["cast-tv " + castlib.__version__, "Google Photos client: none",
-                                                    "GoPro window: CAST_TV_BROWSER=" + str(exe)]
+                                                    "GoPro window: CAST_TV_BROWSER=" + str(exe),
+                                                    "Window: edgechromium"]
     monkeypatch.setattr(_builtin_client, "CLIENT_ID", "id")
     monkeypatch.setattr(_builtin_client, "CLIENT_SECRET", "secret")
     cli.main_tv(["--version"])
@@ -558,3 +560,18 @@ def test_self_check_converts_a_heic(capsys):
     """The release smoke test's probe: a HEIC made in memory comes out as a JPEG."""
     assert cli.main_tv(["--self-check"]) == 0
     assert capsys.readouterr().out.strip() == "self-check: HEIC -> image/jpeg 16x16 OK"
+
+
+def test_window_check_flag_runs_the_probe_only(monkeypatch, capsys):
+    """``--window-check`` returns the probe's exit code and starts nothing else; ``--help`` does not list it."""
+    calls = []
+    monkeypatch.setattr(cli, "window_check", lambda: calls.append("check") or 1)
+    monkeypatch.setattr(cli, "ui", lambda **kw: calls.append("ui") or 0)
+    assert cli.main_tv(["--window-check"]) == 1
+    assert calls == ["check"]
+    monkeypatch.setenv("COLUMNS", "200")
+    with pytest.raises(SystemExit):
+        cli.main_tv(["--help"])
+    out = capsys.readouterr().out
+    assert "--window-check" not in out and "--self-check" not in out
+    assert "which engine the cast-tv window would use" in out

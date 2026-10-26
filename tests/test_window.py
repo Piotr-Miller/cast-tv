@@ -5,10 +5,11 @@ import sys
 import threading
 import time
 import types
+import urllib.request
 
 import pytest
 
-from castlib import cli, platform, window
+from castlib import cli, platform, window, window_probe
 from castlib.platform import SessionEnd
 from castlib.sources.local import item_for_path
 from tests.conftest import wait_for
@@ -31,11 +32,18 @@ class FakeWindow:
     def __init__(self, fake, title, url, kw):
         self.fake, self.title, self.url, self.kw = fake, title, url, kw
         self.events = types.SimpleNamespace(**{name: FakeEvent() for name in (
-            "initialized", "shown", "minimized", "restored", "maximized", "closed")})
+            "initialized", "shown", "loaded", "minimized", "restored", "maximized", "closed")})
         self.is_shown = False
         self.destroys = 0
         self.gone = threading.Event()
         self.calls = []
+
+    def evaluate_js(self, script):
+        self.calls.append(("evaluate_js", script))
+        answer = self.fake.page.get(script)
+        if isinstance(answer, Exception):
+            raise answer
+        return answer
 
     def destroy(self):
         if not self.is_shown:
@@ -79,6 +87,8 @@ class FakeWebview(types.ModuleType):
         self.created = threading.Event()
         self.on_shown = threading.Event()
         self.gui = "not started"
+        self.page = {"document.title": "cast-tv", "typeof window.Alpine": "object"}   # what evaluate_js answers
+        self.loads = True                    # False: the page never fires loaded
 
     def create_window(self, title, url, **kw):
         if self.on_create is not None:
@@ -101,6 +111,8 @@ class FakeWebview(types.ModuleType):
         w.is_shown = True
         w.events.shown.fire()
         self.on_shown.set()
+        if self.loads:
+            w.events.loaded.fire()
         if self.user_closes:
             return
         assert w.gone.wait(5), "the window was never destroyed"
@@ -172,6 +184,73 @@ def test_forced_fallback_opens_no_window(fake_webview, monkeypatch):
     monkeypatch.setenv(window.FAIL_ENV, "1")
     assert window.run(object(), "http://127.0.0.1:1/ui/") == "unavailable: CAST_TV_WINDOW_FAIL"
     assert fake_webview.windows == []
+
+
+# ------------------------------------------------------------ --window-check
+def test_window_check_reads_the_page_back(fake_webview):
+    """The release smoke test's probe: the expected engine, the page's title, Alpine running; then closed."""
+    assert window_probe.check("http://127.0.0.1:1/ui/", timeout=1) == "window-check: edgechromium OK"
+    w = fake_webview.windows[0]
+    assert w.url == "http://127.0.0.1:1/ui/" and w.title == "cast-tv" and w.destroys == 1
+    assert ("evaluate_js", "document.title") in w.calls and fake_webview.errors == []
+
+
+def test_window_check_refuses_the_wrong_engine(fake_webview):
+    """MSHTML instead of WebView2 renders a page too; the check must still fail, with no window shown."""
+    fake_webview.engine = "mshtml"
+    with pytest.raises(RuntimeError, match="the mshtml engine loaded, not edgechromium"):
+        window_probe.check("http://127.0.0.1:1/ui/", timeout=1)
+    assert not fake_webview.windows[0].is_shown
+
+
+@pytest.mark.parametrize("page, says", [
+    ({"document.title": "cast-tv", "typeof window.Alpine": "undefined"}, "Alpine 'undefined'"),
+    ({"document.title": "404", "typeof window.Alpine": "object"}, "document.title '404'"),
+    ({"typeof window.Alpine": RuntimeError("JavaScript is off")}, "JavaScript is off"),
+])
+def test_window_check_fails_when_the_page_did_not_run(fake_webview, page, says):
+    fake_webview.page = page
+    with pytest.raises(RuntimeError, match=says):
+        window_probe.check("http://127.0.0.1:1/ui/", timeout=0.3)
+    assert fake_webview.windows[0].destroys == 1
+
+
+def test_window_check_gives_up_on_a_page_that_never_loads(fake_webview, monkeypatch):
+    monkeypatch.setattr(window_probe, "GRACE", 0.1)
+    fake_webview.loads = False
+    with pytest.raises(RuntimeError, match="did not load within"):
+        window_probe.check("http://127.0.0.1:1/ui/", timeout=0.1)
+
+
+def test_window_check_without_the_extra(monkeypatch):
+    monkeypatch.setitem(sys.modules, "webview", None)
+    monkeypatch.setattr(window, "expected_renderer", lambda: "edgechromium")
+    with pytest.raises(RuntimeError, match="pywebview is not installed"):
+        window_probe.check("http://127.0.0.1:1/ui/")
+
+
+def test_window_check_command_serves_the_ui_and_ends(fake_webview, capsys):
+    """``cast-tv --window-check`` serves /ui/ on a spare loopback port, prints the line, exits 0; 1 on a failure."""
+    served = []
+
+    def opened():
+        served.append(fake_webview.windows[-1].url)
+        with urllib.request.urlopen(served[-1], timeout=5) as r:
+            served.append(r.status)
+
+    original = fake_webview.start
+
+    def start(*a, **kw):
+        opened()
+        return original(*a, **kw)
+
+    fake_webview.start = start
+    assert cli.main_tv(["--window-check"]) == 0
+    assert capsys.readouterr().out.strip() == "window-check: edgechromium OK"
+    assert served[0].startswith("http://127.0.0.1:") and served[0].endswith("/ui/") and served[1] == 200
+    fake_webview.engine = "mshtml"
+    assert cli.main_tv(["--window-check"]) == 1
+    assert capsys.readouterr().out.strip() == "window-check failed: the mshtml engine loaded, not edgechromium"
 
 
 @pytest.mark.parametrize("fails", [False, True])

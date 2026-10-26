@@ -463,10 +463,10 @@ the GPU path.
 
 #### Manual Verification:
 
-- On the Windows laptop, the PR run's `cast-tv-windows-x64.exe` (downloaded into `Downloads\s12-phase2`), started from PowerShell, opens the window. `--version` shows `Window: edgechromium`. Record the file size and the time from Enter to a rendered UI
-- On the Fedora desktop, the PR run's `cast-tv-linux-x64`, after `chmod +x` and a start from a terminal, opens a Qt window with the GPU on (no `--disable-gpu`). `--version` shows `Window: qtwebengine`. Record the size and the start time
-- On the Fedora desktop, with that Linux binary: cast a HEIC photo from Google Photos or a local file through the window and see it upright on the TV (pillow-heif without the bundled `libstdc++`)
-- On the Ubuntu 24.04 VM from the 2026-10-16 spike, if it still exists: the Linux binary opens its window. Otherwise record that it was not run, and why
+- On the Windows laptop, the PR run's `cast-tv-windows-x64.exe` (downloaded into `Downloads\s12-phase2`), started from PowerShell, opens the window. `--version` shows `Window: edgechromium`. Record the file size and the time from Enter to a rendered UI (owner decision 2026-10-26: surface declared) — surface: packaging/cast-tv.spec, packaging/entry.py, .github/workflows/release.yml, castlib/window.py, castlib/cli.py
+- On the Fedora desktop, the PR run's `cast-tv-linux-x64`, after `chmod +x` and a start from a terminal, opens a Qt window with the GPU on (no `--disable-gpu`). `--version` shows `Window: qtwebengine`. Record the size and the start time (owner decision 2026-10-26: surface declared) — surface: packaging/cast-tv.spec, packaging/entry.py, .github/workflows/release.yml, castlib/window.py, castlib/cli.py
+- On the Fedora desktop, with that Linux binary: cast a HEIC photo from Google Photos or a local file through the window and see it upright on the TV (pillow-heif without the bundled `libstdc++`) (owner decision 2026-10-26: surface declared) — surface: packaging/cast-tv.spec, .github/workflows/release.yml, castlib/photos.py
+- On the Ubuntu 24.04 VM from the 2026-10-16 spike, if it still exists: the Linux binary opens its window. Otherwise record that it was not run, and why (owner decision 2026-10-26: surface declared) — surface: packaging/cast-tv.spec, packaging/entry.py, .github/workflows/release.yml, castlib/window.py, castlib/cli.py
 
 ---
 
@@ -810,25 +810,25 @@ The Progress Manual rows, run on the Windows laptop and the Fedora desktop, each
 
 #### Manual
 
-- [x] 1.8 Windows venv with [window]: cast-tv opens a window on the UI — accepted at 104dd710afda592c1e16666eec224c232e2a2479
-- [x] 1.9 Fedora pipx with [window]: cast-tv opens a Qt window — accepted at f04dfcb7fd9105f6a570c29579c1b34240fb5b74
-- [x] 1.10 Without the extra: tab as today, with a working Quit control — accepted at f04dfcb7fd9105f6a570c29579c1b34240fb5b74
-- [x] 1.11 --no-window opens the tab — accepted at 104dd710afda592c1e16666eec224c232e2a2479
-- [x] 1.12 A forced fallback opens the tab with window_unavailable in Diagnostics — accepted at f04dfcb7fd9105f6a570c29579c1b34240fb5b74
-- [x] 1.13 X with a video playing stops the TV and ends the process — accepted at 104dd710afda592c1e16666eec224c232e2a2479
+- [ ] 1.8 Windows venv with [window]: cast-tv opens a window on the UI
+- [ ] 1.9 Fedora pipx with [window]: cast-tv opens a Qt window
+- [ ] 1.10 Without the extra: tab as today, with a working Quit control
+- [ ] 1.11 --no-window opens the tab
+- [ ] 1.12 A forced fallback opens the tab with window_unavailable in Diagnostics
+- [ ] 1.13 X with a video playing stops the TV and ends the process
 - [x] 1.14 Ctrl+C and kill stop the TV and close the window — accepted at f04dfcb7fd9105f6a570c29579c1b34240fb5b74
-- [x] 1.15 A second launch brings the window to the front — accepted at 104dd710afda592c1e16666eec224c232e2a2479
+- [ ] 1.15 A second launch brings the window to the front
 - [x] 1.16 The phone's UI is unchanged and has no Quit control — accepted at ffa982c46ad1f1bd5ea9b81a9283f941dac2690b
 
 ### Phase 2: The release carries the window
 
 #### Automated
 
-- [ ] 2.1 Lint passes
-- [ ] 2.2 version_text and --window-check are covered
-- [ ] 2.3 The full suite passes
-- [ ] 2.4 The release workflow on the PR builds and smoke-tests both files with the window check
-- [ ] 2.5 A local Windows build passes the smoke test
+- [x] 2.1 Lint passes — c4be482
+- [x] 2.2 version_text and --window-check are covered — c4be482
+- [x] 2.3 The full suite passes — c4be482
+- [x] 2.4 The release workflow on the PR builds and smoke-tests both files with the window check — c4be482
+- [x] 2.5 A local Windows build passes the smoke test — c4be482
 
 #### Manual
 

@@ -19,7 +19,7 @@ import urllib.request
 import webbrowser
 
 import castlib
-from castlib import net, platform, window
+from castlib import net, platform, window, window_probe
 from castlib.auth import browser, loopback
 from castlib.app import ENDS_HINT, AlreadyRunning, App, end_on_sigterm, main_wait
 from castlib.diagnostics import check_codecs
@@ -353,19 +353,40 @@ def _bring_forward(port):
 
 
 def version_text() -> str:
-    """``cast-tv <version>``, the Google Photos client's origin, and the browser the GoPro window would use.
+    """``cast-tv <version>``, the Google Photos client's origin, the GoPro window's browser, the cast-tv window's engine.
 
-    Three lines, so a support question is answered from one command. Nothing
+    Four lines, so a support question is answered from one command. Nothing
     is launched: the third line is the first candidate ``browser.candidates()``
     would try, or ``CAST_TV_BROWSER`` when set (with ``(not found)`` when the
-    file is missing), or ``none found (token paste only)``.
+    file is missing), or ``none found (token paste only)``; the fourth is
+    ``window.describe()``, which loads the backend but opens no window.
     """
     source = loopback.client_source()
     where = {"built-in": "built in", None: "none"}.get(source, "from " + str(source))
-    window = browser.describe()
-    if window == "none found":
-        window += " (token paste only)"
-    return "cast-tv %s\nGoogle Photos client: %s\nGoPro window: %s" % (castlib.__version__, where, window)
+    gopro_window = browser.describe()
+    if gopro_window == "none found":
+        gopro_window += " (token paste only)"
+    return "cast-tv %s\nGoogle Photos client: %s\nGoPro window: %s\n%s" % (
+        castlib.__version__, where, gopro_window, window.describe())
+
+
+def window_check() -> int:
+    """The release smoke test's window probe: the UI served on a spare loopback port, shown, read back, closed.
+
+    No TV is looked for and no browser opens. Prints ``window-check: <engine> OK``
+    and returns 0, or prints why and returns 1.
+    """
+    app = App(Server(("127.0.0.1", 0)))
+    app.sources["gphotos"].open_browser = False
+    app.serve()
+    try:
+        print(window_probe.check("http://127.0.0.1:%d/ui/" % app.server.port), flush=True)
+        return 0
+    except RuntimeError as e:
+        print("window-check failed: %s" % e, flush=True)
+        return 1
+    finally:
+        app.close()
 
 
 def self_check() -> str:
@@ -413,8 +434,10 @@ def main_tv(argv=None):
                     help="Netscape cookie jar, for material behind a login")
     ap.add_argument("--version", action="store_true",
                     help="print the version, where the Google Photos client comes from, "
-                         "and which browser would open the gopro.com window")
+                         "which browser would open the gopro.com window, "
+                         "and which engine the cast-tv window would use")
     ap.add_argument("--self-check", action="store_true", help=argparse.SUPPRESS)   # the release smoke test
+    ap.add_argument("--window-check", action="store_true", help=argparse.SUPPRESS)  # the release smoke test
     args = ap.parse_args(argv)
 
     if args.version:
@@ -423,6 +446,8 @@ def main_tv(argv=None):
     if args.self_check:
         print(self_check())
         return 0
+    if args.window_check:
+        return window_check()
 
     if args.list_devices:
         for ip, url, name in discover():
