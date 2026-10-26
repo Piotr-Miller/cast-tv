@@ -45,7 +45,7 @@ conversion and the cast supervisor. Delivered with `cloud-source-ui` (PR #1, 202
 | S-10 | (not opened) | connect Google Photos with any Google account, without weekly re-consent | S-08 | US-04 | parked |
 | S-11 | s11-screensaver | watch a slideshow or a long film without the TV's screen saver cutting in | S-02 | US-03 | done |
 | S-12 | (proposed) | run cast-tv as a desktop window on Windows and Linux, not only a browser tab | S-08 | — | proposed |
-| S-13 | s13-gopro-auth | connect GoPro without copying a token by hand | S-03 | FR-010 | merged (PR #40, 2026-10-12); only rows 5.11-5.12 open, at GoPro's first refusal |
+| S-13 | s13-gopro-auth | connect GoPro without copying a token by hand | S-03 | FR-010 | merged (PR #40, 2026-10-12); every row done (5.11-5.12 on 2026-10-26), archive next |
 | S-14 | (proposed) | cast to Google TV and Chromecast devices, not only DLNA TVs | S-02 | — | proposed |
 | S-15 | s15-share-link-album | cast an album from a share link | S-09 | FR-012 | parked (2026-10-15): the picker covers the owner's own albums |
 
@@ -169,7 +169,8 @@ plan. The ideas under each are starting points, not findings.
   declined. Phases 1-3 (the engine, the source and API, the UI gate) landed on PR #40 by
   2026-09-23; Phase 4 is the docs; Phase 5 exercised both systems by hand: Fedora with Chrome
   on 2026-09-24, the Windows 11 artifact in Chrome and Edge windows on 2026-10-12. Rows 5.11-5.12
-  (what GoPro does when it first refuses a captured session) stay open and dated until it happens.
+  (what GoPro does when it first refuses a captured session) were recorded on 2026-10-26: the Edge
+  capture was first refused 5 days 16 h after capture, a day before its cookie's expiry.
 - The token stays inside cast-tv and is never shown or logged.
 
 ### S-14: Google TV and Chromecast as targets

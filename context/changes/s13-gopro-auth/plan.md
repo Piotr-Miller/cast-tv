@@ -864,5 +864,5 @@ profile directory and `gopro-session.json` behind, harmless and removable by han
 - [x] 5.8 Phone: the window opens on the Fedora machine, the phone shows the on-host note, then lists by itself — 2bce9dc
 - [x] 5.9 No "Save password?" bubble in the window on either system — ff5d8ce
 - [x] 5.10 Windows 11, Edge, the artifact: `--version` names the browser; rows 5.3-5.6 repeated; closing the console closes the window; no `msedge.exe` left — ff5d8ce
-- [ ] 5.11 The profile question, dated: after the first refusal, "Open gopro.com again" closed without typing, or asked to sign in
-- [ ] 5.12 The observed period, dated: the Diagnostics hint text copied into `research.md` "Measurements"
+- [x] 5.11 The profile question, dated: after the first refusal, "Open gopro.com again" closed without typing, or asked to sign in — accepted at 385bf03e0ade258889b2006f7763031d09f6465a
+- [x] 5.12 The observed period, dated: the Diagnostics hint text copied into `research.md` "Measurements" — accepted at 385bf03e0ade258889b2006f7763031d09f6465a
