@@ -824,15 +824,15 @@ The Progress Manual rows, run on the Windows laptop and the Fedora desktop, each
 
 #### Automated
 
-- [x] 2.1 Lint passes — c4be482
-- [x] 2.2 version_text and --window-check are covered — c4be482
-- [x] 2.3 The full suite passes — c4be482
-- [x] 2.4 The release workflow on the PR builds and smoke-tests both files with the window check — c4be482
-- [x] 2.5 A local Windows build passes the smoke test — c4be482
+- [x] 2.1 Lint passes — 7eb63db
+- [x] 2.2 version_text and --window-check are covered — 7eb63db
+- [x] 2.3 The full suite passes — 7eb63db
+- [x] 2.4 The release workflow on the PR builds and smoke-tests both files with the window check — 7eb63db
+- [x] 2.5 A local Windows build passes the smoke test — 7eb63db
 
 #### Manual
 
-- [ ] 2.6 Windows: the PR exe opens the window; size and start time recorded
+- [x] 2.6 Windows: the PR exe opens the window; size and start time recorded — accepted at 7eb63dbbd1faf0303914b0a008356097a0a327ae
 - [ ] 2.7 Fedora: the PR Linux binary opens a Qt window with the GPU on; size and start time recorded
 - [ ] 2.8 Fedora: a HEIC photo cast through the window shows upright
 - [ ] 2.9 Ubuntu 24.04 VM: the Linux binary opens its window, or why not

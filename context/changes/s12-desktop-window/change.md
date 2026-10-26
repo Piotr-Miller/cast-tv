@@ -19,3 +19,4 @@ Run cast-tv as a desktop window on Windows and Linux (roadmap S-12)
 2026-10-26: reopened 1.8, 1.11, 1.13, 1.15 — was accepted at 104dd710afda592c1e16666eec224c232e2a2479; changed: castlib/cli.py (Phase 2: the --version window line and --window-check)
 2026-10-26: reopened 1.9, 1.10, 1.12 — was accepted at f04dfcb7fd9105f6a570c29579c1b34240fb5b74; changed: castlib/cli.py (Phase 2: the --version window line and --window-check)
 2026-10-26: owner decision — Phase 2 Manual rows 2.6-2.9 get explicit "— surface:" lists (the fallback surface could not parse `.github/workflows/release.yml:26-44`); plan.md Phase 2 — Manual Verification
+2026-10-26: PR #80 was squash-merged as 7eb63db (c4be482 and 9c85a46 in one commit; Progress 2.1-2.5 rewritten); row 2.6 accepted at 7eb63db, whose code is the tree the PR run's exe was built from
