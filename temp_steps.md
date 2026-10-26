@@ -1,4 +1,4 @@
-# Next steps (2026-10-26, S-12 Phase 2 on main, Fedora rows next)
+# Next steps (2026-10-26 late, main 5c5736d: Fedora rows 2.7-2.9 or Phase 3 next)
 
 The standing note for a pause in the work (a reboot, a switch of machine): it stays in the
 repository and is overwritten at the next pause.
@@ -12,24 +12,26 @@ recorded row, the PR or commit.
 - S-12 Phase 2 ("The release carries the window") is on `main` as 7eb63db (PR #80, squash-merged).
   The PR's release run 40386649886 built both files and passed the smoke test with the window
   check: Windows 26.1 MB, `window-check: edgechromium OK`; Linux 260.5 MB under Xvfb,
-  `window-check: qtwebengine OK`. Row 2.6 (Windows) is accepted at 7eb63db.
+  `window-check: qtwebengine OK`.
 - Phase 2 reopened Phase 1 rows 1.8-1.13 and 1.15 (`castlib/cli.py` changed); they are confirmed
   again once, near the end (step 15a). 1.14 and 1.16 stay current.
-- ci-actions-node24 (PRs #82-#85, archived) moved the workflows' actions to the Node.js 24 majors.
-  `release.yml` changed, so rows 2.6-2.9 use the binaries of PR #82's release run 40398550351
-  (built from main's code): Windows 26072009 bytes, Linux 260495368 bytes. Row 2.6 was
-  re-confirmed on that exe at 70d37b7.
-- Merge method: PRs #78 and #80 went in as squash merges. Squash or rebase both work; after a merge
+- ci-actions-node24 (PRs #82-#85) moved the workflows' actions to the Node.js 24 majors and is
+  archived; its row 1.4 (the `release` job publishes both files) waits for the next `v*` tag
+  (step 17). `release.yml` changed, so rows 2.6-2.9 use the binaries of PR #82's release run
+  40398550351 (built from main's code): Windows 26072009 bytes, Linux 260495368 bytes.
+- Row 2.6 (Windows) was re-confirmed on run 40398550351's exe and is accepted at 70d37b7 (PR #86).
+- Phase 3 does not wait for rows 2.7-2.9: do whichever machine is at hand first.
+- Merge method: PRs #78-#86 went in as squash merges. Squash or rebase both work; after a merge
   Claude rewrites the branch SHAs in the plan to the `main` SHA.
 
 ## Now: Fedora, Phase 2 rows 2.7-2.9
 
-- [x] 1. **Windows 11, row 2.6:** done 2026-10-26, accepted at 7eb63db (`research.md`, "Phase 2");
-   re-confirmed 2026-10-26 on run 40398550351's exe, accepted at 70d37b7.
+- [x] 1. **Windows 11, row 2.6:** done 2026-10-26 at 7eb63db; re-confirmed 2026-10-26 on run
+   40398550351's exe, accepted at 70d37b7 (PR #86; `research.md`, "Manual row 2.6 again").
 - [ ] 2. **Fedora**, in a terminal, in the cast-tv checkout:
    ```bash
    git switch main && git pull
-   mkdir -p ~/Downloads/s12-phase2 && cd ~/Downloads/s12-phase2
+   mkdir -p ~/Downloads/s12-phase2-node24 && cd ~/Downloads/s12-phase2-node24
    gh run download 40398550351 -R Piotr-Miller/cast-tv -n cast-tv-linux-x64
    chmod +x cast-tv-linux-x64
    ls -l cast-tv-linux-x64
@@ -97,7 +99,10 @@ recorded row, the PR or commit.
     the Phase 4 merge, since Phases 3 and 4 change `cli.py` again. Claude gives the steps.
 - [ ] 16. **Windows 11:** review Phases 2-4 (`/rune-impl-review`) and fix what it finds.
 - [ ] 17. **You:** decide on the release tag (e.g. `v0.5.0`); the release workflow builds and publishes
-    the files on GitHub Releases.
+    the files on GitHub Releases. This run also checks ci-actions-node24's row 1.4: on the Actions
+    page, the tag's release run has a green `release` job, and the release's Assets list
+    `cast-tv-windows-x64.exe` and `cast-tv-linux-x64` at the sizes the build printed. Tell Claude
+    what you saw, and it records the observation.
 - [ ] 18. **Windows 11:** `/rune-archive s12-desktop-window`; S-12 becomes `done` in the roadmap.
 
 ## To decide, no hurry
