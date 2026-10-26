@@ -816,3 +816,27 @@ bootloader, and killing it after 20 s left the child running (it was ended throu
 21:10. `smoke.py`'s `proc.kill()` on Windows ends only the bootloader. CI's runner is discarded
 after the job, so the release gate is unaffected; a local run leaves a server on port 8099.
 Left for Phase 3 with the traceback.
+
+## Manual row 2.6 again, after the action pins moved to Node.js 24 (2026-10-26)
+
+ci-actions-node24 (PR #82, squash 1185659) changed `.github/workflows/release.yml`, one of row
+2.6's surfaces, so the acceptance at 7eb63db went stale. The exe checked here comes from PR #82's
+release run 40398550351 (head 1b92d0c, whose tree is main's at 1185659; `castlib/`, `packaging/`
+and the workflows are unchanged from 1185659 to 70d37b7). Its smoke test printed
+`size: 26072009 bytes` and `window-check: edgechromium OK (8.0 s)`.
+
+**Row 2.6** (2026-10-26, the owner, Windows 11 laptop). `cast-tv-windows-x64.exe` downloaded with
+`gh run download 40398550351 -n cast-tv-windows-x64.exe` into `Downloads\s12-2.6-node24`:
+26,072,009 bytes, SHA-256 `B227237F0E89935BD21AF499C75DD193FF7FEED31A160D1C23BE77BBD8BE549B`.
+Started from PowerShell 7.6.9; the owner pasted the console:
+
+- `--version` printed `cast-tv 0.4.0`, `Google Photos client: built in`, `GoPro window: C:\Program
+  Files\Google\Chrome\Application\chrome.exe`, `Window: edgechromium`.
+- Start, `Get-Date` 22:22:26.042 just before Enter: the three addresses (localhost:8895, the Wi-Fi
+  192.168.50.213, the 172.21.80.1 virtual adapter), the firewall line, "Close the window or press
+  Ctrl+C to end it", `TV: 83" OLED (192.168.50.142)`. The cast-tv window opened on the UI 1.5-2 s
+  after Enter (owner's estimate). Ended as asked, with the window's X: `Stopped.`, the prompt
+  returned, no traceback. The owner reported no SmartScreen or Defender prompt.
+
+Row 2.6's criterion (the window opens, `--version` names `edgechromium`, size and start time
+recorded) is met for the exe built by the Node.js 24 actions.

@@ -15,22 +15,27 @@ recorded row, the PR or commit.
   `window-check: qtwebengine OK`. Row 2.6 (Windows) is accepted at 7eb63db.
 - Phase 2 reopened Phase 1 rows 1.8-1.13 and 1.15 (`castlib/cli.py` changed); they are confirmed
   again once, near the end (step 15a). 1.14 and 1.16 stay current.
+- ci-actions-node24 (PRs #82-#85, archived) moved the workflows' actions to the Node.js 24 majors.
+  `release.yml` changed, so rows 2.6-2.9 use the binaries of PR #82's release run 40398550351
+  (built from main's code): Windows 26072009 bytes, Linux 260495368 bytes. Row 2.6 was
+  re-confirmed on that exe at 70d37b7.
 - Merge method: PRs #78 and #80 went in as squash merges. Squash or rebase both work; after a merge
   Claude rewrites the branch SHAs in the plan to the `main` SHA.
 
 ## Now: Fedora, Phase 2 rows 2.7-2.9
 
-- [x] 1. **Windows 11, row 2.6:** done 2026-10-26, accepted at 7eb63db (`research.md`, "Phase 2").
+- [x] 1. **Windows 11, row 2.6:** done 2026-10-26, accepted at 7eb63db (`research.md`, "Phase 2");
+   re-confirmed 2026-10-26 on run 40398550351's exe, accepted at 70d37b7.
 - [ ] 2. **Fedora**, in a terminal, in the cast-tv checkout:
    ```bash
    git switch main && git pull
    mkdir -p ~/Downloads/s12-phase2 && cd ~/Downloads/s12-phase2
-   gh run download 40386649886 -R Piotr-Miller/cast-tv -n cast-tv-linux-x64
+   gh run download 40398550351 -R Piotr-Miller/cast-tv -n cast-tv-linux-x64
    chmod +x cast-tv-linux-x64
    ls -l cast-tv-linux-x64
    ./cast-tv-linux-x64 --version
    ```
-   The size should be 260494488 bytes and the last line `Window: qtwebengine`.
+   The size should be 260495368 bytes and the last line `Window: qtwebengine`.
    - [ ] **2.7:** in the same terminal:
      ```bash
      date +%T.%3N; ./cast-tv-linux-x64
