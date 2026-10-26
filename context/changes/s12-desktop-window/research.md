@@ -764,3 +764,55 @@ QtPy 2.4.3.
 Two console texts for a later phase, not failures of these rows: in a fallback the console first
 says "Close the window" and then that there is no window; and the Qt warnings land on the
 console that Phase 3 hides.
+
+## Phase 2: the release builds and manual row 2.6 (2026-10-26)
+
+**The PR's release run** (PR #80, branch head c4be482, run 40386649886) was green on both
+runners. Its smoke test printed:
+
+- **Windows (`windows-latest`, Python 3.12.10):** the WebView2 runtime 155.0.4283.62 was already
+  installed (the bootstrapper step did not run); `size: 26071071 bytes`, `Window: edgechromium`,
+  `self-check: HEIC -> image/jpeg 16x16 OK`, `window-check: edgechromium OK (8.6 s)`.
+- **Linux (`ubuntu-22.04`, under `xvfb-run -a`):** `size: 260494488 bytes`, `Window: qtwebengine`,
+  `self-check: HEIC -> image/jpeg 16x16 OK` (pillow-heif without the bundled `libstdc++`, on the
+  runner's own), `window-check: qtwebengine OK (5.8 s)`.
+- Artifacts: `cast-tv-windows-x64.exe` id 12680597503, `cast-tv-linux-x64` id 12680887196.
+
+A local build on the Windows laptop (Python 3.14.5, pywebview 6.2.1, pythonnet 3.2.1,
+PyInstaller 6.22.3; a placeholder Google client written for the build and the stub restored
+right after) was 26,167,565 bytes and passed the same smoke test with `window-check:
+edgechromium OK (6.8 s)`. On Python 3.14, `subprocess` would not start the relative path
+`dist/cast-tv.exe` (WinError 2), so `smoke.py` now resolves the path first.
+
+**Row 2.6** (2026-10-26, the owner, Windows 11 laptop). The PR run's `cast-tv-windows-x64.exe`,
+downloaded with `gh run download 40386649886` into `Downloads\s12-phase2`: 26,071,071 bytes,
+SHA-256 `9e4dae643f11c506627c25ff0373d6a4c2bda7f55fea6fdbb22252a0fdbbbf74`. Started from
+PowerShell 7.6.9; the owner pasted the console:
+
+- `--version` printed `cast-tv 0.4.0`, `Google Photos client: built in`, `GoPro window: C:\Program
+  Files\Google\Chrome\Application\chrome.exe`, `Window: edgechromium`.
+- **Start 1**, `Get-Date` 21:01:01.902 just before Enter: the three addresses (localhost, the
+  Wi-Fi 192.168.50.213, a 172.21.80.1 virtual adapter), the firewall line, "Close the window or
+  press Ctrl+C to end it", `TV: 83" OLED (192.168.50.142)`. The cast-tv window opened on the UI
+  about 2 s after Enter (owner's estimate). No SmartScreen or Defender prompt. Ended with Ctrl+C
+  in the PowerShell window (owner's answer, asked twice): `Stopped.` and the prompt returned, but
+  after `Stopped.` Python printed `Exception ignored in atexit callback: <function unload ...>`,
+  a traceback through `pythonnet\__init__.py` line 161 (`unload`) and `clr_loader\types.py`
+  line 65, ending in `KeyboardInterrupt:`. pythonnet's atexit shutdown of the .NET runtime was
+  interrupted by a `KeyboardInterrupt`. Not seen before: no earlier entry here mentions it.
+- **Start 2**, 21:01:25.909: the same lines; ended with the window's X (owner's answer):
+  `Stopped.`, the prompt returned, no traceback.
+
+Row 2.6's criterion (the window opens, `--version` names `edgechromium`, size and start time
+recorded) is met. The Ctrl+C traceback is a separate defect on the Ctrl+C exit path (rows 1.14,
+3.11), left for Phase 3, which works on that path.
+
+**Found while trying to reproduce it** (Claude, 2026-10-26 21:10). A script that started the exe
+with `Start-Process -WindowStyle Hidden` and called `CloseMainWindow()` was not a valid stand-in
+for X: the onefile exe is a bootloader plus a child that owns the window, so the call reached the
+bootloader, and killing it after 20 s left the child running (it was ended through
+`POST /api/quit`, stderr empty). The same split explains a leftover from the local smoke run:
+`dist\cast-tv.exe --no-browser -p 8099`, started at 20:13 by `smoke.py`, was still serving at
+21:10. `smoke.py`'s `proc.kill()` on Windows ends only the bootloader. CI's runner is discarded
+after the job, so the release gate is unaffected; a local run leaves a server on port 8099.
+Left for Phase 3 with the traceback.

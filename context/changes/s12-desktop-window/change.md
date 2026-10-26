@@ -18,3 +18,4 @@ Run cast-tv as a desktop window on Windows and Linux (roadmap S-12)
 2026-10-18: reopened 1.8, 1.11, 1.13, 1.15 — was accepted at ffa982c46ad1f1bd5ea9b81a9283f941dac2690b; changed: castlib/cli.py, castlib/window.py (F1 startup termination fix)
 2026-10-26: reopened 1.8, 1.11, 1.13, 1.15 — was accepted at 104dd710afda592c1e16666eec224c232e2a2479; changed: castlib/cli.py (Phase 2: the --version window line and --window-check)
 2026-10-26: reopened 1.9, 1.10, 1.12 — was accepted at f04dfcb7fd9105f6a570c29579c1b34240fb5b74; changed: castlib/cli.py (Phase 2: the --version window line and --window-check)
+2026-10-26: owner decision — Phase 2 Manual rows 2.6-2.9 get explicit "— surface:" lists (the fallback surface could not parse `.github/workflows/release.yml:26-44`); plan.md Phase 2 — Manual Verification
