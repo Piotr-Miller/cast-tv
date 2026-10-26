@@ -1,7 +1,7 @@
 ---
 change_id: ci-actions-node24
 title: "Move the workflows' GitHub actions off Node.js 20"
-status: implemented
+status: impl_reviewed
 created: 2026-10-25
 updated: 2026-10-26
 archived_at: null
@@ -21,3 +21,5 @@ be checked at planning (each action's `action.yml`, `runs.using`). lumina-clean-
 `release.yml` is release infrastructure: its change is fully proven only by the next real release run.
 
 2026-10-26: owner decisions — the newest majors (checkout v7, setup-python v7, upload-artifact v7, download-artifact v8); the `release` job is checked at the next real tag, not a trial one; plan.md Overview, What We're NOT Doing
+
+2026-10-26: PR #82 squash-merged as 1185659 on main; Progress rows 1.1-1.3 rewritten from f9b6beb. Impl review APPROVED, 0 findings (reviews/impl-review-1b92d0c.md); 1.4 pending the next v* tag.

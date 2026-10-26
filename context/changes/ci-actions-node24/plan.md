@@ -140,9 +140,9 @@ archived with it pending, recorded as pending acceptance.
 
 #### Automated
 
-- [x] 1.1 The pins are exactly the four new ones — f9b6beb
-- [x] 1.2 The test workflow on the PR is green on both OSes — f9b6beb
-- [x] 1.3 The release workflow on the PR is green, with no Node.js 20 annotation — f9b6beb
+- [x] 1.1 The pins are exactly the four new ones — 1185659
+- [x] 1.2 The test workflow on the PR is green on both OSes — 1185659
+- [x] 1.3 The release workflow on the PR is green, with no Node.js 20 annotation — 1185659
 
 #### Manual
 
