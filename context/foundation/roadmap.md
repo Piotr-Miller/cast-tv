@@ -3,7 +3,7 @@ project: cast-tv
 version: 1
 status: active
 created: 2026-09-19
-updated: 2026-10-15
+updated: 2026-10-26
 prd_version: 1
 main_goal: personal-use-then-share
 top_blocker: time
@@ -45,7 +45,7 @@ conversion and the cast supervisor. Delivered with `cloud-source-ui` (PR #1, 202
 | S-10 | (not opened) | connect Google Photos with any Google account, without weekly re-consent | S-08 | US-04 | parked |
 | S-11 | s11-screensaver | watch a slideshow or a long film without the TV's screen saver cutting in | S-02 | US-03 | done |
 | S-12 | (proposed) | run cast-tv as a desktop window on Windows and Linux, not only a browser tab | S-08 | — | proposed |
-| S-13 | s13-gopro-auth | connect GoPro without copying a token by hand | S-03 | FR-010 | merged (PR #40, 2026-10-12); every row done (5.11-5.12 on 2026-10-26), archive next |
+| S-13 | s13-gopro-auth | connect GoPro without copying a token by hand | S-03 | FR-010 | done |
 | S-14 | (proposed) | cast to Google TV and Chromecast devices, not only DLNA TVs | S-02 | — | proposed |
 | S-15 | s15-share-link-album | cast an album from a share link | S-09 | FR-012 | parked (2026-10-15): the picker covers the owner's own albums |
 
@@ -244,3 +244,4 @@ None open. (Archiving `cloud-source-ui` was answered on 2026-09-20, #32.)
 - **S-09: a share link to a photo lists a photo tile; a motion photo's clip offers `=m37`
   (H.264 1080p), since the Samsung refused its `=dv` HEVC 120 fps original** - Archived
   2026-10-14 → `context/archive/2026-10-13-s09-share-link-photos/`. Lesson: -.
+- **S-13: connect GoPro without copying a token by hand** — Archived 2026-10-26 → `context/archive/2026-09-20-s13-gopro-auth/`. Lesson: —.
