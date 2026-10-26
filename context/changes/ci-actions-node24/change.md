@@ -1,7 +1,7 @@
 ---
 change_id: ci-actions-node24
 title: "Move the workflows' GitHub actions off Node.js 20"
-status: implementing
+status: implemented
 created: 2026-10-25
 updated: 2026-10-26
 archived_at: null
