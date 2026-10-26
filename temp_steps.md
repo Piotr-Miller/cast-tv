@@ -16,7 +16,8 @@ recorded row, the PR or commit.
 - Every Phase 1 manual row is accepted; the Fedora ones (1.9, 1.10, 1.12, the `kill` part of
   1.14) at `main` f04dfcb on 2026-10-19 (PR #70). Phase 1 is done.
 - The OneDrive question (2a) is closed: raw files, hidden by design, no change (PR #71).
-- S-13 rows 5.11 and 5.12 are recorded (step 3, 2026-10-26); S-13 can be archived.
+- S-13 rows 5.11 and 5.12 are recorded (step 3, 2026-10-26, PR #77) and S-13 is archived
+  (`context/archive/2026-09-20-s13-gopro-auth/`).
 - Next: Phase 2 on Windows.
 - Most work stays on the Windows 11 laptop; Fedora is visited for the Linux-only manual rows,
   best once per phase.
@@ -110,9 +111,9 @@ recorded row, the PR or commit.
    (`~/OneDrive/2026_07_10` on Fedora) holds exactly 8 files, all `.ORF` (`P7102190.ORF` to
    `P7102198.ORF`, 18-22 MB each). Hidden by design, not a bug. The owner decided the same day
    against a change that would say how many files are hidden: "Nothing castable here." stays.
-- [x] 3. **Windows 11, 2026-10-19 before about 22:55:** S-13 rows 5.12 and 5.11 (see "S-13" below).
+- [x] 3. **Windows 11, 2026-10-19 before about 22:55:** S-13 rows 5.12 and 5.11 (the steps were in this note until 2026-10-26).
    — done 2026-10-26, late: GoPro had first refused the session on 2026-10-18 15:01, unseen; the
-   rows are recorded at `main` 385bf03 with that caveat (`s13-gopro-auth/research.md`).
+   rows are recorded at `main` 385bf03 with that caveat (PR #77, `context/archive/2026-09-20-s13-gopro-auth/research.md`).
    First, in PowerShell, bring this note up to date:
    ```powershell
    cd C:\Source\cast-tv
@@ -189,34 +190,6 @@ Claude gives the exact commands for these rows when the PR's files exist.
   under rebased SHAs and the remote branch is gone.
 - **Windows:** whether to delete `.venv-spike`, `build` and `dist` in
   `C:\Source\cast-tv\context\changes\s12-desktop-window\spike-kit` (gitignored, 1.2 GB).
-
-## S-13: rows 5.11 and 5.12, when GoPro first rejects the session (Windows)
-
-The session from the Edge window is from 2026-10-12 22:55; its cookie expires **2026-10-19 around
-22:55**. Up to 2026-10-18 GoPro has not rejected it once (`first_401_at` empty).
-
-For comparison only, not row 5.12: Fedora's older window capture shows in Diagnostics (seen
-2026-10-19): "Session captured 2026-09-24 22:40. Worked for at least 1 min (last successful call).
-First refusal 19 days 21 h after capture. Cookie expires: 2026-10-01 22:40 (persistent)." That
-session was not used between those dates, so it says only that the refusal came somewhere between
-1 min and 19 days 21 h after capture.
-
-1. In PowerShell:
-   ```powershell
-   cd $HOME\Downloads\s13-row-5.10
-   $env:CAST_TV_BROWSER='C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe'
-   .\cast-tv-windows-x64.exe
-   ```
-2. In the cast-tv tab, click the **GoPro** tab:
-   - a list means the session still works. Press Ctrl+C in the PowerShell window and try later;
-   - the banner **"cast-tv couldn't access your GoPro media with this session"** means: note the
-     date and time and go to step 3.
-3. **Before clicking anything**, open **Diagnostics** (top right) and copy the whole text of the
-   GoPro card. That is row 5.12.
-4. Click **Open gopro.com again** and note whether the Edge window closed by itself or asked you to
-   sign in. That is row 5.11.
-5. Press Ctrl+C in the PowerShell window and give Claude the date, the Diagnostics text and the
-   result of step 4.
 
 ## How to resume with Claude
 
