@@ -1,4 +1,4 @@
-# Next steps (2026-10-26 late, main 5c5736d: Fedora rows 2.7-2.9 or Phase 3 next)
+# Next steps (2026-10-27, main 1239dcb: Phase 2 rows done; merge the rows PR, then Phase 3 on Windows)
 
 The standing note for a pause in the work (a reboot, a switch of machine): it stays in the
 repository and is overwritten at the next pause.
@@ -10,52 +10,29 @@ recorded row, the PR or commit.
 
 - S-12 Phase 1 is done; S-13 is archived (PR #78).
 - S-12 Phase 2 ("The release carries the window") is on `main` as 7eb63db (PR #80, squash-merged).
-  The PR's release run 40386649886 built both files and passed the smoke test with the window
-  check: Windows 26.1 MB, `window-check: edgechromium OK`; Linux 260.5 MB under Xvfb,
-  `window-check: qtwebengine OK`.
+  All its manual rows are now accepted: 2.6 at 70d37b7 (PR #86) and 2.7-2.9 at 1239dcb, on the
+  binaries of PR #82's release run 40398550351 (Windows 26072009 bytes, Linux 260495368 bytes).
 - Phase 2 reopened Phase 1 rows 1.8-1.13 and 1.15 (`castlib/cli.py` changed); they are confirmed
   again once, near the end (step 15a). 1.14 and 1.16 stay current.
-- ci-actions-node24 (PRs #82-#85) moved the workflows' actions to the Node.js 24 majors and is
-  archived; its row 1.4 (the `release` job publishes both files) waits for the next `v*` tag
-  (step 17). `release.yml` changed, so rows 2.6-2.9 use the binaries of PR #82's release run
-  40398550351 (built from main's code): Windows 26072009 bytes, Linux 260495368 bytes.
-- Row 2.6 (Windows) was re-confirmed on run 40398550351's exe and is accepted at 70d37b7 (PR #86).
-- Phase 3 does not wait for rows 2.7-2.9: do whichever machine is at hand first.
-- Merge method: PRs #78-#86 went in as squash merges. Squash or rebase both work; after a merge
+- ci-actions-node24 (PRs #82-#85) is archived; its row 1.4 (the `release` job publishes both files)
+  waits for the next `v*` tag (step 17).
+- The TV allows DLNA per client (Settings → General → Device Connection Manager → Device List,
+  entries named only "Device N"); Fedora is "Device 3" and is allowed since 2026-10-27. If a
+  machine gets "No TV found" while the TV is on, `curl http://192.168.50.142:9197/dmr` answering
+  401 means that list, not cast-tv.
+- Merge method: PRs #78-#87 went in as squash merges. Squash or rebase both work; after a merge
   Claude rewrites the branch SHAs in the plan to the `main` SHA.
 
-## Now: Fedora, Phase 2 rows 2.7-2.9
+## Now: Phase 2 rows 2.7-2.9
 
-- [x] 1. **Windows 11, row 2.6:** done 2026-10-26 at 7eb63db; re-confirmed 2026-10-26 on run
-   40398550351's exe, accepted at 70d37b7 (PR #86; `research.md`, "Manual row 2.6 again").
-- [ ] 2. **Fedora**, in a terminal, in the cast-tv checkout:
-   ```bash
-   git switch main && git pull
-   mkdir -p ~/Downloads/s12-phase2-node24 && cd ~/Downloads/s12-phase2-node24
-   gh run download 40398550351 -R Piotr-Miller/cast-tv -n cast-tv-linux-x64
-   chmod +x cast-tv-linux-x64
-   ls -l cast-tv-linux-x64
-   ./cast-tv-linux-x64 --version
-   ```
-   The size should be 260495368 bytes and the last line `Window: qtwebengine`.
-   - [ ] **2.7:** in the same terminal:
-     ```bash
-     date +%T.%3N; ./cast-tv-linux-x64
-     ```
-     Note the seconds from Enter to the cast-tv window (a Qt window titled cast-tv, not a browser
-     tab) showing the UI. The GPU stays on: set no `QTWEBENGINE_CHROMIUM_FLAGS`. Close the window with
-     its X: the terminal prints `Stopped.` and the prompt returns. If the start takes over about
-     15 s, say so: the plan then asks you whether the Linux release stays one file (Performance
-     Considerations).
-   - [ ] **2.8:** start `./cast-tv-linux-x64` again. In the window, open a HEIC photo (Google Photos
-     tab, or Local with a `.heic` file) and cast it. On the TV the photo is upright, not rotated.
-     Close the window with X.
-   - [ ] **2.9:** the Ubuntu 24.04 VM from the 2026-10-16 spike (`~/.cache/cast-tv-s12-spike`): if
-     it still starts, copy the binary in and start it there; the cast-tv window should open. If not,
-     say why. Ask Claude (on Fedora) for the exact VM commands.
-   - Tell Claude (in a session on Fedora, "co dalej") what you saw for each row, also when it
-     differed. Claude writes the observations into `research.md`, ticks the rows at the `main` SHA
-     and opens a PR; you merge it.
+- [x] 1. **Windows 11, row 2.6:** re-confirmed 2026-10-26 on run 40398550351's exe, accepted at
+   70d37b7 (PR #86).
+- [x] 2. **Fedora, rows 2.7-2.9:** done 2026-10-27 (`research.md`, "Manual rows 2.7-2.9, Fedora"):
+   2.7 the Qt window in 2.67 s, the UI at 7.35 s, GPU on, so the Linux release stays one file;
+   2.8 a OneDrive HEIC upright on the TV, after allowing Fedora in the TV's Device Connection
+   Manager; 2.9 the window opens in the Ubuntu 24.04.5 VM under Xvfb.
+- [ ] 3. **You:** merge the PR `s12-rows-2.7-2.9`. The rows name `main`'s 1239dcb, so the merge
+   needs no SHA rewrite.
 
 ## Phase 3: the console's information moves into the window, and the console hides
 
@@ -108,11 +85,14 @@ recorded row, the PR or commit.
 ## To decide, no hurry
 
 - **Fedora:** whether to delete the VM disk in `~/.cache/cast-tv-s12-spike` (7.1 GB, VM stopped)
-  and the 20 podman images `localhost/spike-*`. Not before row 2.9: it may need that VM.
+  and the 20 podman images `localhost/spike-*`. Row 2.9 is done, so nothing in S-12 needs them.
 - **Fedora:** whether to delete the local branch `s12-desktop-window`: its 4 commits are on `main`
   under rebased SHAs and the remote branch is gone.
 - **Windows:** whether to delete `.venv-spike`, `build` and `dist` in
   `C:\Source\cast-tv\context\changes\s12-desktop-window\spike-kit` (gitignored, 1.2 GB).
+
+- **Either machine:** whether a later change makes the UI say that the TV refused this computer
+  (the description answering 401) instead of "No TV found"; `research.md`, row 2.8, side finding.
 
 ## How to resume with Claude
 
