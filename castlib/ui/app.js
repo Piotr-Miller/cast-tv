@@ -650,7 +650,10 @@ function castTv() {
       clearTimeout(this._toastTimer);
       this._toastTimer = setTimeout(() => { this.toast = ''; }, 5000);
     },
+    // execCommand first, inside the click: in the cast-tv window (Qt WebEngine) navigator.clipboard
+    // waits for a permission nobody is asked for, and its promise never settles
     async copy(text, what) {
+      if (copyByCommand(text)) { this.flash('Copied.'); return; }
       try {
         await navigator.clipboard.writeText(text);
         this.flash('Copied.');
@@ -659,6 +662,20 @@ function castTv() {
       }
     },
   };
+}
+
+function copyByCommand(text) {
+  const t = document.createElement('textarea');
+  t.value = text;
+  t.setAttribute('readonly', '');
+  t.style.position = 'fixed';
+  t.style.opacity = '0';
+  document.body.appendChild(t);
+  t.select();
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+  t.remove();
+  return ok;
 }
 
 function isLoopback(address) {

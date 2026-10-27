@@ -958,3 +958,66 @@ still TRANSITIONING into the 12 MP photo; its `SetAVTransportURI` got 701, the w
 the first, identical photo, so nothing looked wrong on the screen while Diagnostics reported a
 failure. The owner confirmed pressing `Cast now` twice, so the Qt window did not double a click.
 Row 2.8 rests on the cast that played, so it stands.
+
+## Phase 3: the release builds (2026-10-27)
+
+Implemented on Fedora (PR #89, commit 0561081). The PR's test run 40578872429 passed on
+`ubuntu-latest` and `windows-latest`. Its release run 40578872547 built and smoke-tested both
+files:
+
+- **Windows (`windows-latest`):** `size: 26086550 bytes`, `Window: edgechromium`,
+  `self-check: HEIC -> image/jpeg 16x16 OK`, `/ui/ 200, /api/status 200`,
+  `POST /api/quit: ended, port 8099 free`, `window-check: edgechromium OK (8.1 s)`. The exe is
+  the first built with `hide_console="hide-early"`; started by `smoke.py` it still served and
+  answered Quit. `POST /api/quit` ending the bootloader and its child is the fix for row 2.6's
+  leftover server: the smoke test now fails if anything still answers on the port.
+- **Linux (`ubuntu-22.04`, under `xvfb-run`):** `size: 260510376 bytes`, `Window: qtwebengine`,
+  the same self-check, `POST /api/quit: ended, port 8099 free`, `window-check: qtwebengine OK
+  (5.8 s)`.
+
+Before the PR, the new `smoke.py` ran on Fedora against the Phase 2 Linux binary (run
+40398550351) with a clean `HOME`: `POST /api/quit: ended, port 8099 free`, `window-check:
+qtwebengine OK (3.7 s)`. A QR code made by the page's `qrSvg()` for
+`http://192.168.50.198:8895/ui/` was rendered to PNG and decoded with OpenCV's
+`QRCodeDetector` back to the same address.
+
+Not provable on Fedora, left to the manual rows: whether `GetWindowThreadProcessId` on the
+console window names the onefile bootloader after a double-click (3.10, 3.12's error box), and
+whether ignoring SIGINT after the window closed removes the pythonnet `atexit` traceback (3.11).
+
+## Manual row 3.9, Fedora (2026-10-27)
+
+**First run** (the owner, Fedora 44 desktop, Wayland). PR #89's Linux binary from release run
+40578872547, downloaded into `~/Downloads/s12-phase3`: 260,510,376 bytes, SHA-256
+`749dfbbb603e62f9e8c11dc49e17a679dae4ef10aeb082bd2bc3d6e4bce442fd`, `Window: qtwebengine`.
+`/api/status` reported `window: true`, `host: true`, addresses `http://localhost:8895/ui/` and
+`http://192.168.50.198:8895/ui/`, `firewall_blocked: null`.
+
+- The "Open on your phone" panel listed only `http://192.168.50.198:8895/ui/`: as expected.
+- **Copy** showed no "Copied.": a defect.
+- **QR code** drew a tiny code in the top-left corner of the white square (owner's screenshot): a
+  defect.
+- Scanning that code with the phone opened the cast-tv UI on the phone, with no phone panel and
+  no Quit control: as expected.
+
+**The causes**, measured in the same window through Qt's remote debugging
+(`QTWEBENGINE_REMOTE_DEBUGGING=127.0.0.1:9333`, QtWebEngine 6.14, `Runtime.evaluate` with a user
+gesture):
+
+- `navigator.clipboard.writeText()` never settled (cut off after 5 s): Qt WebEngine asks for a
+  clipboard permission that pywebview never answers, so neither "Copied." nor the
+  `window.prompt` fallback ran. `document.execCommand('copy')` on a selected textarea returned
+  true, and `wl-paste` printed the text. `copy()` now tries `execCommand` first, inside the
+  click; the Diagnostics "Copy command" buttons share it.
+- The HTML parser lowercased the attribute `:viewBox`, so Alpine set `viewbox`, which SVG
+  ignores. Without a viewBox the path drew in pixels, one per module. The binding is now
+  `:view-box.camel`. After the fix the window reported `viewBox="0 0 37 37"`, an SVG of
+  180x180 px and the modules 141x141 px.
+
+**Second run**, same window and binary, with the fixed `app.js` and `index.html` copied over the
+binary's unpacked `castlib/ui` (the server reads them on every request; `cmp` showed them equal
+to the checkout) and the page reloaded. The owner clicked Copy and scanned the QR code again:
+"Działa". Copy pasted the address, and the code filled its square and opened the UI on the phone.
+
+Row 3.9's criterion (the phone panel and QR codes work in the Qt window) is met with the fix.
+The checks of the rebuilt binary are below.
