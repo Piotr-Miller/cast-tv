@@ -956,5 +956,5 @@ which was gone once the window closed): a second `Cast now` 1-2 s after the firs
 still TRANSITIONING into the 12 MP photo; its `SetAVTransportURI` got 701, the wait of
 `PLAY_701_GRACE` (4 s) saw only TRANSITIONING, and the retry got 701 again. The TV kept showing
 the first, identical photo, so nothing looked wrong on the screen while Diagnostics reported a
-failure. Whether the click registered twice in the Qt window or was a double tap is not known.
+failure. The owner confirmed pressing `Cast now` twice, so the Qt window did not double a click.
 Row 2.8 rests on the cast that played, so it stands.
