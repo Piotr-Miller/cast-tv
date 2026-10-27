@@ -105,8 +105,6 @@ recorded row, the PR or commit.
 
 ## To decide, no hurry
 
-- **Fedora:** whether to delete the VM disk in `~/.cache/cast-tv-s12-spike` (7.1 GB, VM stopped)
-  and the 20 podman images `localhost/spike-*`. Row 2.9 is done, so nothing in S-12 needs them.
 - **Fedora:** whether to delete the local branch `s12-desktop-window`: its 4 commits are on `main`
   under rebased SHAs and the remote branch is gone.
 - **Windows:** whether to delete `.venv-spike`, `build` and `dist` in
