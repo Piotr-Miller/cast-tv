@@ -945,3 +945,16 @@ was not needed, as OneDrive serves the same HEIC conversion path.
 Side finding for a later change: when the TV answers the device description with 401, the UI
 says "No TV found" and a cast says `no_tv`, which hides that the TV was found but refused this
 computer. A message naming Device Connection Manager would have saved two retries.
+
+Second side finding, from the same window (2026-10-27): Diagnostics also held a `tv_rejected` at
+21:16:01 for the same OneDrive item: "HTTP Error 500: Internal Server Error (UPnP 701: Transition
+not available); after it the TV reported TRANSITIONING" ten times. The status read just after it
+showed the cast that started at 21:15:55 as `playing` (TV `PLAYING`, `error: null`, `converted:
+true`, 4000x3000); `cast` in the status is the promoted cast, which a failed later one never
+replaces. The likely reading, from that status and `supervisor.py` (not from the error ring,
+which was gone once the window closed): a second `Cast now` 1-2 s after the first met the TV
+still TRANSITIONING into the 12 MP photo; its `SetAVTransportURI` got 701, the wait of
+`PLAY_701_GRACE` (4 s) saw only TRANSITIONING, and the retry got 701 again. The TV kept showing
+the first, identical photo, so nothing looked wrong on the screen while Diagnostics reported a
+failure. Whether the click registered twice in the Qt window or was a double tap is not known.
+Row 2.8 rests on the cast that played, so it stands.
