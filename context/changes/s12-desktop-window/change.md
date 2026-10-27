@@ -25,3 +25,4 @@ Run cast-tv as a desktop window on Windows and Linux (roadmap S-12)
 2026-10-27: reopened 1.16 — was accepted at ffa982c46ad1f1bd5ea9b81a9283f941dac2690b; changed: castlib/server.py, castlib/ui/app.js, castlib/ui/index.html (Phase 3: the phone panel, the firewall banner, qrcode.js)
 2026-10-27: reopened 2.6, 2.7, 2.9 — were accepted at 70d37b737dc4e4124e1d66eba984f227bb290a27 (2.6) and 1239dcb5b8e77e1c992512ef56028a23c5345e51 (2.7, 2.9); changed: castlib/cli.py, packaging/cast-tv.spec (Phase 3: hide-early, the startup error path, Ctrl+C ignored after the window closed)
 2026-10-27: reopened 2.8 — was accepted at 1239dcb5b8e77e1c992512ef56028a23c5345e51; changed: packaging/cast-tv.spec (Phase 3: hide-early)
+2026-10-27: owner decision — Phase 3 Manual rows 3.6-3.12 get explicit "— surface:" lists (the fallback surface could not parse `castlib/server.py:33-37`); plan.md Phase 3 — Manual Verification
