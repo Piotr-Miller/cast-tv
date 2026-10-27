@@ -10,6 +10,8 @@ from castlib.platform import ConsoleClose, ExecutionState, StayAwake, SystemdInh
 from castlib.platform import default_backend as real_default_backend   # bound before conftest swaps it
 from castlib.platform import end_on_console_close as real_end_on_console_close   # likewise
 from castlib.platform import end_on_session_end as real_end_on_session_end       # likewise
+from castlib.platform import report_startup_error as real_report_startup_error   # likewise
+from castlib.platform import show_console as real_show_console                   # likewise
 
 
 # ------------------------------------------------------------- discovery
@@ -304,6 +306,85 @@ def test_end_on_console_close_only_on_windows_and_once(monkeypatch):
     assert real_end_on_console_close() is True
     assert real_end_on_console_close() is False                      # already installed
     assert len(installed) == 1
+
+
+# ------------------------------------------------- the console the release hides
+class FakeConsole:
+    """``Win32Console``'s calls, recorded: a console window, the process that owns it, whether it shows."""
+
+    def __init__(self, hwnd=0x1234, owner=100, visible=False):
+        self.hwnd, self.owner_pid, self.is_visible = hwnd, owner, visible
+        self.calls = []
+
+    def window(self):
+        self.calls.append("GetConsoleWindow")
+        return self.hwnd
+
+    def owner(self, hwnd):
+        return self.owner_pid
+
+    def visible(self, hwnd):
+        return self.is_visible
+
+    def show(self, hwnd):
+        self.calls.append(("ShowWindow", hwnd))
+        self.is_visible = True
+
+    def message_box(self, text, title):
+        self.calls.append(("MessageBoxW", title, text))
+
+
+PIDS = (100, 90)          # this process, its parent (the onefile bootloader)
+
+
+def test_show_console_shows_the_console_it_owns():
+    """The window could not open: the console the release hid at start comes back."""
+    own = FakeConsole(owner=100)
+    assert real_show_console(native=own, platform="win32", pids=PIDS) is True
+    assert own.calls == ["GetConsoleWindow", ("ShowWindow", 0x1234)]
+    boot = FakeConsole(owner=90)                       # the onefile bootloader opened it
+    assert real_show_console(native=boot, platform="win32", pids=PIDS) is True
+
+
+def test_show_console_leaves_other_consoles_alone():
+    for native in (FakeConsole(owner=7),               # PowerShell's or cmd's own window
+                   FakeConsole(owner=4242),            # Windows Terminal's pseudoconsole host
+                   FakeConsole(hwnd=None)):            # no console at all
+        assert real_show_console(native=native, platform="win32", pids=PIDS) is False
+        assert not any(isinstance(c, tuple) for c in native.calls)
+    off = FakeConsole()
+    assert real_show_console(native=off, platform="linux", pids=PIDS) is False and off.calls == []
+
+    class Broken(FakeConsole):
+        def window(self):
+            raise OSError("no user32")
+    assert real_show_console(native=Broken(), platform="win32", pids=PIDS) is False
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="user32 and kernel32 are Windows-only")
+def test_win32_console_reads_the_real_console():
+    """The ctypes signatures hold on a real Windows; nothing is shown and no box opens."""
+    native = platform.Win32Console()
+    hwnd = native.window()
+    if hwnd is not None:
+        assert native.owner(hwnd) > 0 and native.visible(hwnd) in (True, False)
+
+
+def test_startup_error_box_only_for_a_hidden_owned_console():
+    """Double-clicked (its own console, hidden early): a box that stays until OK; any terminal: the text alone."""
+    message = "Cannot bind port 8895: [WinError 10048] Only one usage of each socket address is normally permitted"
+    hidden = FakeConsole(owner=90, visible=False)
+    assert real_report_startup_error(message, native=hidden, platform="win32", pids=PIDS) is True
+    assert hidden.calls[-1] == ("MessageBoxW", "cast-tv", message)
+    for native in (FakeConsole(owner=7, visible=True),        # PowerShell or cmd: prints there
+                   FakeConsole(owner=4242, visible=False),    # Windows Terminal: its pseudoconsole window is hidden
+                   FakeConsole(owner=100, visible=True),      # its own console, not hidden (a dev run)
+                   FakeConsole(hwnd=None)):
+        assert real_report_startup_error(message, native=native, platform="win32", pids=PIDS) is False
+        assert not any(c[0] == "MessageBoxW" for c in native.calls if isinstance(c, tuple))
+    off = FakeConsole(owner=100)
+    assert real_report_startup_error(message, native=off, platform="linux", pids=PIDS) is False
+    assert off.calls == []
 
 
 # ------------------------------------------------- a managed laptop's firewall
