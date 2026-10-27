@@ -90,7 +90,7 @@
         <button class="ghost" @click="toggleQr(a)" x-text="qrOpen === a ? 'Hide QR code' : 'QR code'"></button>
       </div>
       <template x-if="qrOpen === a && qrSvg(a)">
-        <svg class="qr" role="img" :aria-label="'QR code for ' + a" :viewBox="'0 0 ' + qrSvg(a).size + ' ' + qrSvg(a).size"
+        <svg class="qr" role="img" :aria-label="'QR code for ' + a" :view-box.camel="'0 0 ' + qrSvg(a).size + ' ' + qrSvg(a).size"
              shape-rendering="crispEdges"><rect width="100%" height="100%" fill="#fff"></rect><path :d="qrSvg(a).d" fill="#000"></path></svg>
       </template>
     </div>

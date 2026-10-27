@@ -12,6 +12,7 @@
 //   {"call": "<method>", "args": [...]}     await component.<method>(...args), then let the
 //                                           un-awaited fetches it started (loadList) settle
 //   {"read": "<method or field>", "args": [...]}   record the value (a method is called with args)
+//   {"copy": false}                         document.execCommand('copy') fails from now on
 // stdout: {"reads": [...], "requests": ["GET /api/status", "POST /api/sources/gopro/connect", ...]}
 'use strict';
 const fs = require('fs');
@@ -35,8 +36,15 @@ async function fetch(path, init) {
   return { ok, status: ok ? 200 : 400, json: async () => body };
 }
 
-const document = { addEventListener() {}, visibilityState: 'visible' };
-const window = { matchMedia: () => ({ matches: false }) };
+const copied = [];         // what copy() put on the clipboard through execCommand; {"copy": false} refuses it
+let copyWorks = true;
+const document = {
+  addEventListener() {}, visibilityState: 'visible',
+  body: { appendChild() {} },
+  createElement: () => ({ style: {}, setAttribute() {}, select() {}, remove() {} }),
+  execCommand(cmd) { return cmd === 'copy' && copyWorks; },
+};
+const window = { matchMedia: () => ({ matches: false }), prompt: (label, text) => copied.push('prompt: ' + label + ' ' + text) };
 const castTv = new Function('fetch', 'document', 'window', src + '\nreturn castTv;')(fetch, document, window);
 const app = castTv();
 const settle = () => new Promise(resolve => setTimeout(resolve, 0));
@@ -45,6 +53,7 @@ const settle = () => new Promise(resolve => setTimeout(resolve, 0));
   const reads = [];
   for (const step of script.steps) {
     if (step.status !== undefined) status = step.status;
+    else if (step.copy !== undefined) copyWorks = step.copy;
     else if (step.answer) answers[step.answer.path] = step.answer.body;
     else if (step.call) { await app[step.call](...(step.args || [])); await settle(); }
     else if (step.read) {
@@ -52,5 +61,5 @@ const settle = () => new Promise(resolve => setTimeout(resolve, 0));
       reads.push(typeof v === 'function' ? v.apply(app, step.args || []) : v);
     } else throw new Error('unknown step: ' + JSON.stringify(step));
   }
-  process.stdout.write(JSON.stringify({ reads, requests }));
+  process.stdout.write(JSON.stringify({ reads, requests, copied }));
 })().catch(e => { process.stderr.write(String((e && e.stack) || e)); process.exit(1); });

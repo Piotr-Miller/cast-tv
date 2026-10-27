@@ -276,6 +276,8 @@ def test_phone_panel_lists_lan_addresses():
     panel = html[html.index('<section class="phone"'):html.index("</section>", html.index('<section class="phone"'))]
     assert "Open on your phone" in panel and 'x-for="a in phoneAddresses()"' in panel
     assert "copy(a, 'address')" in panel and "toggleQr(a)" in panel and "qrSvg(a).d" in panel
+    # row 3.9: the HTML parser lowercases ":viewBox", and an SVG without its viewBox drew a 37 px code
+    assert ":view-box.camel=" in panel and "viewBox" not in panel
     out = drive_ui([
         {"status": _phone_status(addresses=ADDRESSES + ["http://127.0.0.1:8895/ui/"])}, {"call": "refresh"},
         {"read": "phoneAddresses"},
@@ -334,3 +336,14 @@ def test_firewall_banner_follows_status():
         {"status": _phone_status(blocked=None)}, {"call": "refresh"}, {"read": "firewallBlocked"},
     ])
     assert out["reads"] == [False, True, False]
+
+
+def test_copy_works_without_the_clipboard_permission():
+    """Row 3.9: in the cast-tv window navigator.clipboard never settles; execCommand copies inside the click."""
+    out = drive_ui([
+        {"status": _phone_status()}, {"call": "refresh"},
+        {"call": "copy", "args": [ADDRESSES[1], "address"]}, {"read": "toast"},
+    ])
+    assert out["reads"] == ["Copied."]                      # no navigator in node: had it been asked, this fails
+    refused = drive_ui([{"copy": False}, {"call": "copy", "args": [ADDRESSES[1], "address"]}])
+    assert refused["copied"] == ["prompt: Copy this address: " + ADDRESSES[1]]

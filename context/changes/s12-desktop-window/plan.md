@@ -841,11 +841,11 @@ The Progress Manual rows, run on the Windows laptop and the Fedora desktop, each
 
 #### Automated
 
-- [x] 3.1 The static files include qrcode.js and nothing else new
-- [x] 3.2 Phone panel and firewall banner logic
-- [x] 3.3 show_console is covered
-- [x] 3.4 The full suite passes
-- [ ] 3.5 The release workflow on the PR is green
+- [x] 3.1 The static files include qrcode.js and nothing else new — 0561081
+- [x] 3.2 Phone panel and firewall banner logic — 0561081
+- [x] 3.3 show_console is covered — 0561081
+- [x] 3.4 The full suite passes — 0561081
+- [x] 3.5 The release workflow on the PR is green — 0561081
 
 #### Manual
 
