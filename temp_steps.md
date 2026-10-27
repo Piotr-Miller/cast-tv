@@ -74,7 +74,10 @@ recorded row, the PR or commit.
 
 ## Phase 4: icon and menu entry
 
-- [ ] 12. **Windows 11:** `/rune-implement s12-desktop-window phase 4`, then its PR.
+- [ ] 12. **Either machine:** `/rune-implement s12-desktop-window phase 4`, then its PR. The icon is
+    decided (owner, 2026-10-27): the draft in `context/changes/s12-desktop-window/icon/make_icon.py`.
+    On Fedora the Alt+Tab gear goes away only with this phase: the window's `app_id` `cast-tv`
+    and the `.desktop` entry it adds.
 - [ ] 13. **Windows 11:**
     - [ ] **4.5:** the icon on the exe, the window and the taskbar button.
     - [ ] **4.8:** "Add to Start menu" puts a shortcut in Start that starts with no console; pinning to
