@@ -833,9 +833,9 @@ The Progress Manual rows, run on the Windows laptop and the Fedora desktop, each
 #### Manual
 
 - [x] 2.6 Windows: the PR exe opens the window; size and start time recorded — accepted at 70d37b737dc4e4124e1d66eba984f227bb290a27
-- [ ] 2.7 Fedora: the PR Linux binary opens a Qt window with the GPU on; size and start time recorded
-- [ ] 2.8 Fedora: a HEIC photo cast through the window shows upright
-- [ ] 2.9 Ubuntu 24.04 VM: the Linux binary opens its window, or why not
+- [x] 2.7 Fedora: the PR Linux binary opens a Qt window with the GPU on; size and start time recorded — accepted at 1239dcb5b8e77e1c992512ef56028a23c5345e51
+- [x] 2.8 Fedora: a HEIC photo cast through the window shows upright — accepted at 1239dcb5b8e77e1c992512ef56028a23c5345e51
+- [x] 2.9 Ubuntu 24.04 VM: the Linux binary opens its window, or why not — accepted at 1239dcb5b8e77e1c992512ef56028a23c5345e51
 
 ### Phase 3: The console's information moves into the window, and the console hides
 

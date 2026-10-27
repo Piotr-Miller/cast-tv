@@ -840,3 +840,108 @@ Started from PowerShell 7.6.9; the owner pasted the console:
 
 Row 2.6's criterion (the window opens, `--version` names `edgechromium`, size and start time
 recorded) is met for the exe built by the Node.js 24 actions.
+
+## Manual rows 2.7-2.9, Fedora (2026-10-27)
+
+The binary is the Linux file of PR #82's release run 40398550351, the same run as row 2.6's exe.
+Downloaded with `gh run download 40398550351 -R Piotr-Miller/cast-tv -n cast-tv-linux-x64` into
+`~/Downloads/s12-phase2-node24`: 260,495,368 bytes, SHA-256
+`aaf9b3e754c79461d0bafa5c6a0ac4a101cedd51392340cc7091f5c7dbe434fa`. `--version` printed
+`cast-tv 0.4.0`, `Google Photos client: from ~/.config/cast-tv/google-client.json`,
+`GoPro window: /usr/bin/google-chrome`, `Window: qtwebengine`.
+
+**Row 2.7** (2026-10-27, the owner, Fedora 44 desktop, Wayland). Started from a terminal with
+`date +%T.%3N; ./cast-tv-linux-x64`, no `QTWEBENGINE_CHROMIUM_FLAGS` set. The Qt window appeared
+2.67 s after Enter and showed the rendered UI at 7.35 s. The GPU was on: the process used
+`/dev/dri/renderD128`. Closed with the window's X: the window went away, the terminal printed
+`Stopped.`, the process exited with code 0 and port 8895 was free again. Qt/Wayland warnings were
+printed; there was no traceback.
+
+Row 2.7's criterion (a Qt window with the GPU on; size and start time recorded) is met. The start,
+7.35 s to a usable UI, is under the plan's 15 s threshold, so the Linux release stays one file.
+
+**Row 2.8, unsuccessful attempt** (2026-10-27, Codex operating the Fedora 44 desktop;
+the owner observing the 83" OLED TV at 192.168.50.142). Used the same release binary as row
+2.7 and the local file `~/Downloads/Test_Pictures/shelf-christmas-decoration.heic`
+(1,442,278 bytes; shelves with Christmas decorations). Google Photos was disconnected with
+no picked items. The Qt UI has no local file chooser, so this attempt used the binary's CLI
+with `--debug -t 192.168.50.142` and the HEIC path; it did not exercise casting through the
+Qt window.
+
+- The release converted the HEIC to `image/jpeg`, 4000x3000, 2,004,138 bytes, profile `JPEG_LRG`.
+- The request log showed a TV `HEAD` request and no `GET`; transport state was `TRANSITIONING`.
+  The attempt ended with `The TV stopped answering.` and
+  `Check it is on and on the same network, then retry.`
+- The owner confirmed that the photo was not visible on the TV ("Nie bylo widac"). Codex
+  had no view of the physical TV screen and did not independently observe its picture.
+- After the attempt, no cast-tv or QtWebEngine process remained and port 8895 was free.
+
+Row 2.8 remains open: no displayed photo means orientation could not be assessed, and the
+Qt-window path was not exercised. The cause of the failed display has not been established.
+
+**Row 2.9** (2026-10-27, Claude, on the Fedora host). The Ubuntu 24.04 VM from the 2026-10-16
+spike (`~/.cache/cast-tv-s12-spike`, Ubuntu 24.04.5 LTS, `ubuntu-desktop-minimal` and `xvfb`
+installed) still boots. Its spike SSH key was gone, so it was booted under `qemu-kvm` with a new
+cloud-init seed (`instance-id: s12-row-2-9`) carrying a fresh key; only the throwaway VM disk
+changed. The same binary was copied in (same size and SHA-256 as above); in the VM `--version`
+printed `cast-tv 0.4.0`, `Google Photos client: built in`, `GoPro window: none found (token paste
+only)`, `Window: qtwebengine`. Started on a bare `Xvfb :99 -screen 0 1280x800x24` (no window
+manager, no GPU): `/api/status` answered 3.6 s after the start, and a screenshot of the X screen
+15 s later showed the cast-tv window with the full UI (header, "No TV found" panel, the GoPro,
+OneDrive and Google Photos tabs, "Connect GoPro"). The console printed the addresses, "Close the
+window or press Ctrl+C to end it" and one `GLX: No DRI3 Extension.` line, with no browser fallback
+and no traceback. Ctrl+C (SIGINT) printed `Stopped.`, the process exited with code 0 and port
+8895 was free.
+
+Row 2.9's criterion (the Linux binary opens its window on Ubuntu 24.04, or why not) is met. The
+window had no title bar because Xvfb ran without a window manager; the desktop session itself
+(GNOME on Wayland) was not exercised in the VM, as the VM has no display attached.
+
+**Row 2.8, retry from the Qt window** (2026-10-27, Codex, Fedora 44 desktop, same release
+binary). Opened the release's native Qt window (`/api/status` reported `window: true`).
+Using its accessible UI controls, opened OneDrive, which connected using its stored session,
+then Pictures -> Test_Pictures. The grid showed `shelf-christmas-decoration.heic`
+(`image/heic` in the source listing), with an upright thumbnail of the two decorated shelves.
+This retry used OneDrive rather than the plan's Google Photos/local-file variants.
+
+The window showed `No TV found`. SSDP received a response from 192.168.50.142 advertising
+`http://192.168.50.142:9197/dmr`, but fetching that device description returned HTTP 401
+with a UPnP fault `401 Unauthorized`, so cast-tv could not resolve AVTransport. The TV's
+read-only `/api/v2/` endpoint reported `PowerState: on`, name `83&quot; OLED`, model
+`QE83S85FAEXXH`. Selecting that IP in cast-tv returned `tv_no_avtransport`.
+
+At 20:51:34 +01:00, invoked the HEIC tile's actual `Cast now` button through accessibility
+in the Qt window. The app's error ring then contained `no_tv: No TV selected.` and its
+status had no active cast. The photo was not sent; there is no new observation of its
+orientation on the physical TV. Row 2.8 remains open. Left the Qt window open on the
+prepared folder for a further retry; restored the desktop accessibility setting to its
+original value (false). No app code or TV settings were changed.
+
+**Row 2.8, further retry at 21:06 +01:00** (2026-10-27, Codex, same Fedora desktop,
+release and Qt window). Pressed `Search again` in the window and waited for discovery to
+finish: no TV was selected. At 21:06:30, pressed `Cast now` on the same OneDrive HEIC tile
+again. The error ring gained a new `no_tv: No TV selected.` entry; status still had no
+active cast. The TV reported power on, but its advertised `/dmr` endpoint still returned
+HTTP 401. No photo was sent, so the TV orientation remains unverified and row 2.8 remains
+open. Left the prepared window open and restored toolkit accessibility to false.
+
+**Why the TV was not found, and row 2.8 passed** (2026-10-27, the owner at the TV, Claude on
+Fedora). The 401 was the TV's own access control, not cast-tv: Samsung grants DLNA per client in
+Settings → General → Device Connection Manager → Device List, and this Fedora laptop (Wi-Fi
+`wlo1`, 192.168.50.198, randomised MAC `be:14:c5:89:a9:0b`) was not allowed there; the Windows
+laptop was. The list shows entries only as "Device 1", "Device 3" and so on, with no name or IP;
+Fedora turned out to be "Device 3". After the owner allowed it, `curl
+http://192.168.50.142:9197/dmr` from Fedora returned 200 with `friendlyName` `83" OLED` and
+AVTransport:1, and a discovery on the running window (`POST /api/tv/discover`, what Search again
+sends) selected `83" OLED (192.168.50.142)`, state `ready`.
+
+**Row 2.8** (2026-10-27, about 21:15 +01:00, the owner, Fedora 44 desktop, the release binary
+above in its Qt window, TV QE83S85FAEXXH). `Cast now` on the OneDrive tile
+`shelf-christmas-decoration.heic` (`image/heic`) in Pictures → Test_Pictures: the photo of the two
+decorated shelves showed on the TV upright, as on the thumbnail. Row 2.8's criterion (a HEIC
+photo cast through the window shows upright) is met; the plan's Google Photos or Local variant
+was not needed, as OneDrive serves the same HEIC conversion path.
+
+Side finding for a later change: when the TV answers the device description with 401, the UI
+says "No TV found" and a cast says `no_tv`, which hides that the TV was found but refused this
+computer. A message naming Device Connection Manager would have saved two retries.
