@@ -1021,3 +1021,11 @@ to the checkout) and the page reloaded. The owner clicked Copy and scanned the Q
 
 Row 3.9's criterion (the phone panel and QR codes work in the Qt window) is met with the fix.
 The checks of the rebuilt binary are below.
+
+**The rebuilt binary** (Claude, 2026-10-27). PR #89's release run 40580688484, built from 1134162:
+Windows `size: 26086907 bytes`, `window-check: edgechromium OK (7.9 s)`; Linux `size: 260510504
+bytes`, SHA-256 `b75a2e2d906cdfaaf4e2ef6fa674e4f4edee4799d4ecfcee65df298877dc432b`,
+`window-check: qtwebengine OK (3.2 s)`; both `POST /api/quit: ended, port 8099 free`. Its Qt
+window on Fedora, read through remote debugging after clicking QR code: the panel lists
+`http://192.168.50.198:8895/ui/`, `viewBox="0 0 37 37"`, SVG 180x180 px, modules 141x141 px, and
+`copyByCommand` is in the page. Ended with `POST /api/quit`.
