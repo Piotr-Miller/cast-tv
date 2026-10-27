@@ -26,3 +26,4 @@ Run cast-tv as a desktop window on Windows and Linux (roadmap S-12)
 2026-10-27: reopened 2.6, 2.7, 2.9 — were accepted at 70d37b737dc4e4124e1d66eba984f227bb290a27 (2.6) and 1239dcb5b8e77e1c992512ef56028a23c5345e51 (2.7, 2.9); changed: castlib/cli.py, packaging/cast-tv.spec (Phase 3: hide-early, the startup error path, Ctrl+C ignored after the window closed)
 2026-10-27: reopened 2.8 — was accepted at 1239dcb5b8e77e1c992512ef56028a23c5345e51; changed: packaging/cast-tv.spec (Phase 3: hide-early)
 2026-10-27: owner decision — Phase 3 Manual rows 3.6-3.12 get explicit "— surface:" lists (the fallback surface could not parse `castlib/server.py:33-37`); plan.md Phase 3 — Manual Verification
+2026-10-27: owner decision — the icon design is the approved draft in icon/make_icon.py (amber TV with the cast mark on a dark rounded square); plan.md Phase 4 — 1. The icon

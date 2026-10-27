@@ -577,7 +577,11 @@ the owner can replace the design later.
 
 **Contract**:
 - `make_icon.py` draws a simple TV-screen glyph with Pillow and writes `castlib/ui/icon.png`
-  and `castlib/ui/cast-tv.ico`. Both are committed package resources; the build does not run
+  and `castlib/ui/cast-tv.ico`. **(owner decision 2026-10-27)** The design is the approved draft
+  `context/changes/s12-desktop-window/icon/make_icon.py` (preview: `icon/preview.png`): an amber
+  (`#e8a33d`) TV outline with stand and the cast mark (a dot and two arcs from the screen's
+  bottom-left corner) on a dark warm rounded square; ICO sizes 16, 24, 32, 48, 64, 128, 256.
+  It moves to `packaging/make_icon.py`, its output paths becoming the two files above. Both are committed package resources; the build does not run
   the script. Keep one canonical ICO under `castlib/ui`, not a packaging-only copy: the
   existing `ui/*` package-data rule includes it in wheel/pipx installs without the repository.
 - `/favicon.ico` serves `icon.png` as `image/png` instead of answering 204.
