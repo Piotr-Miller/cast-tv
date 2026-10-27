@@ -9,7 +9,9 @@ fails, staying awake is best effort and never stops a cast.
 ``end_on_console_close`` makes closing the console window on Windows end
 cast-tv the way Ctrl+C does, instead of the process simply being ended;
 ``end_on_session_end`` does the same for logging off and shutting down while
-the cast-tv window is open.
+the cast-tv window is open. The Windows release hides the console it was
+started with; ``show_console`` brings it back when the window cannot open, and
+``report_startup_error`` puts a failure before any window in a message box.
 
 ``use_system_ca_bundle`` points the Linux release binary at this machine's
 CA certificates: it carries the OpenSSL of the distribution it was built on,
@@ -369,6 +371,106 @@ def console_close_ends(on_end) -> None:
     """What a closed console does from now on: ``on_end()``, or Ctrl+C's interrupt again for None."""
     if _console_close is not None:
         _console_close.on_end = on_end
+
+
+class Win32Console:
+    """The console window through ctypes: which process owns it, whether it shows, showing it, a message box."""
+
+    SW_SHOW = 5
+    MB_ICONERROR = 0x00000010
+    MB_SETFOREGROUND = 0x00010000
+
+    def __init__(self):
+        self._api = None
+
+    def _dlls(self):
+        if self._api is None:
+            import ctypes
+            from ctypes import wintypes
+            k32 = ctypes.WinDLL("kernel32")
+            u32 = ctypes.WinDLL("user32")
+            k32.GetConsoleWindow.restype = wintypes.HWND
+            k32.GetConsoleWindow.argtypes = ()
+            u32.IsWindowVisible.restype = wintypes.BOOL
+            u32.IsWindowVisible.argtypes = (wintypes.HWND,)
+            u32.GetWindowThreadProcessId.restype = wintypes.DWORD
+            u32.GetWindowThreadProcessId.argtypes = (wintypes.HWND, ctypes.POINTER(wintypes.DWORD))
+            u32.ShowWindow.restype = wintypes.BOOL
+            u32.ShowWindow.argtypes = (wintypes.HWND, ctypes.c_int)
+            u32.MessageBoxW.restype = ctypes.c_int
+            u32.MessageBoxW.argtypes = (wintypes.HWND, wintypes.LPCWSTR, wintypes.LPCWSTR, wintypes.UINT)
+            self._api = SimpleNamespace(ctypes=ctypes, wintypes=wintypes, k32=k32, u32=u32)
+        return self._api
+
+    def window(self):
+        return self._dlls().k32.GetConsoleWindow() or None
+
+    def owner(self, hwnd) -> int:
+        api = self._dlls()
+        pid = api.wintypes.DWORD(0)
+        api.u32.GetWindowThreadProcessId(hwnd, api.ctypes.byref(pid))
+        return pid.value
+
+    def visible(self, hwnd) -> bool:
+        return bool(self._dlls().u32.IsWindowVisible(hwnd))
+
+    def show(self, hwnd) -> None:
+        self._dlls().u32.ShowWindow(hwnd, self.SW_SHOW)
+
+    def message_box(self, text: str, title: str) -> None:
+        """Blocks until the person presses OK."""
+        self._dlls().u32.MessageBoxW(None, text, title, self.MB_ICONERROR | self.MB_SETFOREGROUND)
+
+
+def _own_console(native, pids):
+    """The console window this process created, or the onefile bootloader that started it; else None.
+
+    Started from PowerShell, cmd or Windows Terminal, the console belongs to that shell or to
+    the terminal's pseudoconsole host: it is not ours to show, and its hidden pseudoconsole
+    window says nothing about a double-click.
+    """
+    hwnd = native.window()
+    if not hwnd:
+        return None
+    return hwnd if native.owner(hwnd) in pids else None
+
+
+def show_console(native=None, platform=None, pids=None) -> bool:
+    """Windows: show the console the release hid at start (``hide_console="hide-early"``); False elsewhere.
+
+    Called when the cast-tv window cannot open: the tab takes over, and without the console
+    nothing on screen would end the process.
+    """
+    if (platform or sys.platform) != "win32":
+        return False
+    try:
+        native = native or Win32Console()
+        hwnd = _own_console(native, pids or (os.getpid(), os.getppid()))
+        if hwnd is None:
+            return False
+        native.show(hwnd)
+        return True
+    except Exception:
+        return False
+
+
+def report_startup_error(message: str, native=None, platform=None, pids=None) -> bool:
+    """Windows, started by double-click (its own console, hidden): ``message`` in a box that stays until OK.
+
+    The caller has printed ``message`` already; that is all a terminal launch gets, and all
+    Linux gets. True when the box was shown and acknowledged.
+    """
+    if (platform or sys.platform) != "win32":
+        return False
+    try:
+        native = native or Win32Console()
+        hwnd = _own_console(native, pids or (os.getpid(), os.getppid()))
+        if hwnd is None or native.visible(hwnd):
+            return False
+        native.message_box(message, "cast-tv")
+        return True
+    except Exception:
+        return False
 
 
 class SessionEnd:

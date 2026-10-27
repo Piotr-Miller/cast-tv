@@ -225,8 +225,19 @@ def _no_stay_awake(monkeypatch):
     monkeypatch.setattr(platform, "default_backend", lambda: platform.NullBackend())
     monkeypatch.setattr(platform, "end_on_console_close", lambda: False)
     monkeypatch.setattr(platform, "end_on_session_end", lambda on_end: None)   # no hidden native window
+    monkeypatch.setattr(platform, "show_console", lambda: False)            # the runner's console stays as it is
+    monkeypatch.setattr(platform, "report_startup_error", lambda message: False)   # a message box would block
     monkeypatch.setattr(platform, "firewall_policy", platform.FirewallPolicy(platform="none"))
     monkeypatch.setattr(browser, "launch", _no_browser_launch)
+
+
+@pytest.fixture(autouse=True)
+def _keep_sigint():
+    """A test whose cast-tv window closed leaves Ctrl+C ignored, as the real exit does; pytest gets it back."""
+    import signal
+    before = signal.getsignal(signal.SIGINT)
+    yield
+    signal.signal(signal.SIGINT, before)
 
 
 @pytest.fixture

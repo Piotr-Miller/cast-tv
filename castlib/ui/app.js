@@ -76,6 +76,8 @@ function castTv() {
     pickNote: '',            // the outcome of the last pick that did not land (timeout, error)
     linkNote: '',            // why the last pasted share link was refused; the status poll leaves it alone
     quitNote: '',            // what the last Quit answered; the status poll leaves it alone
+    qrOpen: '',              // the phone address whose QR code is shown
+    _qr: {},                 // address -> its QR code as one SVG path, made once
     ended: false,            // Quit went through: cast-tv is gone, nothing is polled any more
     _picksSeq: null,         // picks_seq of the Google Photos list this page has fetched
     chooser: null,           // key of the tile whose variant chooser is open
@@ -590,6 +592,30 @@ function castTv() {
       }
       this.busy.quit = false;
     },
+    // ------------------------------------------------------------ the phone
+    // only on the computer running cast-tv: the console used to be the one place these addresses were
+    phoneVisible() { return !!this.status.host; },
+    // every LAN address in the server's order (the default route first), without this machine's own
+    phoneAddresses() { return (this.status.addresses || []).filter(a => !isLoopback(a)); },
+    toggleQr(address) { this.qrOpen = this.qrOpen === address ? '' : address; },
+    // the QR code as one path of 1x1 cells with a 4-cell quiet zone; null where qrcode.js is not loaded
+    qrSvg(address) {
+      if (this._qr[address]) return this._qr[address];
+      if (typeof qrcode !== 'function') return null;
+      const qr = qrcode(0, 'M');
+      qr.addData(address);
+      qr.make();
+      const n = qr.getModuleCount(), q = 4;
+      let d = '';
+      for (let r = 0; r < n; r++) {
+        for (let c = 0; c < n; c++) if (qr.isDark(r, c)) d += 'M' + (c + q) + ' ' + (r + q) + 'h1v1h-1z';
+      }
+      this._qr[address] = { size: n + 2 * q, d };
+      return this._qr[address];
+    },
+    // the managed laptop's block-all policy, from the server's background question: say it before a cast fails
+    firewallBlocked() { return !!this.status.firewall_blocked; },
+
     cardClass(e) {
       if (['tv_fetched_nothing', 'tv_unreachable', 'tv_rejected', 'tv_never_started', 'no_tv'].includes(e.code)) return 'bad';
       if (['dts_audio', 'token_rejected', 'no_token', 'refresh_rejected', 'graph_unauthorized', 'expired_token',
@@ -624,15 +650,21 @@ function castTv() {
       clearTimeout(this._toastTimer);
       this._toastTimer = setTimeout(() => { this.toast = ''; }, 5000);
     },
-    async copy(text) {
+    async copy(text, what) {
       try {
         await navigator.clipboard.writeText(text);
         this.flash('Copied.');
       } catch (e) {
-        window.prompt('Copy this command:', text);
+        window.prompt('Copy this ' + (what || 'command') + ':', text);
       }
     },
   };
+}
+
+function isLoopback(address) {
+  let host;
+  try { host = new URL(address).hostname; } catch (e) { return false; }
+  return host === 'localhost' || host === '[::1]' || /^127\./.test(host);
 }
 
 function fmtSize(n) {

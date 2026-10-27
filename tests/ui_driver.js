@@ -1,7 +1,9 @@
 // Runs the castTv() component of castlib/ui/app.js in node against scripted /api answers, so a
 // test can drive the page's own logic (refresh, connect, listVisible) without a browser or Alpine.
 //
-//   node tests/ui_driver.js castlib/ui/app.js < script.json
+//   node tests/ui_driver.js castlib/ui/app.js [castlib/ui/qrcode.js ...] < script.json
+//
+// Further files are scripts the page loads before app.js (qrcode.js), evaluated in the same scope.
 //
 // stdin: {"steps": [...]}; each step is one of
 //   {"status": {...}}                       the answer to every GET /api/status from now on
@@ -14,7 +16,8 @@
 'use strict';
 const fs = require('fs');
 
-const src = fs.readFileSync(process.argv[2], 'utf8');
+const src = process.argv.slice(3).map(f => fs.readFileSync(f, 'utf8') + '\n').join('')
+  + fs.readFileSync(process.argv[2], 'utf8');
 const script = JSON.parse(fs.readFileSync(0, 'utf8'));
 const requests = [];
 let status = { sources: {}, session: [], errors: 0, settings: { interval: 8 } };

@@ -1,6 +1,8 @@
-# PyInstaller spec for the standalone cast-tv: one file, a console window, the cast-tv window.
+# PyInstaller spec for the standalone cast-tv: one file, a console, the cast-tv window.
 # Build from the repository root, with the window extra installed:  pyinstaller packaging/cast-tv.spec
-# The console stays: Ctrl+C and closing the window stop the TV (castlib.platform).
+# Windows: a double-click hides the console the exe opened ("hide-early"); one started from
+# PowerShell, cmd or Windows Terminal keeps printing there. When the window cannot open, the
+# console is shown again (castlib.platform.show_console). Linux ignores the option.
 # The window: pywebview with WebView2 on Windows, Qt WebEngine (PySide6) on Linux.
 import os
 import sys
@@ -39,5 +41,6 @@ exe = EXE(
     [],
     name="cast-tv",
     console=True,
+    hide_console="hide-early",
     upx=False,
 )

@@ -103,6 +103,17 @@ svg { flex-shrink: 0; }
 .banner .text { flex: 1 1 260px; }
 .banner .title { font-weight: 600; }
 .banner .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* the phone's addresses, on the computer running cast-tv only */
+.phone {
+  margin: 14px 20px 0; padding: 12px 14px; border-radius: var(--radius);
+  border: 1px solid var(--line); background: var(--bg-header);
+}
+.phone h2 { margin: 0 0 8px; font-size: 13px; font-weight: 600; color: var(--ink-2); }
+.phone .address + .address { margin-top: 6px; }
+.phone .row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.phone .row .mono { font-size: 12px; overflow-wrap: anywhere; }
+.phone .qr { display: block; width: 180px; height: 180px; margin: 8px 0 4px; border-radius: 6px; }
 .toast {
   position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%); z-index: 40;
   max-width: min(560px, calc(100vw - 32px)); padding: 10px 14px; border-radius: 10px;

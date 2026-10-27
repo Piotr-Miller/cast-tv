@@ -13,7 +13,9 @@ import argparse
 import http.cookiejar
 import json
 import os
+import signal
 import sys
+import traceback
 import urllib.parse
 import urllib.request
 import webbrowser
@@ -291,17 +293,30 @@ def ui(port=DEFAULT_PORT, tv=None, debug=False, browser=True, windowed=True):
                 pass
         return 0
     except OSError as e:
-        print("Cannot bind port %d: %s" % (port, e))
-        return 1
+        return _startup_failed("Cannot bind port %d: %s" % (port, e))
     except KeyboardInterrupt:              # Ctrl+C while starting: start() already stopped and closed it,
         return 0                           # or closed only its socket before serve() returned
+    except Exception as e:
+        traceback.print_exc()
+        return _startup_failed("cast-tv could not start: %s" % e)
     try:
         if windowed and _in_window(app) == "closed":
+            # The TV is stopped and the app closed. A Ctrl+C that lands now - pending since the
+            # one that closed the window, or a second press - would break pythonnet's atexit
+            # unload of .NET on Windows with a KeyboardInterrupt traceback after "Stopped.".
+            signal.signal(signal.SIGINT, signal.SIG_IGN)
             return 0
         return app.run_forever()
     except KeyboardInterrupt:              # Ctrl+C in the instant before run_forever took over
         app.shutdown()
         return 0
+
+
+def _startup_failed(message):
+    """Print why cast-tv could not start; started by double-click on Windows, also in a message box. Exit code 1."""
+    print(message, flush=True)
+    platform.report_startup_error(message)     # the console is hidden: the text alone would show nowhere
+    return 1
 
 
 def _in_window(app):
@@ -334,6 +349,7 @@ def _in_window(app):
         app.shutdown()
         return result
     reason = result.split(": ", 1)[-1]
+    platform.show_console()                    # the release hid it; without it nothing on screen ends cast-tv
     app.errors.push(CastError("window_unavailable", "No cast-tv window: %s." % reason,
                               hint="The UI opened in the browser instead; Ctrl+C here ends cast-tv."))
     print("  No cast-tv window (%s); the UI opens in the browser. %s" % (reason, ENDS_HINT), flush=True)

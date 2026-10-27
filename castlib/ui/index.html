@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>cast-tv</title>
 <link rel="stylesheet" href="/ui/style.css">
+<script src="/ui/qrcode.js"></script>
 <script src="/ui/app.js"></script>
 <script defer src="/ui/alpine.min.js"></script>
 </head>
@@ -71,6 +72,30 @@
 <div class="banner" :class="{warn: !ended}" x-show="quitNote" x-cloak>
   <div class="text"><div class="title" x-text="quitNote"></div></div>
 </div>
+<div class="banner bad" x-show="firewallBlocked()" x-cloak>
+  <div class="text"><div class="title">The TV cannot fetch from this computer</div><div class="small muted" x-text="status.firewall_advice"></div></div>
+</div>
+
+<!-- only on the computer running cast-tv: what the console used to print for the phone -->
+<section class="phone" x-show="phoneVisible()" x-cloak>
+  <h2>Open on your phone</h2>
+  <template x-if="!phoneAddresses().length">
+    <div class="small muted">This computer has no network address. Connect it to Wi-Fi or Ethernet.</div>
+  </template>
+  <template x-for="a in phoneAddresses()" :key="a">
+    <div class="address">
+      <div class="row">
+        <span class="mono" x-text="a"></span>
+        <button class="ghost" @click="copy(a, 'address')">Copy</button>
+        <button class="ghost" @click="toggleQr(a)" x-text="qrOpen === a ? 'Hide QR code' : 'QR code'"></button>
+      </div>
+      <template x-if="qrOpen === a && qrSvg(a)">
+        <svg class="qr" role="img" :aria-label="'QR code for ' + a" :viewBox="'0 0 ' + qrSvg(a).size + ' ' + qrSvg(a).size"
+             shape-rendering="crispEdges"><rect width="100%" height="100%" fill="#fff"></rect><path :d="qrSvg(a).d" fill="#000"></path></svg>
+      </template>
+    </div>
+  </template>
+</section>
 
 <main>
   <!-- slideshow -->

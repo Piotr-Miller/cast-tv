@@ -439,6 +439,8 @@ def test_gui_end_stops_and_closes(window_cli, capsys):
     assert window_cli.app._closed.is_set() and window_cli.stops == ["interrupted"]
     assert window_cli.tabs == [] and window_cli.served == []
     assert "Stopped." in capsys.readouterr().out
+    # row 2.6: a Ctrl+C landing now would break pythonnet's atexit unload with a traceback
+    assert signal.getsignal(signal.SIGINT) is signal.SIG_IGN
 
 
 def test_sigterm_destroys_window(window_cli):
@@ -492,7 +494,12 @@ def test_quit_closes_the_window(window_cli):
 
 def test_unavailable_window_opens_the_tab(window_cli, monkeypatch, capsys):
     monkeypatch.setenv(window.FAIL_ENV, "1")
+    shown = []
+    monkeypatch.setattr(platform, "show_console", lambda: shown.append(True) or True)
+    before = signal.getsignal(signal.SIGINT)
     assert cli.ui(port=window_cli.app.server.port) == 0
+    assert shown == [True], "the console hidden at start must come back next to the tab"
+    assert signal.getsignal(signal.SIGINT) is before          # the tab still ends on Ctrl+C
     assert window_cli.tabs == [True] and window_cli.served == [True] and window_cli.stops == []
     (err,) = window_cli.app.errors.list()
     assert err["code"] == "window_unavailable" and "CAST_TV_WINDOW_FAIL" in err["message"]
