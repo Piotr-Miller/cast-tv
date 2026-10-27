@@ -1,4 +1,4 @@
-# Next steps (2026-10-27 late: Phase 3 in PR #89; the Windows rows 3.6-3.8 and 3.10-3.12 next)
+# Next steps (2026-10-27 late, switching to Windows 11: PR #89's Windows rows 3.6-3.8 and 3.10-3.12)
 
 The standing note for a pause in the work (a reboot, a switch of machine): it stays in the
 repository and is overwritten at the next pause.
@@ -18,7 +18,12 @@ recorded row, the PR or commit.
   ends the server with `POST /api/quit`). Rows 3.1-3.5 are done; CI is green on both systems.
 - Row 3.9 (Fedora) found Copy and the QR code broken in the Qt window; fixed in 1134162 and
   accepted at efac3c5 (`research.md`, "Manual row 3.9").
-- The binaries for the Windows rows come from PR #89's release run 40580688484: Windows 26086907 bytes.
+- The binaries for the Windows rows come from PR #89's release run 40580688484 (built from
+  1134162): Windows 26086907 bytes. Later commits on the PR (efac3c5, 6aac4a1, 5468c60, 8251f2f)
+  touch only the change folder and this file, so that exe is still the PR's code.
+- The icon is decided (owner, 2026-10-27; `context/changes/s12-desktop-window/icon/`); Phase 4
+  builds it in. On Fedora the spike VM and the podman images `localhost/spike-*` are deleted.
+- PR #89's head is 8251f2f; the Fedora checkout is clean, nothing unpushed.
 - Not provable on Fedora: whether a double-click is recognised (the console's owner is the
   onefile bootloader) and whether the pythonnet traceback after Ctrl+C is gone. Rows 3.10-3.12
   show it; if one fails, Claude fixes it on the same PR before the merge.
@@ -118,4 +123,5 @@ recorded row, the PR or commit.
 
 ## How to resume with Claude
 
-Write "co dalej" in the cast-tv checkout, on `main`.
+Write "co dalej" in the cast-tv checkout. Until PR #89 is merged, work on its branch:
+`git fetch; git switch s12-phase3; git pull`. After the merge: `git switch main; git pull`.
