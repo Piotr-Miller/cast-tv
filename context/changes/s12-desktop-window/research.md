@@ -1178,3 +1178,20 @@ window (...); the UI opens in the browser. Ctrl+C ends it ...`. Tests:
 `test_gui_end_stops_and_closes` (printed), `test_unavailable_window_opens_the_tab` (absent).
 Locally 457 passed, 5 skipped, and only `test_token_file_mode_0600` failed (as before, this
 laptop).
+
+**The fallback on the fix's exe** (the owner, the work laptop, 2026-10-28). Release run
+40760424209, built from acc256e: Windows `size: 26088117 bytes`, `window-check: edgechromium OK
+(7.6 s)`; Linux `size: 260517152 bytes`, `window-check: qtwebengine OK (5.3 s)`; both `POST
+/api/quit: ended, port 8099 free`. Test run 40760424122 is green on both systems. The exe was
+downloaded into `Downloads\s12-phase3c`: 26,088,117 bytes, SHA-256
+`1f0b91dd051dbb9891d345abd0eed1c4882b5852cd31ea657c2ace7a5f73764a`.
+
+- `$env:CAST_TV_WINDOW_FAIL='1'; Start-Process .\cast-tv-windows-x64.exe`: the console showed the
+  four addresses, the netsh hint, `No cast-tv window (CAST_TV_WINDOW_FAIL); the UI opens in the
+  browser. Ctrl+C ends it (playback stops on the TV too)`, the TV and the firewall warning. There
+  was **no** "Close the window" line. Closing that console with X left the tab showing "cast-tv
+  is not answering" (owner's screenshot).
+- `.\cast-tv-windows-x64.exe` from PowerShell, with the window: the addresses, the netsh hint,
+  then `Close the window or press Ctrl+C to end it (playback stops on the TV too)` once the
+  window showed, then the firewall warning and the TV line. Closed with X; no `cast-tv*` process
+  was left.
