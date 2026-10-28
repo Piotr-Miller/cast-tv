@@ -10,6 +10,8 @@ from castlib.platform import ConsoleClose, ExecutionState, StayAwake, SystemdInh
 from castlib.platform import default_backend as real_default_backend   # bound before conftest swaps it
 from castlib.platform import end_on_console_close as real_end_on_console_close   # likewise
 from castlib.platform import end_on_session_end as real_end_on_session_end       # likewise
+from castlib.platform import report_startup_error as real_report_startup_error   # likewise
+from castlib.platform import show_console as real_show_console                   # likewise
 
 
 # ------------------------------------------------------------- discovery
@@ -96,6 +98,41 @@ def test_lan_interfaces_skip_loopback_and_link_local(monkeypatch):
     fake = types.SimpleNamespace(get_adapters=lambda: adapters)
     monkeypatch.setitem(__import__("sys").modules, "ifaddr", fake)
     assert discovery.lan_interfaces() == [("Wi-Fi", "192.168.1.5")]
+
+
+def test_lan_interfaces_skip_stale_addresses(monkeypatch):
+    ip = lambda a: types.SimpleNamespace(ip=a)
+    adapters = [types.SimpleNamespace(nice_name="Wi-Fi", name="{GUID}", ips=[ip("192.168.50.242")]),
+                types.SimpleNamespace(nice_name="Hyper-V", name="{GUID2}", ips=[ip("172.27.112.1")])]
+    monkeypatch.setitem(sys.modules, "ifaddr", types.SimpleNamespace(get_adapters=lambda: adapters))
+    assert discovery.lan_interfaces({"192.168.50.242"}) == [("Hyper-V", "172.27.112.1")]
+    monkeypatch.setattr(discovery, "stale_addresses", lambda: {"172.27.112.1"})   # the default
+    assert discovery.lan_interfaces() == [("Wi-Fi", "192.168.50.242")]
+
+
+def test_stale_addresses_are_those_not_preferred():
+    # Wi-Fi off on Windows 11: the DHCP address stays, Deprecated (3); 1 is Tentative
+    states = [("192.168.50.242", 3), ("172.27.112.1", discovery.DAD_PREFERRED), ("169.254.1.2", 1)]
+    assert discovery.stale_addresses(states) == {"192.168.50.242", "169.254.1.2"}
+    assert discovery.stale_addresses([]) == set()
+
+
+def test_stale_addresses_only_on_windows(monkeypatch):
+    monkeypatch.setattr(discovery, "_windows_dad_states", lambda: [("192.168.50.242", 3)])
+    assert discovery.stale_addresses(platform="linux") == set()
+    assert discovery.stale_addresses(platform="win32") == {"192.168.50.242"}
+
+    def fails():
+        raise OSError("GetAdaptersAddresses")
+    monkeypatch.setattr(discovery, "_windows_dad_states", fails)
+    assert discovery.stale_addresses(platform="win32") == set()   # unknown: nothing is dropped
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="GetAdaptersAddresses is Windows-only")
+def test_windows_dad_states_reads_the_real_table():
+    states = discovery._windows_dad_states()
+    assert ("127.0.0.1", discovery.DAD_PREFERRED) in states
+    assert all(isinstance(ip, str) and isinstance(state, int) for ip, state in states)
 
 
 def test_discover_hands_the_report_to_the_caller(monkeypatch):
@@ -304,6 +341,85 @@ def test_end_on_console_close_only_on_windows_and_once(monkeypatch):
     assert real_end_on_console_close() is True
     assert real_end_on_console_close() is False                      # already installed
     assert len(installed) == 1
+
+
+# ------------------------------------------------- the console the release hides
+class FakeConsole:
+    """``Win32Console``'s calls, recorded: a console window, the process that owns it, whether it shows."""
+
+    def __init__(self, hwnd=0x1234, owner=100, visible=False):
+        self.hwnd, self.owner_pid, self.is_visible = hwnd, owner, visible
+        self.calls = []
+
+    def window(self):
+        self.calls.append("GetConsoleWindow")
+        return self.hwnd
+
+    def owner(self, hwnd):
+        return self.owner_pid
+
+    def visible(self, hwnd):
+        return self.is_visible
+
+    def show(self, hwnd):
+        self.calls.append(("ShowWindow", hwnd))
+        self.is_visible = True
+
+    def message_box(self, text, title):
+        self.calls.append(("MessageBoxW", title, text))
+
+
+PIDS = (100, 90)          # this process, its parent (the onefile bootloader)
+
+
+def test_show_console_shows_the_console_it_owns():
+    """The window could not open: the console the release hid at start comes back."""
+    own = FakeConsole(owner=100)
+    assert real_show_console(native=own, platform="win32", pids=PIDS) is True
+    assert own.calls == ["GetConsoleWindow", ("ShowWindow", 0x1234)]
+    boot = FakeConsole(owner=90)                       # the onefile bootloader opened it
+    assert real_show_console(native=boot, platform="win32", pids=PIDS) is True
+
+
+def test_show_console_leaves_other_consoles_alone():
+    for native in (FakeConsole(owner=7),               # PowerShell's or cmd's own window
+                   FakeConsole(owner=4242),            # Windows Terminal's pseudoconsole host
+                   FakeConsole(hwnd=None)):            # no console at all
+        assert real_show_console(native=native, platform="win32", pids=PIDS) is False
+        assert not any(isinstance(c, tuple) for c in native.calls)
+    off = FakeConsole()
+    assert real_show_console(native=off, platform="linux", pids=PIDS) is False and off.calls == []
+
+    class Broken(FakeConsole):
+        def window(self):
+            raise OSError("no user32")
+    assert real_show_console(native=Broken(), platform="win32", pids=PIDS) is False
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="user32 and kernel32 are Windows-only")
+def test_win32_console_reads_the_real_console():
+    """The ctypes signatures hold on a real Windows; nothing is shown and no box opens."""
+    native = platform.Win32Console()
+    hwnd = native.window()
+    if hwnd is not None:
+        assert native.owner(hwnd) > 0 and native.visible(hwnd) in (True, False)
+
+
+def test_startup_error_box_only_for_a_hidden_owned_console():
+    """Double-clicked (its own console, hidden early): a box that stays until OK; any terminal: the text alone."""
+    message = "Cannot bind port 8895: [WinError 10048] Only one usage of each socket address is normally permitted"
+    hidden = FakeConsole(owner=90, visible=False)
+    assert real_report_startup_error(message, native=hidden, platform="win32", pids=PIDS) is True
+    assert hidden.calls[-1] == ("MessageBoxW", "cast-tv", message)
+    for native in (FakeConsole(owner=7, visible=True),        # PowerShell or cmd: prints there
+                   FakeConsole(owner=4242, visible=False),    # Windows Terminal: its pseudoconsole window is hidden
+                   FakeConsole(owner=100, visible=True),      # its own console, not hidden (a dev run)
+                   FakeConsole(hwnd=None)):
+        assert real_report_startup_error(message, native=native, platform="win32", pids=PIDS) is False
+        assert not any(c[0] == "MessageBoxW" for c in native.calls if isinstance(c, tuple))
+    off = FakeConsole(owner=100)
+    assert real_report_startup_error(message, native=off, platform="linux", pids=PIDS) is False
+    assert off.calls == []
 
 
 # ------------------------------------------------- a managed laptop's firewall

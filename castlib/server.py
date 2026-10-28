@@ -30,13 +30,14 @@ MEDIA_TIMEOUT = 600        # a paused TV may hold a transfer open this long
 MAX_DRAIN = 1 << 20        # request bodies we read and discard before answering
 LOOPBACK = {"127.0.0.1", "::1"}   # the client addresses the host-only routes answer
 
-# The UI is four files served from an exact-match map: no directory listing,
+# The UI is five files served from an exact-match map: no directory listing,
 # no path traversal, nothing else under /ui/ exists.
 UI_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ui")
 UI_FILES = {"/ui/": ("index.html", "text/html; charset=utf-8"),
             "/ui/app.js": ("app.js", "application/javascript; charset=utf-8"),
             "/ui/style.css": ("style.css", "text/css; charset=utf-8"),
-            "/ui/alpine.min.js": ("alpine.min.js", "application/javascript; charset=utf-8")}
+            "/ui/alpine.min.js": ("alpine.min.js", "application/javascript; charset=utf-8"),
+            "/ui/qrcode.js": ("qrcode.js", "application/javascript; charset=utf-8")}
 
 
 def parse_range(header, size):

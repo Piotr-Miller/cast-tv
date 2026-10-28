@@ -1,4 +1,4 @@
-# Next steps (2026-10-27, main 1239dcb: Phase 2 rows done; merge the rows PR, then Phase 3 on Windows)
+# Next steps (2026-10-28, PR #89: the row 3.8 fix is in; the TV and phone parts need the home Windows machine)
 
 The standing note for a pause in the work (a reboot, a switch of machine): it stays in the
 repository and is overwritten at the next pause.
@@ -8,52 +8,71 @@ recorded row, the PR or commit.
 
 ## Where it stands
 
-- S-12 Phase 1 is done; S-13 is archived (PR #78).
-- S-12 Phase 2 ("The release carries the window") is on `main` as 7eb63db (PR #80, squash-merged).
-  All its manual rows are now accepted: 2.6 at 70d37b7 (PR #86) and 2.7-2.9 at 1239dcb, on the
-  binaries of PR #82's release run 40398550351 (Windows 26072009 bytes, Linux 260495368 bytes).
-- Phase 2 reopened Phase 1 rows 1.8-1.13 and 1.15 (`castlib/cli.py` changed); they are confirmed
-  again once, near the end (step 15a). 1.14 and 1.16 stay current.
-- ci-actions-node24 (PRs #82-#85) is archived; its row 1.4 (the `release` job publishes both files)
-  waits for the next `v*` tag (step 17).
+- S-12 Phases 1 and 2 are on `main`. Phase 3 reopened 1.14, 1.16 and 2.6-2.9 (`change.md`,
+  2026-10-27); with 1.8-1.13 and 1.15 they are confirmed again once, in step 15a.
+- **Phase 3 is PR #89** (branch `s12-phase3`). Rows 3.1-3.5 are done, 3.9 (Fedora) is accepted.
+- **2026-10-28, on the Intune work laptop** (`C:\Source\Trainings\AI\cast-tv`; its MDM rule
+  "Block InBound connection Public Private" blocks every inbound connection, so neither the TV nor
+  the phone can reach it). Every part that needs no inbound connection passed, on run
+  40580688484's exe (`research.md`, "Manual rows 3.6 and 3.11 on the work laptop"):
+  - 3.6: Wi-Fi first, the QR code fills its square and the phone read the right URL, Copy works;
+  - 3.10: a double-click shows only the window, X ends everything;
+  - 3.11: `Stopped.`, the window closes, **no** `atexit` traceback (row 2.6's finding is fixed);
+  - 3.12: the console comes back on the fallback; the error box and the text-only terminal error.
+- **Row 3.8 failed and is fixed** in 6878387. With Wi-Fi off, Windows keeps the Wi-Fi address as
+  `Deprecated` and the panel listed it. Addresses that are not `Preferred` are now skipped. On
+  run 40750049252's exe, with Wi-Fi off, the work laptop listed only its two Hyper-V addresses
+  (2026-10-28); the "no network address" message itself needs a machine without them.
+- **Row 3.12's side finding is fixed** in acc256e: "Close the window or press Ctrl+C" is printed
+  only once the window shows, so a fallback prints only "No cast-tv window ...; Ctrl+C ends it".
+  Checked on the work laptop on run 40760424209's exe (2026-10-28).
+- **The exe for the remaining rows** comes from PR #89's release run 40760424209 (built from
+  acc256e): Windows 26088117 bytes, `window-check: edgechromium OK`; Linux 260517152 bytes. Test
+  run 40760424122 is green on both systems.
+- Locally on the work laptop, `test_onedrive.py::test_token_file_mode_0600` always fails and
+  `test_cli.py::test_cast_replaced_from_the_ui_keeps_serving` sometimes does, with or without
+  the change; CI passes both.
 - The TV allows DLNA per client (Settings → General → Device Connection Manager → Device List,
-  entries named only "Device N"); Fedora is "Device 3" and is allowed since 2026-10-27. If a
-  machine gets "No TV found" while the TV is on, `curl http://192.168.50.142:9197/dmr` answering
-  401 means that list, not cast-tv.
-- Merge method: PRs #78-#87 went in as squash merges. Squash or rebase both work; after a merge
-  Claude rewrites the branch SHAs in the plan to the `main` SHA.
+  entries named only "Device N"). "No TV found" while the TV is on and
+  `curl http://192.168.50.142:9197/dmr` answering 401 means that list, not cast-tv.
 
-## Now: Phase 2 rows 2.7-2.9
+## Now: the home Windows machine, PR #89's remaining rows
 
-- [x] 1. **Windows 11, row 2.6:** re-confirmed 2026-10-26 on run 40398550351's exe, accepted at
-   70d37b7 (PR #86).
-- [x] 2. **Fedora, rows 2.7-2.9:** done 2026-10-27 (`research.md`, "Manual rows 2.7-2.9, Fedora"):
-   2.7 the Qt window in 2.67 s, the UI at 7.35 s, GPU on, so the Linux release stays one file;
-   2.8 a OneDrive HEIC upright on the TV, after allowing Fedora in the TV's Device Connection
-   Manager; 2.9 the window opens in the Ubuntu 24.04.5 VM under Xvfb.
-- [ ] 3. **You:** merge the PR `s12-rows-2.7-2.9`. The rows name `main`'s 1239dcb, so the merge
-   needs no SHA rewrite.
-
-## Phase 3: the console's information moves into the window, and the console hides
-
-- [ ] 8. **Windows 11:** `/rune-implement s12-desktop-window phase 3`, then its PR. It also fixes
-   the two findings of row 2.6 (`research.md`, "Phase 2"): the pythonnet `atexit` traceback after
-   Ctrl+C, and `packaging/smoke.py` leaving the onefile child running on Windows.
-- [ ] 9. **Windows 11:**
-   - [ ] **3.6:** the "Open on your phone" panel lists the Wi-Fi address first; its QR code opens the
-     UI on the phone.
-   - [ ] **3.7:** the phone shows no phone panel and no Quit control.
-   - [ ] **3.8:** with Wi-Fi off, the panel says there is no network address.
-   - [ ] **3.10:** double-clicking the exe in Explorer shows only the window; closing it stops the TV.
-   - [ ] **3.11:** from PowerShell the exe prints the addresses and opens the window; Ctrl+C stops the
-     TV and closes the window.
-   - [ ] **3.12:** a forced fallback with a hidden console shows the console again next to the tab.
-- [ ] 10. **Fedora, row 3.9:** the same panel and QR codes work in the Qt window.
-- [ ] 11. **You:** merge the Phase 3 PR.
+- [ ] 8. **Home Windows 11**, in PowerShell, in `C:\Source\cast-tv`:
+   ```powershell
+   git fetch; git switch s12-phase3; git pull
+   mkdir $HOME\Downloads\s12-phase3c -Force; cd $HOME\Downloads\s12-phase3c
+   gh run download 40760424209 -R Piotr-Miller/cast-tv -n cast-tv-windows-x64.exe
+   (Get-Item .\cast-tv-windows-x64.exe).Length
+   .\cast-tv-windows-x64.exe --version
+   ```
+   The length should be 26088117 and the last line `Window: edgechromium`. Tell Claude each
+   row's result; Claude records it and ticks the row.
+   - [ ] **3.6:** start `.\cast-tv-windows-x64.exe`. In the cast-tv window, click **QR code** next
+     to the first (192.168.50.x) address in "Open on your phone" and scan it with the phone's
+     camera: the cast-tv UI opens on the phone.
+   - [ ] **3.7:** on the phone, the page shows no "Open on your phone" panel and no "Quit cast-tv"
+     button. Close the cast-tv window with X.
+   - [ ] **3.8:** turn the Wi-Fi tile off in the taskbar's network menu (and unplug Ethernet),
+     wait 10 s, start the exe again. The panel says "This computer has no network address.
+     Connect it to Wi-Fi or Ethernet." If a virtual adapter (Hyper-V, WSL, VPN) is still listed
+     instead, say which; the Wi-Fi address must **not** be listed. Close with X, turn Wi-Fi back on.
+   - [ ] **3.11:** in PowerShell, start the exe, cast a photo to the TV, then press **Ctrl+C in
+     the PowerShell window**: `Stopped.`, the window closes, the TV stops, no traceback.
+   - [ ] **3.10:** in File Explorer, double-click the exe, cast a photo, close the window with X:
+     the TV stops, and Task Manager shows no `cast-tv-windows-x64.exe`.
+   - [ ] **3.12:** in PowerShell, `$env:CAST_TV_WINDOW_FAIL='1'; Start-Process .\cast-tv-windows-x64.exe`.
+     Cast a photo from the browser tab, then close the console window that appeared with its X:
+     the TV stops and the tab shows "cast-tv is not answering". Then
+     `Remove-Item Env:CAST_TV_WINDOW_FAIL`.
+- [ ] 9. **You:** merge PR #89 once the rows pass (or say what failed; Claude fixes it first).
 
 ## Phase 4: icon and menu entry
 
-- [ ] 12. **Windows 11:** `/rune-implement s12-desktop-window phase 4`, then its PR.
+- [ ] 12. **Either machine:** `/rune-implement s12-desktop-window phase 4`, then its PR. The icon is
+    decided (owner, 2026-10-27): the draft in `context/changes/s12-desktop-window/icon/make_icon.py`.
+    On Fedora the Alt+Tab gear goes away only with this phase: the window's `app_id` `cast-tv`
+    and the `.desktop` entry it adds.
 - [ ] 13. **Windows 11:**
     - [ ] **4.5:** the icon on the exe, the window and the taskbar button.
     - [ ] **4.8:** "Add to Start menu" puts a shortcut in Start that starts with no console; pinning to
@@ -71,9 +90,9 @@ recorded row, the PR or commit.
 
 ## Closing S-12
 
-- [ ] 15a. **Windows 11 and Fedora:** confirm again the Phase 1 rows that Phase 2 reopened
-    (`castlib/cli.py` changed): 1.8, 1.9, 1.10, 1.11, 1.12, 1.13, 1.15. Once, at the `main` SHA after
-    the Phase 4 merge, since Phases 3 and 4 change `cli.py` again. Claude gives the steps.
+- [ ] 15a. **Windows 11 and Fedora:** confirm again the rows that Phases 2 and 3 reopened: 1.8-1.16
+    and 2.6-2.9 (`cli.py`, `platform.py`, the UI and the spec changed). Once, on the release binaries
+    built after the Phase 4 merge, since Phase 4 changes `cli.py` again. Claude gives the steps.
 - [ ] 16. **Windows 11:** review Phases 2-4 (`/rune-impl-review`) and fix what it finds.
 - [ ] 17. **You:** decide on the release tag (e.g. `v0.5.0`); the release workflow builds and publishes
     the files on GitHub Releases. This run also checks ci-actions-node24's row 1.4: on the Actions
@@ -84,16 +103,14 @@ recorded row, the PR or commit.
 
 ## To decide, no hurry
 
-- **Fedora:** whether to delete the VM disk in `~/.cache/cast-tv-s12-spike` (7.1 GB, VM stopped)
-  and the 20 podman images `localhost/spike-*`. Row 2.9 is done, so nothing in S-12 needs them.
 - **Fedora:** whether to delete the local branch `s12-desktop-window`: its 4 commits are on `main`
   under rebased SHAs and the remote branch is gone.
-- **Windows:** whether to delete `.venv-spike`, `build` and `dist` in
+- **Home Windows:** whether to delete `.venv-spike`, `build` and `dist` in
   `C:\Source\cast-tv\context\changes\s12-desktop-window\spike-kit` (gitignored, 1.2 GB).
-
 - **Either machine:** whether a later change makes the UI say that the TV refused this computer
   (the description answering 401) instead of "No TV found"; `research.md`, row 2.8, side finding.
 
 ## How to resume with Claude
 
-Write "co dalej" in the cast-tv checkout, on `main`.
+Write "co dalej" in the cast-tv checkout. Until PR #89 is merged, work on its branch:
+`git fetch; git switch s12-phase3; git pull`. After the merge: `git switch main; git pull`.

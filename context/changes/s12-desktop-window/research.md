@@ -958,3 +958,240 @@ still TRANSITIONING into the 12 MP photo; its `SetAVTransportURI` got 701, the w
 the first, identical photo, so nothing looked wrong on the screen while Diagnostics reported a
 failure. The owner confirmed pressing `Cast now` twice, so the Qt window did not double a click.
 Row 2.8 rests on the cast that played, so it stands.
+
+## Phase 3: the release builds (2026-10-27)
+
+Implemented on Fedora (PR #89, commit 0561081). The PR's test run 40578872429 passed on
+`ubuntu-latest` and `windows-latest`. Its release run 40578872547 built and smoke-tested both
+files:
+
+- **Windows (`windows-latest`):** `size: 26086550 bytes`, `Window: edgechromium`,
+  `self-check: HEIC -> image/jpeg 16x16 OK`, `/ui/ 200, /api/status 200`,
+  `POST /api/quit: ended, port 8099 free`, `window-check: edgechromium OK (8.1 s)`. The exe is
+  the first built with `hide_console="hide-early"`; started by `smoke.py` it still served and
+  answered Quit. `POST /api/quit` ending the bootloader and its child is the fix for row 2.6's
+  leftover server: the smoke test now fails if anything still answers on the port.
+- **Linux (`ubuntu-22.04`, under `xvfb-run`):** `size: 260510376 bytes`, `Window: qtwebengine`,
+  the same self-check, `POST /api/quit: ended, port 8099 free`, `window-check: qtwebengine OK
+  (5.8 s)`.
+
+Before the PR, the new `smoke.py` ran on Fedora against the Phase 2 Linux binary (run
+40398550351) with a clean `HOME`: `POST /api/quit: ended, port 8099 free`, `window-check:
+qtwebengine OK (3.7 s)`. A QR code made by the page's `qrSvg()` for
+`http://192.168.50.198:8895/ui/` was rendered to PNG and decoded with OpenCV's
+`QRCodeDetector` back to the same address.
+
+Not provable on Fedora, left to the manual rows: whether `GetWindowThreadProcessId` on the
+console window names the onefile bootloader after a double-click (3.10, 3.12's error box), and
+whether ignoring SIGINT after the window closed removes the pythonnet `atexit` traceback (3.11).
+
+## Manual row 3.9, Fedora (2026-10-27)
+
+**First run** (the owner, Fedora 44 desktop, Wayland). PR #89's Linux binary from release run
+40578872547, downloaded into `~/Downloads/s12-phase3`: 260,510,376 bytes, SHA-256
+`749dfbbb603e62f9e8c11dc49e17a679dae4ef10aeb082bd2bc3d6e4bce442fd`, `Window: qtwebengine`.
+`/api/status` reported `window: true`, `host: true`, addresses `http://localhost:8895/ui/` and
+`http://192.168.50.198:8895/ui/`, `firewall_blocked: null`.
+
+- The "Open on your phone" panel listed only `http://192.168.50.198:8895/ui/`: as expected.
+- **Copy** showed no "Copied.": a defect.
+- **QR code** drew a tiny code in the top-left corner of the white square (owner's screenshot): a
+  defect.
+- Scanning that code with the phone opened the cast-tv UI on the phone, with no phone panel and
+  no Quit control: as expected.
+
+**The causes**, measured in the same window through Qt's remote debugging
+(`QTWEBENGINE_REMOTE_DEBUGGING=127.0.0.1:9333`, QtWebEngine 6.14, `Runtime.evaluate` with a user
+gesture):
+
+- `navigator.clipboard.writeText()` never settled (cut off after 5 s): Qt WebEngine asks for a
+  clipboard permission that pywebview never answers, so neither "Copied." nor the
+  `window.prompt` fallback ran. `document.execCommand('copy')` on a selected textarea returned
+  true, and `wl-paste` printed the text. `copy()` now tries `execCommand` first, inside the
+  click; the Diagnostics "Copy command" buttons share it.
+- The HTML parser lowercased the attribute `:viewBox`, so Alpine set `viewbox`, which SVG
+  ignores. Without a viewBox the path drew in pixels, one per module. The binding is now
+  `:view-box.camel`. After the fix the window reported `viewBox="0 0 37 37"`, an SVG of
+  180x180 px and the modules 141x141 px.
+
+**Second run**, same window and binary, with the fixed `app.js` and `index.html` copied over the
+binary's unpacked `castlib/ui` (the server reads them on every request; `cmp` showed them equal
+to the checkout) and the page reloaded. The owner clicked Copy and scanned the QR code again:
+"Działa". Copy pasted the address, and the code filled its square and opened the UI on the phone.
+
+Row 3.9's criterion (the phone panel and QR codes work in the Qt window) is met with the fix.
+The checks of the rebuilt binary are below.
+
+**The rebuilt binary** (Claude, 2026-10-27). PR #89's release run 40580688484, built from 1134162:
+Windows `size: 26086907 bytes`, `window-check: edgechromium OK (7.9 s)`; Linux `size: 260510504
+bytes`, SHA-256 `b75a2e2d906cdfaaf4e2ef6fa674e4f4edee4799d4ecfcee65df298877dc432b`,
+`window-check: qtwebengine OK (3.2 s)`; both `POST /api/quit: ended, port 8099 free`. Its Qt
+window on Fedora, read through remote debugging after clicking QR code: the panel lists
+`http://192.168.50.198:8895/ui/`, `viewBox="0 0 37 37"`, SVG 180x180 px, modules 141x141 px, and
+`copyByCommand` is in the page. Ended with `POST /api/quit`.
+
+## Manual rows 3.6 and 3.11 on the work laptop, without the TV and the phone (2026-10-28)
+
+The owner, on the Intune-managed Windows 11 Enterprise laptop. Its MDM firewall rule "Block
+InBound connection Public Private" is still active (checked in `ActiveStore`), so neither the TV
+nor the phone can fetch from it. Only the parts that need no inbound connection are observed
+here. The rows stay open until the cast and phone parts run on the other Windows machine. The exe
+is PR #89's from release run 40580688484, downloaded into `Downloads\s12-phase3`: 26,086,907
+bytes, SHA-256 `d85e853a384d013918bfb00b91f2347236969f0aefcd429f2dcb3c420072c1f1`, `--version`
+ends `Window: edgechromium`. The laptop's IPv4 addresses: Wi-Fi 192.168.50.242 (the default
+route), Hyper-V `vEthernet (Default Switch)` 172.27.112.1, `vEthernet (WSL)` 172.21.128.1 and
+five 169.254.x link-local addresses.
+
+**Started from PowerShell** (`.\cast-tv-windows-x64.exe`, row 3.11's start):
+
+- PowerShell printed `localhost`, `192.168.50.242`, `172.27.112.1` and `172.21.128.1` (each
+  `:8895/ui/`), the netsh hint, "Close the window or press Ctrl+C", `TV: 83" OLED
+  (192.168.50.142)` and the firewall-policy warning naming the rule. The cast-tv window opened.
+- In the window (owner's screenshots), the banner "The TV cannot fetch from this computer" showed
+  the same advice. The "Open on your phone" panel listed `http://192.168.50.242:8895/ui/` first,
+  then 172.27.112.1 and 172.21.128.1, each with Copy and QR code. There was no localhost and no
+  169.254.x address.
+- **QR code** for 192.168.50.242 drew a code filling its white square (WebView2, so the
+  `:view-box.camel` fix holds there too). The phone's camera read it as
+  `http://192.168.50.242:8895/ui/`. Opening it on the phone is blocked by the firewall and is left
+  for the other machine.
+- **Copy** showed "Copied." at the bottom of the window.
+- **Ctrl+C in the PowerShell window** printed `Stopped.`, the window closed, and PowerShell came
+  back with no `Exception ignored in atexit callback` traceback, which was row 2.6's finding.
+  `$LASTEXITCODE` was 0.
+
+Left for the other Windows machine: 3.6's phone opening the UI, and 3.11 with a cast running (the
+TV stops on Ctrl+C).
+
+**Double-click** (row 3.10's start), the same exe from File Explorer: at most a console flashed,
+then only the cast-tv window showed, with no console window and no Windows Terminal tab (owner:
+"zobaczyłem to co opisałeś"). So the console's owner is recognised as this process or the onefile
+bootloader, and `hide-early` plus the owned-console check behave as intended on Windows. Closing
+the window with X ended everything. Task Manager's Processes filtered on `cast-tv` showed no
+results (owner's screenshot). Claude then found no `cast-tv*` process (`Get-Process`) and nothing
+listening on 8895 (`Get-NetTCPConnection`).
+
+Left for the other Windows machine: 3.10 with a cast running (the TV stops on X).
+
+**Forced fallback with a hidden console** (row 3.12). In PowerShell:
+`$env:CAST_TV_WINDOW_FAIL='1'; Start-Process .\cast-tv-windows-x64.exe`. A browser tab opened
+with the UI. The console window appeared next to it, so `platform.show_console()` brought back
+the hidden console. It showed the four addresses, the netsh hint, `Close the window or press
+Ctrl+C to end it ...`, then `No cast-tv window (CAST_TV_WINDOW_FAIL); the UI opens in the browser.
+Ctrl+C ends it (playback stops on the TV too)`, the TV and the firewall-policy warning. The owner
+closed that console window with its X. The tab then showed "cast-tv is not answering. The process
+may have stopped." (owner's screenshot; the tab, on localhost, also showed the firewall banner and
+the phone panel). The variable was removed with `Remove-Item Env:CAST_TV_WINDOW_FAIL`.
+
+Side finding, not a 3.12 failure: on the fallback path the console still prints `Close the window
+or press Ctrl+C` (`WINDOW_ENDS`, printed before the window is tried) above the line saying there
+is no window. That is harmless, but it names a window that never came.
+
+**The error box.** In a second PowerShell window, `python -m http.server 8895 --bind 127.0.0.1`
+held the port (Python 3.14.8).
+
+- A double-click on the exe in File Explorer showed a message box titled `cast-tv` with the error
+  icon, the text `Cannot bind port 8895: [WinError 10048] Only one usage of each socket address
+  (protocol/network address/port) is normally permitted` and an OK button (owner's screenshot).
+  It stayed until OK.
+- From the first PowerShell window, `.\cast-tv-windows-x64.exe` printed the same `Cannot bind
+  port 8895: [WinError 10048] ...` line and showed no box. `$LASTEXITCODE` was 1.
+- The HTTP server was stopped with Ctrl+C. Claude then found no `cast-tv*` process and nothing
+  listening on 8895.
+
+Left for the other Windows machine: 3.12's cast from the tab (the TV stops when the console
+closes).
+
+**Offline** (row 3.8). Two runs: the owner turned the Wi-Fi tile off in the taskbar's network
+menu, started the exe from PowerShell, then closed it with X and turned Wi-Fi back on. Both runs
+gave the same result (owner's screenshots). PowerShell and the panel listed
+`http://192.168.50.242:8895/ui/` first, then 172.27.112.1 and 172.21.128.1. Discovery reported
+"No TV found" and "Searched on: Intel(R) Wi-Fi 6E AX211 160MHz 192.168.50.242 — 0 responses",
+plus the two Hyper-V adapters, so the M-SEARCH socket bound to the Wi-Fi address without an
+error. No firewall warning appeared, because there was no TV to check against. The panel never
+said "This computer has no network address".
+
+During the second run Claude logged every 3 s: `Get-NetAdapter`, `Get-NetIPAddress` and
+`ifaddr.get_adapters()` (0.2.0, the library `lan_interfaces()` uses), plus `/api/status`
+addresses. State changes:
+
+```
+19:20:28 wifi=Up/Connected            netip=[192.168.50.242/Preferred]  ifaddr lists 192.168.50.242
+19:21:00 wifi=Disconnected/Disconnected netip=[192.168.50.242/Deprecated] ifaddr lists 192.168.50.242
+19:21:21 (cast-tv started) status addresses: localhost, 192.168.50.242, 172.27.112.1, 172.21.128.1
+19:22:08 (cast-tv closed)
+19:22:29 wifi=Up/Connected            netip=[192.168.50.242/Preferred]
+```
+
+**Finding:** with Wi-Fi off, Windows 11 keeps the DHCP address on the disconnected adapter in
+`AddressState` **Deprecated**. Here it stayed for the whole 89 s that Wi-Fi was off. `ifaddr`
+does not filter it: its `IP_ADAPTER_UNICAST_ADDRESS` reads `DadState`, but the `IP` objects do
+not expose it. So cast-tv offers the phone an address that nothing can reach, and the offline
+message cannot show on Windows while such an address remains. On this laptop the Hyper-V
+adapters (172.27.112.1, 172.21.128.1, always up) would keep the panel non-empty anyway, which the
+plan accepts ("VPN or Docker addresses: listed like any other"). A Windows machine without virtual
+adapters would still fail 3.8 because of the Deprecated Wi-Fi address.
+
+**The fix** (owner's decision: on PR #89). `discovery.stale_addresses()` reads each IPv4 address's
+`DadState` from `GetAdaptersAddresses` through ctypes (`_windows_dad_states`). Every address not
+in `IpDadStatePreferred` (4) is stale. `lan_interfaces()` skips stale addresses, so discovery no
+longer sends M-SEARCH from them, and `App.start` drops the default-route address if it is stale.
+Off Windows, or if the call fails, nothing is stale and the list is as before. On this laptop with
+Wi-Fi on, the call returned 192.168.50.242, 127.0.0.1 and both Hyper-V addresses as Preferred
+(4), and the five 169.254.x addresses of the disconnected adapters as Tentative (1). Locally:
+`pyflakes` clean. Over three full `pytest` runs, 455-456 passed and 5 were skipped. Two tests fail
+on this laptop with or without the change (a full run with the change stashed: the same two
+failed, 450 passed): `test_onedrive.py::test_token_file_mode_0600` always (`PermissionError` on
+the token file), and `test_cli.py::test_cast_replaced_from_the_ui_keeps_serving` in some runs
+(`'App' object has no attribute 'current'`, read before `__init__` finished; alone it passes).
+CI decides. Row 3.8 is to be run again on the PR's new release exe.
+
+**The fix's builds** (Claude, 2026-10-28). PR #89 at 731ccab: test run 40750043256 green on
+`ubuntu-latest` and `windows-latest`. Release run 40750049252: Windows `size: 26089838 bytes`,
+`POST /api/quit: ended, port 8099 free`, `window-check: edgechromium OK (7.2 s)`; Linux
+`size: 260518120 bytes`, the same quit line, `window-check: qtwebengine OK (5.3 s)`.
+
+**Row 3.8 again, on the fix's exe** (the owner, the same work laptop, 2026-10-28). The exe from
+release run 40750049252, downloaded into `Downloads\s12-phase3b`: 26,089,838 bytes, SHA-256
+`627e72a381713c1f436611c3db308cf6bf89199bc34ee3f138cbd99252f5a1e7`, `Window: edgechromium`.
+The owner turned Wi-Fi off and started the exe from PowerShell. Claude's log:
+
+```
+20:58:42 wifi=Disconnected/Disconnected netip=[192.168.50.242/Deprecated] ifaddr lists 192.168.50.242
+20:59:02 (cast-tv started) status addresses: localhost, 172.27.112.1, 172.21.128.1
+20:59:57 (cast-tv closed)
+21:00:08 wifi=Up/Connected netip=[192.168.50.242/Preferred]
+```
+
+PowerShell printed `localhost`, `172.27.112.1` and `172.21.128.1` only. The panel (owner's
+screenshot) listed the two Hyper-V addresses, and "Searched on" named only the two Hyper-V
+adapters. So the Deprecated Wi-Fi address is gone from the list and from discovery, which was the
+fix's aim. The panel's "no network address" message still cannot show on this laptop, because the
+Hyper-V adapters stay up (listed by design). Row 3.8 stays open for the home Windows machine.
+
+**Row 3.12's side finding, fixed** (owner's decision, 2026-10-28). `App.start` now prints no
+"how to end it" line when the window is asked for (`ends=None`). `window.run(..., on_shown=)`
+prints `Close the window or press Ctrl+C ...` from pywebview's `shown` event. So it appears only
+once a window is on screen, a few seconds after the addresses. A fallback prints only `No cast-tv
+window (...); the UI opens in the browser. Ctrl+C ends it ...`. Tests:
+`test_on_shown_runs_once_the_window_shows`, `test_wrong_renderer_falls_back` (not called),
+`test_gui_end_stops_and_closes` (printed), `test_unavailable_window_opens_the_tab` (absent).
+Locally 457 passed, 5 skipped, and only `test_token_file_mode_0600` failed (as before, this
+laptop).
+
+**The fallback on the fix's exe** (the owner, the work laptop, 2026-10-28). Release run
+40760424209, built from acc256e: Windows `size: 26088117 bytes`, `window-check: edgechromium OK
+(7.6 s)`; Linux `size: 260517152 bytes`, `window-check: qtwebengine OK (5.3 s)`; both `POST
+/api/quit: ended, port 8099 free`. Test run 40760424122 is green on both systems. The exe was
+downloaded into `Downloads\s12-phase3c`: 26,088,117 bytes, SHA-256
+`1f0b91dd051dbb9891d345abd0eed1c4882b5852cd31ea657c2ace7a5f73764a`.
+
+- `$env:CAST_TV_WINDOW_FAIL='1'; Start-Process .\cast-tv-windows-x64.exe`: the console showed the
+  four addresses, the netsh hint, `No cast-tv window (CAST_TV_WINDOW_FAIL); the UI opens in the
+  browser. Ctrl+C ends it (playback stops on the TV too)`, the TV and the firewall warning. There
+  was **no** "Close the window" line. Closing that console with X left the tab showing "cast-tv
+  is not answering" (owner's screenshot).
+- `.\cast-tv-windows-x64.exe` from PowerShell, with the window: the addresses, the netsh hint,
+  then `Close the window or press Ctrl+C to end it (playback stops on the TV too)` once the
+  window showed, then the firewall warning and the TV line. Closed with X; no `cast-tv*` process
+  was left.

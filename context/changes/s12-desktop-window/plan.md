@@ -542,13 +542,13 @@ process.
 
 #### Manual Verification:
 
-- In the window on the Windows laptop: the "Open on your phone" panel lists the Wi-Fi address first. Scanning its QR code with the phone's camera opens the cast-tv UI on the phone
-- On the phone, the UI shows no phone panel and no Quit control
-- With Wi-Fi off on the laptop, the panel says there is no network address
-- On the Fedora desktop, the same panel and QR codes work in the Qt window
-- On the Windows laptop, double-clicking the PR run's exe in Explorer: at most a brief console flash, then only the window. Closing it stops the TV
-- From PowerShell, the same exe prints the addresses in the PowerShell window and opens the window. Ctrl+C in that PowerShell window stops the TV and closes the window
-- A forced fallback with a hidden console: in PowerShell, `$env:CAST_TV_WINDOW_FAIL='1'; Start-Process .\cast-tv-windows-x64.exe` (the new process owns a new console, so it is hidden first). The console window reappears next to the browser tab, and closing that console window stops the TV. Clear the test variable with `Remove-Item Env:CAST_TV_WINDOW_FAIL`. Also test an error before GUI startup: with cast-tv stopped, in a separate PowerShell window run `python -m http.server 8895 --bind 127.0.0.1`; double-click the cast-tv exe in Explorer and verify a `cast-tv` error dialog names the occupied port and remains until OK. Run the exe from the original PowerShell too: it prints the bind error, exits nonzero, and shows no dialog. Stop the temporary HTTP server with Ctrl+C in its own PowerShell window. This extends row 3.12's error-path coverage without changing its Progress title
+- In the window on the Windows laptop: the "Open on your phone" panel lists the Wi-Fi address first. Scanning its QR code with the phone's camera opens the cast-tv UI on the phone (owner decision 2026-10-27: surface declared) — surface: castlib/ui/app.js, castlib/ui/index.html, castlib/ui/qrcode.js, castlib/server.py, castlib/api.py, castlib/app.py, castlib/discovery.py
+- On the phone, the UI shows no phone panel and no Quit control (owner decision 2026-10-27: surface declared) — surface: castlib/ui/app.js, castlib/ui/index.html, castlib/ui/qrcode.js, castlib/server.py, castlib/api.py
+- With Wi-Fi off on the laptop, the panel says there is no network address (owner decision 2026-10-27: surface declared) — surface: castlib/ui/app.js, castlib/ui/index.html, castlib/ui/qrcode.js, castlib/server.py, castlib/api.py, castlib/app.py, castlib/discovery.py
+- On the Fedora desktop, the same panel and QR codes work in the Qt window (owner decision 2026-10-27: surface declared) — surface: castlib/ui/app.js, castlib/ui/index.html, castlib/ui/qrcode.js, castlib/server.py, castlib/api.py
+- On the Windows laptop, double-clicking the PR run's exe in Explorer: at most a brief console flash, then only the window. Closing it stops the TV (owner decision 2026-10-27: surface declared) — surface: castlib/cli.py, castlib/platform.py, castlib/window.py, packaging/cast-tv.spec
+- From PowerShell, the same exe prints the addresses in the PowerShell window and opens the window. Ctrl+C in that PowerShell window stops the TV and closes the window (owner decision 2026-10-27: surface declared) — surface: castlib/cli.py, castlib/platform.py, castlib/window.py, packaging/cast-tv.spec
+- A forced fallback with a hidden console: in PowerShell, `$env:CAST_TV_WINDOW_FAIL='1'; Start-Process .\cast-tv-windows-x64.exe` (the new process owns a new console, so it is hidden first). The console window reappears next to the browser tab, and closing that console window stops the TV. Clear the test variable with `Remove-Item Env:CAST_TV_WINDOW_FAIL`. Also test an error before GUI startup: with cast-tv stopped, in a separate PowerShell window run `python -m http.server 8895 --bind 127.0.0.1`; double-click the cast-tv exe in Explorer and verify a `cast-tv` error dialog names the occupied port and remains until OK. Run the exe from the original PowerShell too: it prints the bind error, exits nonzero, and shows no dialog. Stop the temporary HTTP server with Ctrl+C in its own PowerShell window. This extends row 3.12's error-path coverage without changing its Progress title (owner decision 2026-10-27: surface declared) — surface: castlib/cli.py, castlib/platform.py, castlib/window.py, packaging/cast-tv.spec
 
 ---
 
@@ -577,7 +577,11 @@ the owner can replace the design later.
 
 **Contract**:
 - `make_icon.py` draws a simple TV-screen glyph with Pillow and writes `castlib/ui/icon.png`
-  and `castlib/ui/cast-tv.ico`. Both are committed package resources; the build does not run
+  and `castlib/ui/cast-tv.ico`. **(owner decision 2026-10-27)** The design is the approved draft
+  `context/changes/s12-desktop-window/icon/make_icon.py` (preview: `icon/preview.png`): an amber
+  (`#e8a33d`) TV outline with stand and the cast mark (a dot and two arcs from the screen's
+  bottom-left corner) on a dark warm rounded square; ICO sizes 16, 24, 32, 48, 64, 128, 256.
+  It moves to `packaging/make_icon.py`, its output paths becoming the two files above. Both are committed package resources; the build does not run
   the script. Keep one canonical ICO under `castlib/ui`, not a packaging-only copy: the
   existing `ui/*` package-data rule includes it in wheel/pipx installs without the repository.
 - `/favicon.ico` serves `icon.png` as `image/png` instead of answering 204.
@@ -816,9 +820,9 @@ The Progress Manual rows, run on the Windows laptop and the Fedora desktop, each
 - [ ] 1.11 --no-window opens the tab
 - [ ] 1.12 A forced fallback opens the tab with window_unavailable in Diagnostics
 - [ ] 1.13 X with a video playing stops the TV and ends the process
-- [x] 1.14 Ctrl+C and kill stop the TV and close the window — accepted at f04dfcb7fd9105f6a570c29579c1b34240fb5b74
+- [ ] 1.14 Ctrl+C and kill stop the TV and close the window
 - [ ] 1.15 A second launch brings the window to the front
-- [x] 1.16 The phone's UI is unchanged and has no Quit control — accepted at ffa982c46ad1f1bd5ea9b81a9283f941dac2690b
+- [ ] 1.16 The phone's UI is unchanged and has no Quit control
 
 ### Phase 2: The release carries the window
 
@@ -832,27 +836,27 @@ The Progress Manual rows, run on the Windows laptop and the Fedora desktop, each
 
 #### Manual
 
-- [x] 2.6 Windows: the PR exe opens the window; size and start time recorded — accepted at 70d37b737dc4e4124e1d66eba984f227bb290a27
-- [x] 2.7 Fedora: the PR Linux binary opens a Qt window with the GPU on; size and start time recorded — accepted at 1239dcb5b8e77e1c992512ef56028a23c5345e51
-- [x] 2.8 Fedora: a HEIC photo cast through the window shows upright — accepted at 1239dcb5b8e77e1c992512ef56028a23c5345e51
-- [x] 2.9 Ubuntu 24.04 VM: the Linux binary opens its window, or why not — accepted at 1239dcb5b8e77e1c992512ef56028a23c5345e51
+- [ ] 2.6 Windows: the PR exe opens the window; size and start time recorded
+- [ ] 2.7 Fedora: the PR Linux binary opens a Qt window with the GPU on; size and start time recorded
+- [ ] 2.8 Fedora: a HEIC photo cast through the window shows upright
+- [ ] 2.9 Ubuntu 24.04 VM: the Linux binary opens its window, or why not
 
 ### Phase 3: The console's information moves into the window, and the console hides
 
 #### Automated
 
-- [ ] 3.1 The static files include qrcode.js and nothing else new
-- [ ] 3.2 Phone panel and firewall banner logic
-- [ ] 3.3 show_console is covered
-- [ ] 3.4 The full suite passes
-- [ ] 3.5 The release workflow on the PR is green
+- [x] 3.1 The static files include qrcode.js and nothing else new — 0561081
+- [x] 3.2 Phone panel and firewall banner logic — 0561081
+- [x] 3.3 show_console is covered — 0561081
+- [x] 3.4 The full suite passes — 0561081
+- [x] 3.5 The release workflow on the PR is green — 0561081
 
 #### Manual
 
 - [ ] 3.6 Windows window: the phone panel's QR opens the UI on the phone
 - [ ] 3.7 The phone shows no phone panel and no Quit control
 - [ ] 3.8 Offline: the panel says there is no network address
-- [ ] 3.9 Fedora: the phone panel and QR codes work in the Qt window
+- [x] 3.9 Fedora: the phone panel and QR codes work in the Qt window — accepted at efac3c5bed1c033f3879c63d34c64efa469a1cba
 - [ ] 3.10 Windows double-click: only the window, closing it stops the TV
 - [ ] 3.11 Windows from PowerShell: output there, window opens, Ctrl+C stops both
 - [ ] 3.12 A fallback with a hidden console shows the console again

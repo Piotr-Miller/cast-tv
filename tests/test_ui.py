@@ -1,4 +1,4 @@
-"""The static UI: four files, exact match, nothing else."""
+"""The static UI: five files, exact match, nothing else."""
 from tests.conftest import request
 
 
@@ -11,12 +11,13 @@ def test_static_exact_match_only(server):
     assert b"cast-tv" in body and b"x-data" in body
     for path, ctype in (("/ui/app.js", "application/javascript"),
                         ("/ui/style.css", "text/css"),
-                        ("/ui/alpine.min.js", "application/javascript")):
+                        ("/ui/alpine.min.js", "application/javascript"),
+                        ("/ui/qrcode.js", "application/javascript")):
         status, headers, body, _ = request(base, "GET", path, conn=conn)
         assert status == 200, path
         assert headers["Content-Type"].startswith(ctype)
         assert headers["Content-Length"] == str(len(body)) and body
-    for path in ("/ui/index.html", "/ui/../castlib/server.py", "/ui/app.js/", "/ui/x",
+    for path in ("/ui/index.html", "/ui/../castlib/server.py", "/ui/app.js/", "/ui/x", "/ui/qrcode.mjs",
                  "/ui/%2e%2e/pyproject.toml", "/ui/APP.JS"):
         status, headers, body, _ = request(base, "GET", path, conn=conn)
         assert status == 404, path
@@ -132,8 +133,10 @@ def test_gopro_steps_are_not_duplicated_in_the_ui():
     assert "fallback(tab).steps" in html and "fallbackText(tab)" in html
 
 
-def drive_ui(steps):
-    """Run the page's component in node against scripted answers (tests/ui_driver.js); skipped without node."""
+def drive_ui(steps, scripts=()):
+    """Run the page's component in node against scripted answers (tests/ui_driver.js); skipped without node.
+
+    ``scripts`` are other files under /ui/ the page loads before app.js, such as qrcode.js."""
     import json
     import os
     import shutil
@@ -144,7 +147,8 @@ def drive_ui(steps):
     if not node:
         pytest.skip("node is not installed")
     driver = os.path.join(os.path.dirname(__file__), "ui_driver.js")
-    done = subprocess.run([node, driver, os.path.join(UI_DIR, "app.js")], input=json.dumps({"steps": steps}),
+    done = subprocess.run([node, driver, os.path.join(UI_DIR, "app.js")] + [os.path.join(UI_DIR, s) for s in scripts],
+                          input=json.dumps({"steps": steps}),
                           capture_output=True, text=True, encoding="utf-8", timeout=30)
     assert done.returncode == 0, done.stderr
     return json.loads(done.stdout)
@@ -255,3 +259,91 @@ def open_ui_bytes():
     import os
     with open(os.path.join(UI_DIR, "index.html"), "rb") as fh:
         return fh.read()
+
+
+ADDRESSES = ["http://localhost:8895/ui/", "http://192.168.50.198:8895/ui/", "http://172.21.80.1:8895/ui/"]
+
+
+def _phone_status(host=True, addresses=ADDRESSES, blocked=None, advice=""):
+    return dict(_host_status(host, True), addresses=list(addresses), firewall_blocked=blocked,
+                firewall_advice=advice)
+
+
+def test_phone_panel_lists_lan_addresses():
+    """S-12 Phase 3: every LAN address in the server's order, the default route first; localhost dropped."""
+    html = _ui_text("index.html")
+    assert html.index('src="/ui/qrcode.js"') < html.index('src="/ui/app.js"')
+    panel = html[html.index('<section class="phone"'):html.index("</section>", html.index('<section class="phone"'))]
+    assert "Open on your phone" in panel and 'x-for="a in phoneAddresses()"' in panel
+    assert "copy(a, 'address')" in panel and "toggleQr(a)" in panel and "qrSvg(a).d" in panel
+    # row 3.9: the HTML parser lowercases ":viewBox", and an SVG without its viewBox drew a 37 px code
+    assert ":view-box.camel=" in panel and "viewBox" not in panel
+    out = drive_ui([
+        {"status": _phone_status(addresses=ADDRESSES + ["http://127.0.0.1:8895/ui/"])}, {"call": "refresh"},
+        {"read": "phoneAddresses"},
+    ])
+    assert out["reads"] == [ADDRESSES[1:]]
+
+
+def test_phone_panel_qr_codes():
+    """Each address gets its own QR code, from the vendored qrcode.js, toggled one at a time."""
+    out = drive_ui([
+        {"status": _phone_status()}, {"call": "refresh"},
+        {"call": "toggleQr", "args": [ADDRESSES[1]]}, {"read": "qrOpen"},
+        {"read": "qrSvg", "args": [ADDRESSES[1]]}, {"read": "qrSvg", "args": [ADDRESSES[2]]},
+        {"call": "toggleQr", "args": [ADDRESSES[2]]}, {"read": "qrOpen"},
+        {"call": "toggleQr", "args": [ADDRESSES[2]]}, {"read": "qrOpen"},
+    ], scripts=["qrcode.js"])
+    open1, wifi, other, open2, closed = out["reads"]
+    assert (open1, open2, closed) == (ADDRESSES[1], ADDRESSES[2], "")
+    for qr in (wifi, other):
+        modules = qr["size"] - 8                          # a 4-cell quiet zone on each side
+        assert modules >= 21 and (modules - 17) % 4 == 0   # a QR version's side: 17 + 4 * version
+        assert qr["d"].startswith("M4 4h1v1h-1z")           # the top-left finder pattern starts at the quiet zone
+    assert wifi["d"] != other["d"]
+    plain = drive_ui([{"status": _phone_status()}, {"call": "refresh"}, {"read": "qrSvg", "args": [ADDRESSES[1]]}])
+    assert plain["reads"] == [None]                       # no qrcode.js: no code, no error
+
+
+def test_phone_panel_only_on_localhost():
+    """The phone's page (not on this machine's loopback) shows no phone panel."""
+    out = drive_ui([
+        {"status": _phone_status(host=True)}, {"call": "refresh"}, {"read": "phoneVisible"},
+        {"status": _phone_status(host=False)}, {"call": "refresh"}, {"read": "phoneVisible"},
+    ])
+    assert out["reads"] == [True, False]
+
+
+def test_phone_panel_offline():
+    """With no LAN address the panel says so, instead of an empty list."""
+    html = _ui_text("index.html")
+    assert "This computer has no network address. Connect it to Wi-Fi or Ethernet." in html
+    assert '<template x-if="!phoneAddresses().length">' in html
+    out = drive_ui([{"status": _phone_status(addresses=ADDRESSES[:1])}, {"call": "refresh"},
+                    {"read": "phoneAddresses"}, {"read": "phoneVisible"}])
+    assert out["reads"] == [[], True]
+
+
+def test_firewall_banner_follows_status():
+    """The block-all policy banner shows the server's advice while firewall_blocked is set, and goes with it."""
+    html = _ui_text("index.html")
+    assert 'x-show="firewallBlocked()"' in html and 'x-text="status.firewall_advice"' in html
+    advice = "This computer's firewall policy blocks every incoming connection"
+    out = drive_ui([
+        {"status": _phone_status(blocked=None)}, {"call": "refresh"}, {"read": "firewallBlocked"},
+        {"status": _phone_status(blocked="Block all", advice=advice)}, {"call": "refresh"},
+        {"read": "firewallBlocked"},
+        {"status": _phone_status(blocked=None)}, {"call": "refresh"}, {"read": "firewallBlocked"},
+    ])
+    assert out["reads"] == [False, True, False]
+
+
+def test_copy_works_without_the_clipboard_permission():
+    """Row 3.9: in the cast-tv window navigator.clipboard never settles; execCommand copies inside the click."""
+    out = drive_ui([
+        {"status": _phone_status()}, {"call": "refresh"},
+        {"call": "copy", "args": [ADDRESSES[1], "address"]}, {"read": "toast"},
+    ])
+    assert out["reads"] == ["Copied."]                      # no navigator in node: had it been asked, this fails
+    refused = drive_ui([{"copy": False}, {"call": "copy", "args": [ADDRESSES[1], "address"]}])
+    assert refused["copied"] == ["prompt: Copy this address: " + ADDRESSES[1]]

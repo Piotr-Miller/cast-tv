@@ -1,3 +1,4 @@
+import io
 import os
 import signal
 import socket
@@ -346,6 +347,22 @@ def test_start_installs_the_sigterm_handler_before_its_first_line(start_env):
         app.close()
 
 
+def test_start_leaves_out_stale_addresses(start_env, monkeypatch):
+    """Wi-Fi off on Windows: its Deprecated address is neither the phone address nor another one."""
+    monkeypatch.setattr(start_env, "stale_addresses", lambda: {"192.168.50.242"})
+    monkeypatch.setattr(start_env, "local_ip", lambda target: "192.168.50.242")
+    asked = []
+    monkeypatch.setattr(start_env, "lan_interfaces",
+                        lambda stale: asked.append(stale) or [("Hyper-V", "172.27.112.1")])
+    port = _free_port()
+    app = start_env.App.start(port, browser=False, out=io.StringIO())
+    try:
+        assert app.addresses == ["http://localhost:%d/ui/" % port, "http://172.27.112.1:%d/ui/" % port]
+        assert asked == [{"192.168.50.242"}]
+    finally:
+        app.close()
+
+
 def test_ctrl_c_during_start_stops_and_frees_the_port(start_env, monkeypatch, capsys):
     port = _free_port()
     monkeypatch.setattr(start_env, "firewall_blocked", _interrupted)   # called after the addresses are printed
@@ -407,6 +424,44 @@ def test_failed_bind_leaves_sigterm_alone(app, start_env, upstream):
     assert signal.getsignal(signal.SIGTERM) is before
 
 
+def test_startup_failure_is_reported_before_any_window(app, start_env, upstream, monkeypatch, capsys):
+    """A port held by another program: the text and exit 1 as before, the report (a message box when
+    double-clicked on Windows) with the same text, and no window or tab is started."""
+    from castlib import platform, window
+    reported, windows = [], []
+    monkeypatch.setattr(platform, "report_startup_error", reported.append)
+    monkeypatch.setattr(window, "installed", lambda: True)
+    monkeypatch.setattr(cli, "_in_window", lambda app: windows.append(app) or "closed")
+    monkeypatch.setattr(cli.webbrowser, "open", lambda url: windows.append(url))
+    other = upstream(b"<html>", ctype="text/html")
+    port = other.server_address[1]
+    assert cli.ui(port=port) == 1
+    out = capsys.readouterr().out
+    (message,) = reported
+    assert message.startswith("Cannot bind port %d: " % port) and message in out
+    assert windows == []
+
+    def broken(cls, port, **kw):
+        raise RuntimeError("the config directory is not writable")
+    monkeypatch.setattr(cli.App, "start", classmethod(broken))
+    reported.clear()
+    assert cli.ui(port=port) == 1
+    assert reported == ["cast-tv could not start: the config directory is not writable"]
+    assert "RuntimeError" in capsys.readouterr().err   # the traceback stays for a bug report
+
+
+def test_ctrl_c_and_second_launch_are_not_startup_errors(app, start_env, monkeypatch):
+    """Ctrl+C while starting and handing over to the cast-tv already running are no failures: no report."""
+    from castlib import platform
+    reported = []
+    monkeypatch.setattr(platform, "report_startup_error", reported.append)
+    monkeypatch.setattr(cli.webbrowser, "open", lambda url: None)
+    assert cli.ui(port=app.server.port) == 0                          # AlreadyRunning
+    monkeypatch.setattr(cli.App, "start", classmethod(lambda cls, port, **kw: (_ for _ in ()).throw(KeyboardInterrupt())))
+    assert cli.ui(port=1) == 0
+    assert reported == []
+
+
 def test_no_window_extra_keeps_tab(start_env, monkeypatch, capsys):
     """pipx without ``[window]``: the tab and the console, as before S-12."""
     from castlib import window
@@ -460,7 +515,6 @@ def consent_env(start_env, monkeypatch, tmp_path):
 
 def test_ui_tab_and_consent_browser_are_separate(consent_env):
     """The window turns the UI tab off but keeps Google's consent; --no-browser turns off both."""
-    import io
     start_env, tabs, consents = consent_env
     cases = (({"browser": True, "open_ui": False}, False, True),      # window mode
              ({"browser": False, "open_ui": False}, False, False),    # --no-browser
