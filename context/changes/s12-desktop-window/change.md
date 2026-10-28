@@ -3,7 +3,7 @@ change_id: s12-desktop-window
 title: "Run cast-tv as a desktop window on Windows and Linux"
 status: implementing
 created: 2026-10-15
-updated: 2026-10-27
+updated: 2026-10-28
 archived_at: null
 ---
 
@@ -27,3 +27,4 @@ Run cast-tv as a desktop window on Windows and Linux (roadmap S-12)
 2026-10-27: reopened 2.8 — was accepted at 1239dcb5b8e77e1c992512ef56028a23c5345e51; changed: packaging/cast-tv.spec (Phase 3: hide-early)
 2026-10-27: owner decision — Phase 3 Manual rows 3.6-3.12 get explicit "— surface:" lists (the fallback surface could not parse `castlib/server.py:33-37`); plan.md Phase 3 — Manual Verification
 2026-10-27: owner decision — the icon design is the approved draft in icon/make_icon.py (amber TV with the cast mark on a dark rounded square); plan.md Phase 4 — 1. The icon
+2026-10-28: owner decision — row 3.8's finding (Windows keeps a disconnected adapter's address as Deprecated, and the phone panel listed it) is fixed on PR #89: the address list and discovery skip IPv4 addresses that are not Preferred (castlib/discovery.py stale_addresses, castlib/app.py); rows 3.6 and 3.8 get castlib/app.py and castlib/discovery.py in their surfaces. 3.9 stays accepted: off Windows nothing is stale, so the Linux list is unchanged (test_stale_addresses_only_on_windows)

@@ -22,7 +22,7 @@ import webbrowser
 from concurrent.futures import ThreadPoolExecutor
 
 from castlib import __version__, config, dlna, downloads, photos, window
-from castlib.discovery import control_urls, discover, lan_interfaces, local_ip, renderer_name
+from castlib.discovery import control_urls, discover, lan_interfaces, local_ip, renderer_name, stale_addresses
 from castlib.dlna import AVT
 from castlib.errors import CastError, ConfigError, NotMedia, TVError
 from castlib.platform import FirewallPolicy, StayAwake, firewall_advice, firewall_blocked, firewall_hint
@@ -237,16 +237,17 @@ class App:
             app.sources["gphotos"].open_browser = browser   # the Google consent opens a tab on this machine, unless --no-browser
             app.serve()
             running = app
+            stale = stale_addresses()            # Windows: a disconnected adapter's address, kept as Deprecated
             try:
                 lan = local_ip("192.0.2.1")
             except OSError:
                 lan = None
             app.addresses = ["http://localhost:%d/ui/" % port]
-            if lan and lan != "127.0.0.1":
+            if lan and lan != "127.0.0.1" and lan not in stale:
                 app.addresses.append("http://%s:%d/ui/" % (lan, port))
                 server.set_host(lan)
             try:
-                others = [ip for _name, ip in lan_interfaces() if ip != lan]
+                others = [ip for _name, ip in lan_interfaces(stale) if ip != lan]
             except Exception:
                 others = []
             app.addresses += ["http://%s:%d/ui/" % (ip, port) for ip in dict.fromkeys(others)]
