@@ -22,12 +22,13 @@ recorded row, the PR or commit.
 - **Row 3.8 failed and is fixed** in 6878387. With Wi-Fi off, Windows keeps the Wi-Fi address as
   `Deprecated` and the panel listed it. Addresses that are not `Preferred` are now skipped. On
   run 40750049252's exe, with Wi-Fi off, the work laptop listed only its two Hyper-V addresses
-  (2026-10-28); the "no network address" message itself needs a machine without them. A side
-  finding, not fixed: on the fallback the console still prints "Close the window or press Ctrl+C"
-  above "No cast-tv window".
-- **The exe for the remaining rows** comes from PR #89's release run 40750049252 (built from
-  731ccab): Windows 26089838 bytes, `window-check: edgechromium OK`; Linux 260518120 bytes. Test
-  run 40750043256 is green on both systems.
+  (2026-10-28); the "no network address" message itself needs a machine without them.
+- **Row 3.12's side finding is fixed** in acc256e: "Close the window or press Ctrl+C" is printed
+  only once the window shows, so a fallback prints only "No cast-tv window ...; Ctrl+C ends it".
+  Checked on the work laptop on run 40760424209's exe (2026-10-28).
+- **The exe for the remaining rows** comes from PR #89's release run 40760424209 (built from
+  acc256e): Windows 26088117 bytes, `window-check: edgechromium OK`; Linux 260517152 bytes. Test
+  run 40760424122 is green on both systems.
 - Locally on the work laptop, `test_onedrive.py::test_token_file_mode_0600` always fails and
   `test_cli.py::test_cast_replaced_from_the_ui_keeps_serving` sometimes does, with or without
   the change; CI passes both.
@@ -40,12 +41,12 @@ recorded row, the PR or commit.
 - [ ] 8. **Home Windows 11**, in PowerShell, in `C:\Source\cast-tv`:
    ```powershell
    git fetch; git switch s12-phase3; git pull
-   mkdir $HOME\Downloads\s12-phase3b -Force; cd $HOME\Downloads\s12-phase3b
-   gh run download 40750049252 -R Piotr-Miller/cast-tv -n cast-tv-windows-x64.exe
+   mkdir $HOME\Downloads\s12-phase3c -Force; cd $HOME\Downloads\s12-phase3c
+   gh run download 40760424209 -R Piotr-Miller/cast-tv -n cast-tv-windows-x64.exe
    (Get-Item .\cast-tv-windows-x64.exe).Length
    .\cast-tv-windows-x64.exe --version
    ```
-   The length should be 26089838 and the last line `Window: edgechromium`. Tell Claude each
+   The length should be 26088117 and the last line `Window: edgechromium`. Tell Claude each
    row's result; Claude records it and ticks the row.
    - [ ] **3.6:** start `.\cast-tv-windows-x64.exe`. In the cast-tv window, click **QR code** next
      to the first (192.168.50.x) address in "Open on your phone" and scan it with the phone's
@@ -108,8 +109,6 @@ recorded row, the PR or commit.
   `C:\Source\cast-tv\context\changes\s12-desktop-window\spike-kit` (gitignored, 1.2 GB).
 - **Either machine:** whether a later change makes the UI say that the TV refused this computer
   (the description answering 401) instead of "No TV found"; `research.md`, row 2.8, side finding.
-- **Either machine:** whether to drop "Close the window or press Ctrl+C" from the console when the
-  window falls back (`castlib/cli.py`, `WINDOW_ENDS`); `research.md`, row 3.12, side finding.
 
 ## How to resume with Claude
 
