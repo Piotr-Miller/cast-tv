@@ -20,7 +20,9 @@ recorded row, the PR or commit.
   - 3.11: `Stopped.`, the window closes, **no** `atexit` traceback (row 2.6's finding is fixed);
   - 3.12: the console comes back on the fallback; the error box and the text-only terminal error.
 - **Row 3.8 failed and is fixed** in 6878387. With Wi-Fi off, Windows keeps the Wi-Fi address as
-  `Deprecated` and the panel listed it. Addresses that are not `Preferred` are now skipped. A side
+  `Deprecated` and the panel listed it. Addresses that are not `Preferred` are now skipped. On
+  run 40750049252's exe, with Wi-Fi off, the work laptop listed only its two Hyper-V addresses
+  (2026-10-28); the "no network address" message itself needs a machine without them. A side
   finding, not fixed: on the fallback the console still prints "Close the window or press Ctrl+C"
   above "No cast-tv window".
 - **The exe for the remaining rows** comes from PR #89's release run 40750049252 (built from

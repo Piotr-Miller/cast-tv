@@ -1150,3 +1150,21 @@ CI decides. Row 3.8 is to be run again on the PR's new release exe.
 `ubuntu-latest` and `windows-latest`. Release run 40750049252: Windows `size: 26089838 bytes`,
 `POST /api/quit: ended, port 8099 free`, `window-check: edgechromium OK (7.2 s)`; Linux
 `size: 260518120 bytes`, the same quit line, `window-check: qtwebengine OK (5.3 s)`.
+
+**Row 3.8 again, on the fix's exe** (the owner, the same work laptop, 2026-10-28). The exe from
+release run 40750049252, downloaded into `Downloads\s12-phase3b`: 26,089,838 bytes, SHA-256
+`627e72a381713c1f436611c3db308cf6bf89199bc34ee3f138cbd99252f5a1e7`, `Window: edgechromium`.
+The owner turned Wi-Fi off and started the exe from PowerShell. Claude's log:
+
+```
+20:58:42 wifi=Disconnected/Disconnected netip=[192.168.50.242/Deprecated] ifaddr lists 192.168.50.242
+20:59:02 (cast-tv started) status addresses: localhost, 172.27.112.1, 172.21.128.1
+20:59:57 (cast-tv closed)
+21:00:08 wifi=Up/Connected netip=[192.168.50.242/Preferred]
+```
+
+PowerShell printed `localhost`, `172.27.112.1` and `172.21.128.1` only. The panel (owner's
+screenshot) listed the two Hyper-V addresses, and "Searched on" named only the two Hyper-V
+adapters. So the Deprecated Wi-Fi address is gone from the list and from discovery, which was the
+fix's aim. The panel's "no network address" message still cannot show on this laptop, because the
+Hyper-V adapters stay up (listed by design). Row 3.8 stays open for the home Windows machine.
