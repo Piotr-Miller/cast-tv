@@ -1,3 +1,4 @@
+import io
 import os
 import signal
 import socket
@@ -346,6 +347,22 @@ def test_start_installs_the_sigterm_handler_before_its_first_line(start_env):
         app.close()
 
 
+def test_start_leaves_out_stale_addresses(start_env, monkeypatch):
+    """Wi-Fi off on Windows: its Deprecated address is neither the phone address nor another one."""
+    monkeypatch.setattr(start_env, "stale_addresses", lambda: {"192.168.50.242"})
+    monkeypatch.setattr(start_env, "local_ip", lambda target: "192.168.50.242")
+    asked = []
+    monkeypatch.setattr(start_env, "lan_interfaces",
+                        lambda stale: asked.append(stale) or [("Hyper-V", "172.27.112.1")])
+    port = _free_port()
+    app = start_env.App.start(port, browser=False, out=io.StringIO())
+    try:
+        assert app.addresses == ["http://localhost:%d/ui/" % port, "http://172.27.112.1:%d/ui/" % port]
+        assert asked == [{"192.168.50.242"}]
+    finally:
+        app.close()
+
+
 def test_ctrl_c_during_start_stops_and_frees_the_port(start_env, monkeypatch, capsys):
     port = _free_port()
     monkeypatch.setattr(start_env, "firewall_blocked", _interrupted)   # called after the addresses are printed
@@ -498,7 +515,6 @@ def consent_env(start_env, monkeypatch, tmp_path):
 
 def test_ui_tab_and_consent_browser_are_separate(consent_env):
     """The window turns the UI tab off but keeps Google's consent; --no-browser turns off both."""
-    import io
     start_env, tabs, consents = consent_env
     cases = (({"browser": True, "open_ui": False}, False, True),      # window mode
              ({"browser": False, "open_ui": False}, False, False),    # --no-browser

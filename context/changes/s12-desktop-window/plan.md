@@ -542,9 +542,9 @@ process.
 
 #### Manual Verification:
 
-- In the window on the Windows laptop: the "Open on your phone" panel lists the Wi-Fi address first. Scanning its QR code with the phone's camera opens the cast-tv UI on the phone (owner decision 2026-10-27: surface declared) — surface: castlib/ui/app.js, castlib/ui/index.html, castlib/ui/qrcode.js, castlib/server.py, castlib/api.py
+- In the window on the Windows laptop: the "Open on your phone" panel lists the Wi-Fi address first. Scanning its QR code with the phone's camera opens the cast-tv UI on the phone (owner decision 2026-10-27: surface declared) — surface: castlib/ui/app.js, castlib/ui/index.html, castlib/ui/qrcode.js, castlib/server.py, castlib/api.py, castlib/app.py, castlib/discovery.py
 - On the phone, the UI shows no phone panel and no Quit control (owner decision 2026-10-27: surface declared) — surface: castlib/ui/app.js, castlib/ui/index.html, castlib/ui/qrcode.js, castlib/server.py, castlib/api.py
-- With Wi-Fi off on the laptop, the panel says there is no network address (owner decision 2026-10-27: surface declared) — surface: castlib/ui/app.js, castlib/ui/index.html, castlib/ui/qrcode.js, castlib/server.py, castlib/api.py
+- With Wi-Fi off on the laptop, the panel says there is no network address (owner decision 2026-10-27: surface declared) — surface: castlib/ui/app.js, castlib/ui/index.html, castlib/ui/qrcode.js, castlib/server.py, castlib/api.py, castlib/app.py, castlib/discovery.py
 - On the Fedora desktop, the same panel and QR codes work in the Qt window (owner decision 2026-10-27: surface declared) — surface: castlib/ui/app.js, castlib/ui/index.html, castlib/ui/qrcode.js, castlib/server.py, castlib/api.py
 - On the Windows laptop, double-clicking the PR run's exe in Explorer: at most a brief console flash, then only the window. Closing it stops the TV (owner decision 2026-10-27: surface declared) — surface: castlib/cli.py, castlib/platform.py, castlib/window.py, packaging/cast-tv.spec
 - From PowerShell, the same exe prints the addresses in the PowerShell window and opens the window. Ctrl+C in that PowerShell window stops the TV and closes the window (owner decision 2026-10-27: surface declared) — surface: castlib/cli.py, castlib/platform.py, castlib/window.py, packaging/cast-tv.spec

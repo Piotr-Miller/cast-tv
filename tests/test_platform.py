@@ -100,6 +100,41 @@ def test_lan_interfaces_skip_loopback_and_link_local(monkeypatch):
     assert discovery.lan_interfaces() == [("Wi-Fi", "192.168.1.5")]
 
 
+def test_lan_interfaces_skip_stale_addresses(monkeypatch):
+    ip = lambda a: types.SimpleNamespace(ip=a)
+    adapters = [types.SimpleNamespace(nice_name="Wi-Fi", name="{GUID}", ips=[ip("192.168.50.242")]),
+                types.SimpleNamespace(nice_name="Hyper-V", name="{GUID2}", ips=[ip("172.27.112.1")])]
+    monkeypatch.setitem(sys.modules, "ifaddr", types.SimpleNamespace(get_adapters=lambda: adapters))
+    assert discovery.lan_interfaces({"192.168.50.242"}) == [("Hyper-V", "172.27.112.1")]
+    monkeypatch.setattr(discovery, "stale_addresses", lambda: {"172.27.112.1"})   # the default
+    assert discovery.lan_interfaces() == [("Wi-Fi", "192.168.50.242")]
+
+
+def test_stale_addresses_are_those_not_preferred():
+    # Wi-Fi off on Windows 11: the DHCP address stays, Deprecated (3); 1 is Tentative
+    states = [("192.168.50.242", 3), ("172.27.112.1", discovery.DAD_PREFERRED), ("169.254.1.2", 1)]
+    assert discovery.stale_addresses(states) == {"192.168.50.242", "169.254.1.2"}
+    assert discovery.stale_addresses([]) == set()
+
+
+def test_stale_addresses_only_on_windows(monkeypatch):
+    monkeypatch.setattr(discovery, "_windows_dad_states", lambda: [("192.168.50.242", 3)])
+    assert discovery.stale_addresses(platform="linux") == set()
+    assert discovery.stale_addresses(platform="win32") == {"192.168.50.242"}
+
+    def fails():
+        raise OSError("GetAdaptersAddresses")
+    monkeypatch.setattr(discovery, "_windows_dad_states", fails)
+    assert discovery.stale_addresses(platform="win32") == set()   # unknown: nothing is dropped
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="GetAdaptersAddresses is Windows-only")
+def test_windows_dad_states_reads_the_real_table():
+    states = discovery._windows_dad_states()
+    assert ("127.0.0.1", discovery.DAD_PREFERRED) in states
+    assert all(isinstance(ip, str) and isinstance(state, int) for ip, state in states)
+
+
 def test_discover_hands_the_report_to_the_caller(monkeypatch):
     monkeypatch.setattr(discovery, "msearch", lambda timeout: ({}, [{"name": "Wi-Fi", "ip": "192.168.1.5", "responses": 0}]))
     report = []

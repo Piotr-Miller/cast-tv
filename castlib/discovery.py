@@ -31,12 +31,16 @@ MSEARCH = ("M-SEARCH * HTTP/1.1\r\nHOST:%s:%d\r\nMAN:\"ssdp:discover\"\r\n"
            % (SSDP_ADDR, SSDP_PORT)).encode()
 
 
-def lan_interfaces() -> list[tuple[str, str]]:
-    """``[(adapter name, ipv4)]`` M-SEARCH can leave from: loopback and link-local skipped."""
+def lan_interfaces(stale=None) -> list[tuple[str, str]]:
+    """``[(adapter name, ipv4)]`` M-SEARCH can leave from: loopback, link-local and ``stale`` skipped.
+
+    ``stale`` defaults to :func:`stale_addresses`.
+    """
     try:
         import ifaddr
     except ImportError:
         return []
+    skip = stale_addresses() if stale is None else stale
     out = []
     for adapter in ifaddr.get_adapters():
         for ip in adapter.ips:
@@ -46,9 +50,79 @@ def lan_interfaces() -> list[tuple[str, str]]:
                 addr = ipaddress.IPv4Address(ip.ip)
             except ValueError:
                 continue
-            if addr.is_loopback or addr.is_link_local:
+            if addr.is_loopback or addr.is_link_local or ip.ip in skip:
                 continue
             out.append((adapter.nice_name or adapter.name, ip.ip))
+    return out
+
+
+DAD_PREFERRED = 4                               # NL_DAD_STATE's IpDadStatePreferred
+
+
+def stale_addresses(states=None, platform=None) -> set[str]:
+    """IPv4 addresses Windows still lists but does not use: any not in the Preferred state.
+
+    With Wi-Fi off, Windows 11 keeps the DHCP address on the disconnected
+    adapter as Deprecated, and ``ifaddr`` lists it: the phone panel offered an
+    address nothing could reach (row 3.8, 2026-10-28). ``states`` is
+    ``[(ipv4, dad state)]``; by default :func:`_windows_dad_states`, and nothing
+    is stale on any other system.
+    """
+    if states is None:
+        if (platform or sys.platform) != "win32":
+            return set()
+        try:
+            states = _windows_dad_states()
+        except OSError:
+            return set()                        # unknown: list every address, as before
+    return {ip for ip, state in states if state != DAD_PREFERRED}
+
+
+def _windows_dad_states() -> list[tuple[str, int]]:
+    """``[(ipv4, NL_DAD_STATE)]`` of every unicast IPv4 address, from ``GetAdaptersAddresses``."""
+    import ctypes
+    from ctypes import wintypes
+
+    class SOCKET_ADDRESS(ctypes.Structure):
+        _fields_ = [("lpSockaddr", ctypes.c_void_p), ("iSockaddrLength", ctypes.c_int)]
+
+    class UNICAST(ctypes.Structure):            # IP_ADAPTER_UNICAST_ADDRESS, up to DadState
+        pass
+    UNICAST._fields_ = [("Length", wintypes.ULONG), ("Flags", wintypes.DWORD),
+                        ("Next", ctypes.POINTER(UNICAST)), ("Address", SOCKET_ADDRESS),
+                        ("PrefixOrigin", ctypes.c_int), ("SuffixOrigin", ctypes.c_int),
+                        ("DadState", ctypes.c_int)]
+
+    class ADAPTER(ctypes.Structure):            # IP_ADAPTER_ADDRESSES, up to FirstUnicastAddress
+        pass
+    ADAPTER._fields_ = [("Length", wintypes.ULONG), ("IfIndex", wintypes.DWORD),
+                        ("Next", ctypes.POINTER(ADAPTER)), ("AdapterName", ctypes.c_char_p),
+                        ("FirstUnicastAddress", ctypes.POINTER(UNICAST))]
+
+    ERROR_BUFFER_OVERFLOW, ERROR_NO_DATA = 111, 232
+    SKIP_ANYCAST_MULTICAST_DNS = 0x2 | 0x4 | 0x8
+    iphlpapi = ctypes.WinDLL("iphlpapi")
+    size = wintypes.ULONG(15 * 1024)
+    err = ERROR_BUFFER_OVERFLOW
+    while err == ERROR_BUFFER_OVERFLOW:         # the call writes back the size it needs
+        buf = ctypes.create_string_buffer(size.value)
+        err = iphlpapi.GetAdaptersAddresses(wintypes.ULONG(socket.AF_INET),
+                                            wintypes.ULONG(SKIP_ANYCAST_MULTICAST_DNS),
+                                            None, ctypes.byref(buf), ctypes.byref(size))
+    if err == ERROR_NO_DATA:
+        return []
+    if err:
+        raise ctypes.WinError(err)
+    out = []
+    adapter = ctypes.cast(buf, ctypes.POINTER(ADAPTER))
+    while adapter:
+        unicast = adapter.contents.FirstUnicastAddress
+        while unicast:
+            sockaddr = ctypes.string_at(unicast.contents.Address.lpSockaddr, 8)   # sockaddr_in
+            if int.from_bytes(sockaddr[:2], "little") == socket.AF_INET:
+                out.append((socket.inet_ntoa(sockaddr[4:8]), unicast.contents.DadState))
+            unicast = unicast.contents.Next
+        adapter = adapter.contents.Next
     return out
 
 
