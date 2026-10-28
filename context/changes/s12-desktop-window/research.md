@@ -1029,3 +1029,119 @@ bytes`, SHA-256 `b75a2e2d906cdfaaf4e2ef6fa674e4f4edee4799d4ecfcee65df298877dc432
 window on Fedora, read through remote debugging after clicking QR code: the panel lists
 `http://192.168.50.198:8895/ui/`, `viewBox="0 0 37 37"`, SVG 180x180 px, modules 141x141 px, and
 `copyByCommand` is in the page. Ended with `POST /api/quit`.
+
+## Manual rows 3.6 and 3.11 on the work laptop, without the TV and the phone (2026-10-28)
+
+The owner, on the Intune-managed Windows 11 Enterprise laptop. Its MDM firewall rule "Block
+InBound connection Public Private" is still active (checked in `ActiveStore`), so neither the TV
+nor the phone can fetch from it. Only the parts that need no inbound connection are observed
+here. The rows stay open until the cast and phone parts run on the other Windows machine. The exe
+is PR #89's from release run 40580688484, downloaded into `Downloads\s12-phase3`: 26,086,907
+bytes, SHA-256 `d85e853a384d013918bfb00b91f2347236969f0aefcd429f2dcb3c420072c1f1`, `--version`
+ends `Window: edgechromium`. The laptop's IPv4 addresses: Wi-Fi 192.168.50.242 (the default
+route), Hyper-V `vEthernet (Default Switch)` 172.27.112.1, `vEthernet (WSL)` 172.21.128.1 and
+five 169.254.x link-local addresses.
+
+**Started from PowerShell** (`.\cast-tv-windows-x64.exe`, row 3.11's start):
+
+- PowerShell printed `localhost`, `192.168.50.242`, `172.27.112.1` and `172.21.128.1` (each
+  `:8895/ui/`), the netsh hint, "Close the window or press Ctrl+C", `TV: 83" OLED
+  (192.168.50.142)` and the firewall-policy warning naming the rule. The cast-tv window opened.
+- In the window (owner's screenshots), the banner "The TV cannot fetch from this computer" showed
+  the same advice. The "Open on your phone" panel listed `http://192.168.50.242:8895/ui/` first,
+  then 172.27.112.1 and 172.21.128.1, each with Copy and QR code. There was no localhost and no
+  169.254.x address.
+- **QR code** for 192.168.50.242 drew a code filling its white square (WebView2, so the
+  `:view-box.camel` fix holds there too). The phone's camera read it as
+  `http://192.168.50.242:8895/ui/`. Opening it on the phone is blocked by the firewall and is left
+  for the other machine.
+- **Copy** showed "Copied." at the bottom of the window.
+- **Ctrl+C in the PowerShell window** printed `Stopped.`, the window closed, and PowerShell came
+  back with no `Exception ignored in atexit callback` traceback, which was row 2.6's finding.
+  `$LASTEXITCODE` was 0.
+
+Left for the other Windows machine: 3.6's phone opening the UI, and 3.11 with a cast running (the
+TV stops on Ctrl+C).
+
+**Double-click** (row 3.10's start), the same exe from File Explorer: at most a console flashed,
+then only the cast-tv window showed, with no console window and no Windows Terminal tab (owner:
+"zobaczyłem to co opisałeś"). So the console's owner is recognised as this process or the onefile
+bootloader, and `hide-early` plus the owned-console check behave as intended on Windows. Closing
+the window with X ended everything. Task Manager's Processes filtered on `cast-tv` showed no
+results (owner's screenshot). Claude then found no `cast-tv*` process (`Get-Process`) and nothing
+listening on 8895 (`Get-NetTCPConnection`).
+
+Left for the other Windows machine: 3.10 with a cast running (the TV stops on X).
+
+**Forced fallback with a hidden console** (row 3.12). In PowerShell:
+`$env:CAST_TV_WINDOW_FAIL='1'; Start-Process .\cast-tv-windows-x64.exe`. A browser tab opened
+with the UI. The console window appeared next to it, so `platform.show_console()` brought back
+the hidden console. It showed the four addresses, the netsh hint, `Close the window or press
+Ctrl+C to end it ...`, then `No cast-tv window (CAST_TV_WINDOW_FAIL); the UI opens in the browser.
+Ctrl+C ends it (playback stops on the TV too)`, the TV and the firewall-policy warning. The owner
+closed that console window with its X. The tab then showed "cast-tv is not answering. The process
+may have stopped." (owner's screenshot; the tab, on localhost, also showed the firewall banner and
+the phone panel). The variable was removed with `Remove-Item Env:CAST_TV_WINDOW_FAIL`.
+
+Side finding, not a 3.12 failure: on the fallback path the console still prints `Close the window
+or press Ctrl+C` (`WINDOW_ENDS`, printed before the window is tried) above the line saying there
+is no window. That is harmless, but it names a window that never came.
+
+**The error box.** In a second PowerShell window, `python -m http.server 8895 --bind 127.0.0.1`
+held the port (Python 3.14.8).
+
+- A double-click on the exe in File Explorer showed a message box titled `cast-tv` with the error
+  icon, the text `Cannot bind port 8895: [WinError 10048] Only one usage of each socket address
+  (protocol/network address/port) is normally permitted` and an OK button (owner's screenshot).
+  It stayed until OK.
+- From the first PowerShell window, `.\cast-tv-windows-x64.exe` printed the same `Cannot bind
+  port 8895: [WinError 10048] ...` line and showed no box. `$LASTEXITCODE` was 1.
+- The HTTP server was stopped with Ctrl+C. Claude then found no `cast-tv*` process and nothing
+  listening on 8895.
+
+Left for the other Windows machine: 3.12's cast from the tab (the TV stops when the console
+closes).
+
+**Offline** (row 3.8). Two runs: the owner turned the Wi-Fi tile off in the taskbar's network
+menu, started the exe from PowerShell, then closed it with X and turned Wi-Fi back on. Both runs
+gave the same result (owner's screenshots). PowerShell and the panel listed
+`http://192.168.50.242:8895/ui/` first, then 172.27.112.1 and 172.21.128.1. Discovery reported
+"No TV found" and "Searched on: Intel(R) Wi-Fi 6E AX211 160MHz 192.168.50.242 — 0 responses",
+plus the two Hyper-V adapters, so the M-SEARCH socket bound to the Wi-Fi address without an
+error. No firewall warning appeared, because there was no TV to check against. The panel never
+said "This computer has no network address".
+
+During the second run Claude logged every 3 s: `Get-NetAdapter`, `Get-NetIPAddress` and
+`ifaddr.get_adapters()` (0.2.0, the library `lan_interfaces()` uses), plus `/api/status`
+addresses. State changes:
+
+```
+19:20:28 wifi=Up/Connected            netip=[192.168.50.242/Preferred]  ifaddr lists 192.168.50.242
+19:21:00 wifi=Disconnected/Disconnected netip=[192.168.50.242/Deprecated] ifaddr lists 192.168.50.242
+19:21:21 (cast-tv started) status addresses: localhost, 192.168.50.242, 172.27.112.1, 172.21.128.1
+19:22:08 (cast-tv closed)
+19:22:29 wifi=Up/Connected            netip=[192.168.50.242/Preferred]
+```
+
+**Finding:** with Wi-Fi off, Windows 11 keeps the DHCP address on the disconnected adapter in
+`AddressState` **Deprecated**. Here it stayed for the whole 89 s that Wi-Fi was off. `ifaddr`
+does not filter it: its `IP_ADAPTER_UNICAST_ADDRESS` reads `DadState`, but the `IP` objects do
+not expose it. So cast-tv offers the phone an address that nothing can reach, and the offline
+message cannot show on Windows while such an address remains. On this laptop the Hyper-V
+adapters (172.27.112.1, 172.21.128.1, always up) would keep the panel non-empty anyway, which the
+plan accepts ("VPN or Docker addresses: listed like any other"). A Windows machine without virtual
+adapters would still fail 3.8 because of the Deprecated Wi-Fi address.
+
+**The fix** (owner's decision: on PR #89). `discovery.stale_addresses()` reads each IPv4 address's
+`DadState` from `GetAdaptersAddresses` through ctypes (`_windows_dad_states`). Every address not
+in `IpDadStatePreferred` (4) is stale. `lan_interfaces()` skips stale addresses, so discovery no
+longer sends M-SEARCH from them, and `App.start` drops the default-route address if it is stale.
+Off Windows, or if the call fails, nothing is stale and the list is as before. On this laptop with
+Wi-Fi on, the call returned 192.168.50.242, 127.0.0.1 and both Hyper-V addresses as Preferred
+(4), and the five 169.254.x addresses of the disconnected adapters as Tentative (1). Locally:
+`pyflakes` clean. Over three full `pytest` runs, 455-456 passed and 5 were skipped. Two tests fail
+on this laptop with or without the change (a full run with the change stashed: the same two
+failed, 450 passed): `test_onedrive.py::test_token_file_mode_0600` always (`PermissionError` on
+the token file), and `test_cli.py::test_cast_replaced_from_the_ui_keeps_serving` in some runs
+(`'App' object has no attribute 'current'`, read before `__init__` finished; alone it passes).
+CI decides. Row 3.8 is to be run again on the PR's new release exe.
