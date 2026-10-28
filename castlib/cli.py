@@ -280,7 +280,7 @@ def ui(port=DEFAULT_PORT, tv=None, debug=False, browser=True, windowed=True):
     windowed = ask_window and window.installed()
     try:
         app = App.start(port, tv=tv, debug=debug, browser=browser, open_ui=browser and not windowed,
-                        ends=WINDOW_ENDS if windowed else ENDS_HINT)
+                        ends=None if windowed else ENDS_HINT)   # the window prints WINDOW_ENDS once shown
     except AlreadyRunning as e:
         print("cast-tv is already running: %s" % e.url)
         if browser:
@@ -337,7 +337,8 @@ def _in_window(app):
             end_on_sigterm(on_end=window.destroy)
             platform.console_close_ends(window.destroy)
             session = platform.end_on_session_end(session_end)
-            result = window.run(app, "http://127.0.0.1:%d/ui/" % app.server.port)   # not localhost: it may be ::1 first
+            result = window.run(app, "http://127.0.0.1:%d/ui/" % app.server.port,   # not localhost: it may be ::1 first
+                                on_shown=lambda: print("  %s" % WINDOW_ENDS, flush=True))
         finally:
             if session is not None:
                 session.release()

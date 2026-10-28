@@ -139,9 +139,10 @@ def _closer(run: _Run) -> None:
         time.sleep(STEP)
 
 
-def run(app, url: str) -> str:
+def run(app, url: str, on_shown=None) -> str:
     """Show ``url`` (the UI of ``app``) in the cast-tv window until it closes; the main thread only.
 
+    ``on_shown()`` is called once the window is on screen, on the GUI thread.
     Returns ``"closed"`` when the window was closed or destroyed, or
     ``"unavailable: <reason>"`` when no window could open or the engine was
     the wrong one. Either way ``app`` still runs; the caller stops it or opens
@@ -149,11 +150,11 @@ def run(app, url: str) -> str:
     starting wins over a failure to start: the answer is then ``"closed"``.
     """
     with termination_scope() as current:
-        result = _run(current, url)
+        result = _run(current, url, on_shown)
         return "closed" if current.end_requested else result
 
 
-def _run(current: _Run, url: str) -> str:
+def _run(current: _Run, url: str, on_shown=None) -> str:
     if current.end_requested:
         return "closed"
     if os.environ.get(FAIL_ENV) == "1":
@@ -177,6 +178,11 @@ def _run(current: _Run, url: str) -> str:
 
     def shown():
         current.shown = True
+        if on_shown is not None:
+            try:
+                on_shown()
+            except Exception:
+                pass                             # a failed message must not take the window down
 
     def minimized():
         current.minimized = True

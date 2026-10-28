@@ -162,11 +162,25 @@ def test_window_opens_the_ui_and_closes(fake_webview):
     assert fake_webview.errors == [] and _closers() == []
 
 
+def test_on_shown_runs_once_the_window_shows(fake_webview):
+    fake_webview.user_closes = True
+    seen = []
+    assert window.run(object(), "http://127.0.0.1:1/ui/", on_shown=lambda: seen.append("shown")) == "closed"
+    assert seen == ["shown"]
+
+    def broken():
+        raise OSError("stdout is gone")
+    assert window.run(object(), "http://127.0.0.1:1/ui/", on_shown=broken) == "closed"   # the window lives on
+
+
 def test_wrong_renderer_falls_back(fake_webview):
     """pywebview's quiet fallback (MSHTML without WebView2) is refused before any window appears."""
     fake_webview.engine = "mshtml"
-    assert window.run(object(), "http://127.0.0.1:1/ui/") == "unavailable: the mshtml engine loaded, not edgechromium"
+    seen = []
+    assert window.run(object(), "http://127.0.0.1:1/ui/", on_shown=lambda: seen.append("shown")) == (
+        "unavailable: the mshtml engine loaded, not edgechromium")
     assert not fake_webview.created.is_set() and not fake_webview.windows[0].is_shown
+    assert seen == []                                          # "Close the window" would name a window never seen
 
 
 def test_missing_backend_falls_back(fake_webview, monkeypatch):
@@ -434,11 +448,12 @@ def test_gui_end_stops_and_closes(window_cli, capsys):
     window_cli.fake.user_closes = True
     assert cli.ui(port=window_cli.app.server.port) == 0
     assert window_cli.started["open_ui"] is False and window_cli.started["browser"] is True
-    assert window_cli.started["ends"] == cli.WINDOW_ENDS
+    assert window_cli.started["ends"] is None                  # said once the window shows, below
     assert window_cli.app.tv_fake.actions().count("Stop") == 1
     assert window_cli.app._closed.is_set() and window_cli.stops == ["interrupted"]
     assert window_cli.tabs == [] and window_cli.served == []
-    assert "Stopped." in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert cli.WINDOW_ENDS in out and "Stopped." in out
     # row 2.6: a Ctrl+C landing now would break pythonnet's atexit unload with a traceback
     assert signal.getsignal(signal.SIGINT) is signal.SIG_IGN
 
@@ -505,6 +520,7 @@ def test_unavailable_window_opens_the_tab(window_cli, monkeypatch, capsys):
     assert err["code"] == "window_unavailable" and "CAST_TV_WINDOW_FAIL" in err["message"]
     out = capsys.readouterr().out
     assert "No cast-tv window (CAST_TV_WINDOW_FAIL)" in out and "Ctrl+C ends it" in out
+    assert cli.WINDOW_ENDS not in out                          # row 3.12: no "Close the window" without one
 
 
 def test_no_window_flag_keeps_the_tab(window_cli, monkeypatch):

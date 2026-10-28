@@ -1168,3 +1168,13 @@ screenshot) listed the two Hyper-V addresses, and "Searched on" named only the t
 adapters. So the Deprecated Wi-Fi address is gone from the list and from discovery, which was the
 fix's aim. The panel's "no network address" message still cannot show on this laptop, because the
 Hyper-V adapters stay up (listed by design). Row 3.8 stays open for the home Windows machine.
+
+**Row 3.12's side finding, fixed** (owner's decision, 2026-10-28). `App.start` now prints no
+"how to end it" line when the window is asked for (`ends=None`). `window.run(..., on_shown=)`
+prints `Close the window or press Ctrl+C ...` from pywebview's `shown` event. So it appears only
+once a window is on screen, a few seconds after the addresses. A fallback prints only `No cast-tv
+window (...); the UI opens in the browser. Ctrl+C ends it ...`. Tests:
+`test_on_shown_runs_once_the_window_shows`, `test_wrong_renderer_falls_back` (not called),
+`test_gui_end_stops_and_closes` (printed), `test_unavailable_window_opens_the_tab` (absent).
+Locally 457 passed, 5 skipped, and only `test_token_file_mode_0600` failed (as before, this
+laptop).
