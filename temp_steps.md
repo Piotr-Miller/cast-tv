@@ -1,4 +1,4 @@
-# Next steps (2026-10-27 late, switching to Windows 11: PR #89's Windows rows 3.6-3.8 and 3.10-3.12)
+# Next steps (2026-10-28, PR #89: the row 3.8 fix is in; the TV and phone parts need the home Windows machine)
 
 The standing note for a pause in the work (a reboot, a switch of machine): it stays in the
 repository and is overwritten at the next pause.
@@ -8,73 +8,60 @@ recorded row, the PR or commit.
 
 ## Where it stands
 
-- S-12 Phases 1 and 2 are on `main`. All Phase 2 rows were accepted (PR #88), then reopened by
-  Phase 3 with 1.14 and 1.16, because Phase 3 changes their surfaces (`change.md`, 2026-10-27).
-  They are confirmed again once, in step 15a, with 1.8-1.13 and 1.15.
-- **Phase 3 is PR #89** (branch `s12-phase3`, implemented on Fedora): the "Open on your phone"
-  panel with Copy and a QR code per address, the firewall banner, the console hidden on
-  double-click (`hide-early`), the console shown again on fallback, a message box for a startup
-  failure, and the two findings of row 2.6 (Ctrl+C ignored after the window closed; `smoke.py`
-  ends the server with `POST /api/quit`). Rows 3.1-3.5 are done; CI is green on both systems.
-- Row 3.9 (Fedora) found Copy and the QR code broken in the Qt window; fixed in 1134162 and
-  accepted at efac3c5 (`research.md`, "Manual row 3.9").
-- The binaries for the Windows rows come from PR #89's release run 40580688484 (built from
-  1134162): Windows 26086907 bytes. Later commits on the PR (efac3c5, 6aac4a1, 5468c60, 8251f2f)
-  touch only the change folder and this file, so that exe is still the PR's code.
-- The icon is decided (owner, 2026-10-27; `context/changes/s12-desktop-window/icon/`); Phase 4
-  builds it in. On Fedora the spike VM and the podman images `localhost/spike-*` are deleted.
-- PR #89's head is 8251f2f; the Fedora checkout is clean, nothing unpushed.
-- Not provable on Fedora: whether a double-click is recognised (the console's owner is the
-  onefile bootloader) and whether the pythonnet traceback after Ctrl+C is gone. Rows 3.10-3.12
-  show it; if one fails, Claude fixes it on the same PR before the merge.
+- S-12 Phases 1 and 2 are on `main`. Phase 3 reopened 1.14, 1.16 and 2.6-2.9 (`change.md`,
+  2026-10-27); with 1.8-1.13 and 1.15 they are confirmed again once, in step 15a.
+- **Phase 3 is PR #89** (branch `s12-phase3`). Rows 3.1-3.5 are done, 3.9 (Fedora) is accepted.
+- **2026-10-28, on the Intune work laptop** (`C:\Source\Trainings\AI\cast-tv`; its MDM rule
+  "Block InBound connection Public Private" blocks every inbound connection, so neither the TV nor
+  the phone can reach it). Every part that needs no inbound connection passed, on run
+  40580688484's exe (`research.md`, "Manual rows 3.6 and 3.11 on the work laptop"):
+  - 3.6: Wi-Fi first, the QR code fills its square and the phone read the right URL, Copy works;
+  - 3.10: a double-click shows only the window, X ends everything;
+  - 3.11: `Stopped.`, the window closes, **no** `atexit` traceback (row 2.6's finding is fixed);
+  - 3.12: the console comes back on the fallback; the error box and the text-only terminal error.
+- **Row 3.8 failed and is fixed** in 6878387. With Wi-Fi off, Windows keeps the Wi-Fi address as
+  `Deprecated` and the panel listed it. Addresses that are not `Preferred` are now skipped. A side
+  finding, not fixed: on the fallback the console still prints "Close the window or press Ctrl+C"
+  above "No cast-tv window".
+- **The exe for the remaining rows** comes from PR #89's release run 40750049252 (built from
+  731ccab): Windows 26089838 bytes, `window-check: edgechromium OK`; Linux 260518120 bytes. Test
+  run 40750043256 is green on both systems.
+- Locally on the work laptop, `test_onedrive.py::test_token_file_mode_0600` always fails and
+  `test_cli.py::test_cast_replaced_from_the_ui_keeps_serving` sometimes does, with or without
+  the change; CI passes both.
 - The TV allows DLNA per client (Settings → General → Device Connection Manager → Device List,
-  entries named only "Device N"); Fedora is "Device 3". "No TV found" while the TV is on and
+  entries named only "Device N"). "No TV found" while the TV is on and
   `curl http://192.168.50.142:9197/dmr` answering 401 means that list, not cast-tv.
 
-## Now: Windows 11, Phase 3 rows
+## Now: the home Windows machine, PR #89's remaining rows
 
-- [ ] 8. **Windows 11**, in PowerShell, in `C:\Source\cast-tv`:
+- [ ] 8. **Home Windows 11**, in PowerShell, in `C:\Source\cast-tv`:
    ```powershell
    git fetch; git switch s12-phase3; git pull
-   mkdir $HOME\Downloads\s12-phase3 -Force; cd $HOME\Downloads\s12-phase3
-   gh run download 40580688484 -R Piotr-Miller/cast-tv -n cast-tv-windows-x64.exe
+   mkdir $HOME\Downloads\s12-phase3b -Force; cd $HOME\Downloads\s12-phase3b
+   gh run download 40750049252 -R Piotr-Miller/cast-tv -n cast-tv-windows-x64.exe
    (Get-Item .\cast-tv-windows-x64.exe).Length
    .\cast-tv-windows-x64.exe --version
    ```
-   The length should be 26086907 and the last line `Window: edgechromium`. Tell Claude each row's
-   result, also when it differs; Claude records it and ticks the row.
-   - [ ] **3.6:** start `.\cast-tv-windows-x64.exe`. In the cast-tv window, under the header, the
-     "Open on your phone" panel lists the Wi-Fi address (192.168.50.x) first. Click **QR code**
-     next to it; scan the code with the phone's camera: the cast-tv UI opens on the phone. Click
-     **Copy**: "Copied." shows at the bottom of the window.
+   The length should be 26089838 and the last line `Window: edgechromium`. Tell Claude each
+   row's result; Claude records it and ticks the row.
+   - [ ] **3.6:** start `.\cast-tv-windows-x64.exe`. In the cast-tv window, click **QR code** next
+     to the first (192.168.50.x) address in "Open on your phone" and scan it with the phone's
+     camera: the cast-tv UI opens on the phone.
    - [ ] **3.7:** on the phone, the page shows no "Open on your phone" panel and no "Quit cast-tv"
-     button.
-   - [ ] **3.8:** the addresses are read at start, so: close the window with X, turn Wi-Fi off
-     (and unplug Ethernet), start the exe again. The panel says "This computer has no network
-     address. Connect it to Wi-Fi or Ethernet." (a virtual adapter such as 172.21.80.1 may still
-     be listed instead; say so). Close with X and turn Wi-Fi back on.
-   - [ ] **3.11:** in the PowerShell window, start `.\cast-tv-windows-x64.exe`. The addresses
-     print in PowerShell and the cast-tv window opens. Cast a photo to the TV, then press
-     **Ctrl+C in the PowerShell window**: it prints `Stopped.`, the window closes, the TV stops,
-     and **no** `Exception ignored in atexit callback` traceback follows (row 2.6's finding).
-   - [ ] **3.10:** in File Explorer, open `Downloads\s12-phase3` and double-click
-     `cast-tv-windows-x64.exe`. At most a console flashes; then only the cast-tv window shows (no
-     console window, no new Windows Terminal tab). Cast a photo, then close the window with X: the
-     TV stops. Check Task Manager: no `cast-tv-windows-x64.exe` left.
-   - [ ] **3.12:** in PowerShell:
-     ```powershell
-     $env:CAST_TV_WINDOW_FAIL='1'; Start-Process .\cast-tv-windows-x64.exe
-     ```
-     A browser tab opens with the UI, and the console window appears next to it (it says why
-     there is no window). Cast a photo from the tab, then close that console window with its X:
+     button. Close the cast-tv window with X.
+   - [ ] **3.8:** turn the Wi-Fi tile off in the taskbar's network menu (and unplug Ethernet),
+     wait 10 s, start the exe again. The panel says "This computer has no network address.
+     Connect it to Wi-Fi or Ethernet." If a virtual adapter (Hyper-V, WSL, VPN) is still listed
+     instead, say which; the Wi-Fi address must **not** be listed. Close with X, turn Wi-Fi back on.
+   - [ ] **3.11:** in PowerShell, start the exe, cast a photo to the TV, then press **Ctrl+C in
+     the PowerShell window**: `Stopped.`, the window closes, the TV stops, no traceback.
+   - [ ] **3.10:** in File Explorer, double-click the exe, cast a photo, close the window with X:
+     the TV stops, and Task Manager shows no `cast-tv-windows-x64.exe`.
+   - [ ] **3.12:** in PowerShell, `$env:CAST_TV_WINDOW_FAIL='1'; Start-Process .\cast-tv-windows-x64.exe`.
+     Cast a photo from the browser tab, then close the console window that appeared with its X:
      the TV stops and the tab shows "cast-tv is not answering". Then
      `Remove-Item Env:CAST_TV_WINDOW_FAIL`.
-     The error box: in a **second** PowerShell window run `python -m http.server 8895 --bind
-     127.0.0.1`. Double-click the exe in Explorer: a "cast-tv" message box names port 8895 and
-     the error, and stays until you press OK; then nothing else is left running. In the first
-     PowerShell window run `.\cast-tv-windows-x64.exe`: it prints `Cannot bind port 8895: ...`,
-     shows no box, and `$LASTEXITCODE` is 1. Stop the HTTP server with Ctrl+C in the second
-     window.
 - [ ] 9. **You:** merge PR #89 once the rows pass (or say what failed; Claude fixes it first).
 
 ## Phase 4: icon and menu entry
@@ -115,11 +102,12 @@ recorded row, the PR or commit.
 
 - **Fedora:** whether to delete the local branch `s12-desktop-window`: its 4 commits are on `main`
   under rebased SHAs and the remote branch is gone.
-- **Windows:** whether to delete `.venv-spike`, `build` and `dist` in
+- **Home Windows:** whether to delete `.venv-spike`, `build` and `dist` in
   `C:\Source\cast-tv\context\changes\s12-desktop-window\spike-kit` (gitignored, 1.2 GB).
-
 - **Either machine:** whether a later change makes the UI say that the TV refused this computer
   (the description answering 401) instead of "No TV found"; `research.md`, row 2.8, side finding.
+- **Either machine:** whether to drop "Close the window or press Ctrl+C" from the console when the
+  window falls back (`castlib/cli.py`, `WINDOW_ENDS`); `research.md`, row 3.12, side finding.
 
 ## How to resume with Claude
 

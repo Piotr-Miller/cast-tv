@@ -1145,3 +1145,8 @@ failed, 450 passed): `test_onedrive.py::test_token_file_mode_0600` always (`Perm
 the token file), and `test_cli.py::test_cast_replaced_from_the_ui_keeps_serving` in some runs
 (`'App' object has no attribute 'current'`, read before `__init__` finished; alone it passes).
 CI decides. Row 3.8 is to be run again on the PR's new release exe.
+
+**The fix's builds** (Claude, 2026-10-28). PR #89 at 731ccab: test run 40750043256 green on
+`ubuntu-latest` and `windows-latest`. Release run 40750049252: Windows `size: 26089838 bytes`,
+`POST /api/quit: ended, port 8099 free`, `window-check: edgechromium OK (7.2 s)`; Linux
+`size: 260518120 bytes`, the same quit line, `window-check: qtwebengine OK (5.3 s)`.
