@@ -206,13 +206,14 @@ class App:
     @classmethod
     def start(cls, port: int, tv: str | None = None, debug: bool = False,
               browser: bool = True, out=None, *, open_ui: bool | None = None,
-              ends: str = ENDS_HINT) -> "App":
+              ends: str | None = ENDS_HINT) -> "App":
         """Bind first, then discover in the background, print the addresses, open the browser.
 
         ``browser`` lets the Google consent open a tab on this machine (off with
         ``--no-browser``); ``open_ui`` opens the UI itself in a tab, and follows
         ``browser`` when not given - the cast-tv window turns it off and keeps
-        the consent. ``ends`` is the line that says how to end it.
+        the consent. ``ends`` is the line that says how to end it; ``None``
+        leaves it to the caller (the window says it once it shows).
 
         Raises ``AlreadyRunning`` when another cast-tv answers on the port, and
         ``OSError`` when the port is held by something else. A Ctrl+C (or SIGTERM)
@@ -262,7 +263,8 @@ class App:
                     print("\n  ! %s" % firewall_advice(port), file=out, flush=True)
 
             threading.Thread(target=warn_if_blocked, name="firewall-warning", daemon=True).start()
-            print("  %s" % ends, file=out, flush=True)
+            if ends:
+                print("  %s" % ends, file=out, flush=True)
             if tv:
                 try:
                     app.select_tv(tv)
