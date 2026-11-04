@@ -1312,3 +1312,31 @@ the same way.
 interrupt the main thread, as Python's own handler would). The earlier ctypes callback is kept
 alive. Tests: `test_console_close_takes_ctrl_c_after_a_new_console`, and
 `test_the_copy_without_a_console_gets_one_and_a_box` checks the new registration.
+
+**Rows 3.10-3.12 on the third exe** (release run 41921369531, built from 7415a17: Windows `size:
+26097484 bytes`, `window-check: edgechromium OK (7.8 s)`; Linux `size: 260530344 bytes`,
+`window-check: qtwebengine OK (5.1 s)`; both `POST /api/quit: ended, port 8099 free`). Its test run
+41921369568 failed on `ubuntu-latest` only: the new `test_console_close_takes_ctrl_c_after_a_new_console`
+had been inserted under the `skipif` of the next test, which then ran off Windows. e2744c3 moves the
+decorator back (tests only, so the exe is the same code). Copied over the exe in
+`Downloads\s12-phase3c`: 26,097,484 bytes, SHA-256
+`66e2a932afe6bfa51dd71b52652115a850fc735a9e804a83a986f8bde9f91c6c`. Claude's script as before:
+
+- **3.12:** `CAST_TV_WINDOW_FAIL=1`, started in a new console: the copy's new console (a Terminal
+  window titled with the exe's path), `window: false`, the photo `PLAYING`. `WM_CLOSE` to that
+  console: the server down at once, the TV **`STOPPED`**, no process and no console left. (The TV
+  was still `PLAYING` from the failed run before; this close stopped it.)
+- **3.10:** via `explorer.exe`: a Terminal window from 0.7 s to 2.5 s, the cast-tv window at 3.9 s,
+  no console window after it. The photo `PLAYING`; `WM_CLOSE` to the window: the TV `STOPPED`, no
+  process left.
+- **3.11:** WMI-started `cmd /c exe > log`: the photo `PLAYING`; Ctrl+C: the server down, the TV
+  `STOPPED`, no process, no window; the log ends with `Stopped.` and no traceback.
+- **3.12's error box:** `python -m http.server 8895 --bind 127.0.0.1` held the port. Via
+  `explorer.exe`: after 6.0 s a message box titled `cast-tv` with `Cannot bind port 8895: [WinError
+  10048] Only one usage of each socket address (protocol/network address/port) is normally
+  permitted` and OK, no console window; its OK button pressed: no process left. From a terminal
+  (WMI-started `cmd /c exe > log`): no box, the same line in the log, no process left.
+
+Not seen in these runs: the browser tab's "cast-tv is not answering" after 3.12's close. That is the
+page's own check and nothing on this path changed it; it was seen on the work laptop (2026-10-28).
+e2744c3: test run 41921951579 and release run 41921951505 green on both systems. Rows 3.10, 3.11 and 3.12 accepted at 7415a17.
