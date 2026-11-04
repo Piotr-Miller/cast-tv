@@ -401,6 +401,8 @@ class Win32Console:
             u32.ShowWindow.argtypes = (wintypes.HWND, ctypes.c_int)
             u32.GetClassNameW.restype = ctypes.c_int
             u32.GetClassNameW.argtypes = (wintypes.HWND, wintypes.LPWSTR, ctypes.c_int)
+            k32.FreeConsole.restype = wintypes.BOOL
+            k32.FreeConsole.argtypes = ()
             k32.AllocConsole.restype = wintypes.BOOL
             k32.AllocConsole.argtypes = ()
             k32.SetConsoleOutputCP.restype = wintypes.BOOL
@@ -432,8 +434,9 @@ class Win32Console:
         self._dlls().u32.ShowWindow(hwnd, self.SW_SHOW)
 
     def alloc(self) -> bool:
-        """A new console for a copy started without one; ``print`` and tracebacks go to it from now on."""
+        """A visible console for the copy started with a windowless one; ``print`` and tracebacks go to it from now on."""
         api = self._dlls()
+        api.k32.FreeConsole()               # AllocConsole fails while the windowless console is attached
         if not api.k32.AllocConsole():
             return False
         api.k32.SetConsoleOutputCP(65001)
@@ -461,11 +464,13 @@ def _own_console(native, pids):
 
 DETACHED = "CAST_TV_DETACHED"            # set on the copy ``leave_terminal_tab`` starts without a console
 PSEUDO_CONSOLE = "PseudoConsoleWindow"  # GetConsoleWindow's class when Windows Terminal hosts the console
-DETACHED_PROCESS = 0x00000008
+CREATE_NO_WINDOW = 0x08000000           # a console with no window, which the onefile child inherits
 
 
 def _spawn_detached(args, env):
-    subprocess.Popen(args, env=env, creationflags=DETACHED_PROCESS, close_fds=True,
+    # Not DETACHED_PROCESS: that leaves only the bootloader without a console, and Windows gives
+    # the Python child it starts a new one - in Windows Terminal again (row 3.10, 2026-11-04).
+    subprocess.Popen(args, env=env, creationflags=CREATE_NO_WINDOW, close_fds=True,
                      stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
@@ -477,7 +482,7 @@ def leave_terminal_tab(native=None, platform=None, pids=None, frozen=None, envir
     terminal is the console host. ``hide_console="hide-early"`` then hides
     only the hidden pseudoconsole window, and the Terminal tab stays next to
     the cast-tv window until it closes (row 3.10, the home machine,
-    2026-11-04). The copy runs with ``CAST_TV_DETACHED`` and no console;
+    2026-11-04). The copy runs with ``CAST_TV_DETACHED`` and a console without a window;
     this one exits, and the tab closes with it. A terminal launch (the
     console is not ours), the console host (hidden already), a checkout or a
     pipx install (``sys.frozen`` unset: nothing is hidden) and the copy
@@ -506,8 +511,8 @@ def show_console(native=None, platform=None, pids=None, environ=None) -> bool:
     """Windows: show the console the release hid at start (``hide_console="hide-early"``); False elsewhere.
 
     Called when the cast-tv window cannot open: the tab takes over, and without the console
-    nothing on screen would end the process. The copy ``leave_terminal_tab`` started has
-    none: it gets a new one.
+    nothing on screen would end the process. The copy ``leave_terminal_tab`` started has a
+    windowless console: it gets a visible one instead.
     """
     if (platform or sys.platform) != "win32":
         return False
@@ -534,7 +539,7 @@ def report_startup_error(message: str, native=None, platform=None, pids=None, en
         return False
     try:
         native = native or Win32Console()
-        if (os.environ if environ is None else environ).get(DETACHED):   # no console: the box is all there is
+        if (os.environ if environ is None else environ).get(DETACHED):   # no visible console: the box is all there is
             native.message_box(message, "cast-tv")
             return True
         hwnd = _own_console(native, pids or (os.getpid(), os.getppid()))

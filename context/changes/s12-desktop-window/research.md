@@ -1262,3 +1262,22 @@ startup failure always gets the message box. Tests:
 `test_every_other_start_keeps_its_console`, `test_the_copy_without_a_console_gets_one_and_a_box`,
 `test_a_copy_without_a_console_takes_over_before_anything_starts`. Rows 3.10-3.12 run again on the
 fix's exe.
+
+**Row 3.10 on the fix's first exe** (release run 41918241584, built from 7e85338: Windows `size:
+26096231 bytes`, `window-check: edgechromium OK (9.7 s)`; Linux `size: 260519808 bytes`,
+`window-check: qtwebengine OK (7.5 s)`; both `POST /api/quit: ended, port 8099 free`; test run
+41918241724 green). Downloaded into `Downloads\s12-phase3d`: 26,096,231 bytes, SHA-256
+`4b3da3888490d568391906db9ddc88e56bd47f0403e1e3ad24e6aba1ba761216`. Started via `explorer.exe`:
+the first Terminal window closed, as planned, but a second one titled with the exe's path
+appeared and stayed. `DETACHED_PROCESS` leaves only the onefile bootloader without a console;
+the Python child it starts is a console program, so Windows gave it a new console, in Windows
+Terminal again. Started by hand with `CREATE_NO_WINDOW` (and `CAST_TV_DETACHED=1`,
+`PYINSTALLER_RESET_ENVIRONMENT=1`), the same exe showed no console window at all (polled every
+0.2 s for 15 s) and the cast-tv window opened: the child inherits the windowless console. The
+spawn now uses `CREATE_NO_WINDOW`, and on a fallback the copy swaps that console for a visible one
+(`FreeConsole`, `AllocConsole`). Test: `test_the_copy_inherits_a_console_without_a_window`.
+
+Side observation: in that run the photo never played (`tv_fetched_nothing`). The new path
+`Downloads\s12-phase3d` had got Windows Firewall **Block** rules (profile Public, TCP and UDP),
+which is what Windows writes when its "allow access" prompt is cancelled or dismissed. Not a
+cast-tv fault; the next exe goes to an already allowed path.
