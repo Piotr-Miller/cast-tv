@@ -278,6 +278,8 @@ def ui(port=DEFAULT_PORT, tv=None, debug=False, browser=True, windowed=True):
     """
     ask_window = windowed and browser      # a second launch asks even without the extra: the first may have a window
     windowed = ask_window and window.installed()
+    if windowed and platform.leave_terminal_tab():
+        return 0          # a copy without a console goes on; this one's Windows Terminal tab closes with it
     try:
         app = App.start(port, tv=tv, debug=debug, browser=browser, open_ui=browser and not windowed,
                         ends=None if windowed else ENDS_HINT)   # the window prints WINDOW_ENDS once shown

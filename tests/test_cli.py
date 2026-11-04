@@ -450,6 +450,17 @@ def test_startup_failure_is_reported_before_any_window(app, start_env, upstream,
     assert "RuntimeError" in capsys.readouterr().err   # the traceback stays for a bug report
 
 
+def test_a_copy_without_a_console_takes_over_before_anything_starts(start_env, monkeypatch):
+    """Double-clicked into Windows Terminal: the copy started without a console runs cast-tv; this one only exits."""
+    from castlib import platform, window
+    started = []
+    monkeypatch.setattr(window, "installed", lambda: True)
+    monkeypatch.setattr(platform, "leave_terminal_tab", lambda: True)
+    monkeypatch.setattr(cli.App, "start", classmethod(lambda cls, port, **kw: started.append(port)))
+    assert cli.ui(port=1) == 0
+    assert started == []
+
+
 def test_ctrl_c_and_second_launch_are_not_startup_errors(app, start_env, monkeypatch):
     """Ctrl+C while starting and handing over to the cast-tv already running are no failures: no report."""
     from castlib import platform

@@ -12,6 +12,8 @@ cast-tv the way Ctrl+C does, instead of the process simply being ended;
 the cast-tv window is open. The Windows release hides the console it was
 started with; ``show_console`` brings it back when the window cannot open, and
 ``report_startup_error`` puts a failure before any window in a message box.
+Windows Terminal cannot be hidden that way: ``leave_terminal_tab`` starts the
+release again without a console, and the tab closes with the first copy.
 
 ``use_system_ca_bundle`` points the Linux release binary at this machine's
 CA certificates: it carries the OpenSSL of the distribution it was built on,
@@ -397,6 +399,12 @@ class Win32Console:
             u32.GetWindowThreadProcessId.argtypes = (wintypes.HWND, ctypes.POINTER(wintypes.DWORD))
             u32.ShowWindow.restype = wintypes.BOOL
             u32.ShowWindow.argtypes = (wintypes.HWND, ctypes.c_int)
+            u32.GetClassNameW.restype = ctypes.c_int
+            u32.GetClassNameW.argtypes = (wintypes.HWND, wintypes.LPWSTR, ctypes.c_int)
+            k32.AllocConsole.restype = wintypes.BOOL
+            k32.AllocConsole.argtypes = ()
+            k32.SetConsoleOutputCP.restype = wintypes.BOOL
+            k32.SetConsoleOutputCP.argtypes = (wintypes.UINT,)
             u32.MessageBoxW.restype = ctypes.c_int
             u32.MessageBoxW.argtypes = (wintypes.HWND, wintypes.LPCWSTR, wintypes.LPCWSTR, wintypes.UINT)
             self._api = SimpleNamespace(ctypes=ctypes, wintypes=wintypes, k32=k32, u32=u32)
@@ -414,8 +422,24 @@ class Win32Console:
     def visible(self, hwnd) -> bool:
         return bool(self._dlls().u32.IsWindowVisible(hwnd))
 
+    def window_class(self, hwnd) -> str:
+        api = self._dlls()
+        name = api.ctypes.create_unicode_buffer(256)
+        api.u32.GetClassNameW(hwnd, name, 256)
+        return name.value
+
     def show(self, hwnd) -> None:
         self._dlls().u32.ShowWindow(hwnd, self.SW_SHOW)
+
+    def alloc(self) -> bool:
+        """A new console for a copy started without one; ``print`` and tracebacks go to it from now on."""
+        api = self._dlls()
+        if not api.k32.AllocConsole():
+            return False
+        api.k32.SetConsoleOutputCP(65001)
+        for name in ("stdout", "stderr"):
+            setattr(sys, name, open("CONOUT$", "w", encoding="utf-8", errors="replace", buffering=1))
+        return True
 
     def message_box(self, text: str, title: str) -> None:
         """Blocks until the person presses OK."""
@@ -435,16 +459,62 @@ def _own_console(native, pids):
     return hwnd if native.owner(hwnd) in pids else None
 
 
-def show_console(native=None, platform=None, pids=None) -> bool:
+DETACHED = "CAST_TV_DETACHED"            # set on the copy ``leave_terminal_tab`` starts without a console
+PSEUDO_CONSOLE = "PseudoConsoleWindow"  # GetConsoleWindow's class when Windows Terminal hosts the console
+DETACHED_PROCESS = 0x00000008
+
+
+def _spawn_detached(args, env):
+    subprocess.Popen(args, env=env, creationflags=DETACHED_PROCESS, close_fds=True,
+                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def leave_terminal_tab(native=None, platform=None, pids=None, frozen=None, environ=None,
+                       spawn=None, argv=None, executable=None) -> bool:
+    """Windows release, double-clicked, its new console in Windows Terminal: start again without one; True means exit now.
+
+    Windows 11 hands a new console to Windows Terminal unless its default
+    terminal is the console host. ``hide_console="hide-early"`` then hides
+    only the hidden pseudoconsole window, and the Terminal tab stays next to
+    the cast-tv window until it closes (row 3.10, the home machine,
+    2026-11-04). The copy runs with ``CAST_TV_DETACHED`` and no console;
+    this one exits, and the tab closes with it. A terminal launch (the
+    console is not ours), the console host (hidden already), a checkout or a
+    pipx install (``sys.frozen`` unset: nothing is hidden) and the copy
+    itself go on as before.
+    """
+    if (platform or sys.platform) != "win32":
+        return False
+    environ = os.environ if environ is None else environ
+    if not (getattr(sys, "frozen", False) if frozen is None else frozen) or environ.get(DETACHED):
+        return False
+    try:
+        native = native or Win32Console()
+        hwnd = _own_console(native, pids or (os.getpid(), os.getppid()))
+        if hwnd is None or native.window_class(hwnd) != PSEUDO_CONSOLE:
+            return False
+        env = dict(environ)
+        env[DETACHED] = "1"
+        env["PYINSTALLER_RESET_ENVIRONMENT"] = "1"   # a new onefile instance, not a child of this one's unpacked copy
+        (spawn or _spawn_detached)([executable or sys.executable] + list(sys.argv[1:] if argv is None else argv), env)
+        return True
+    except Exception:
+        return False
+
+
+def show_console(native=None, platform=None, pids=None, environ=None) -> bool:
     """Windows: show the console the release hid at start (``hide_console="hide-early"``); False elsewhere.
 
     Called when the cast-tv window cannot open: the tab takes over, and without the console
-    nothing on screen would end the process.
+    nothing on screen would end the process. The copy ``leave_terminal_tab`` started has
+    none: it gets a new one.
     """
     if (platform or sys.platform) != "win32":
         return False
     try:
         native = native or Win32Console()
+        if (os.environ if environ is None else environ).get(DETACHED):
+            return bool(native.alloc())
         hwnd = _own_console(native, pids or (os.getpid(), os.getppid()))
         if hwnd is None:
             return False
@@ -454,7 +524,7 @@ def show_console(native=None, platform=None, pids=None) -> bool:
         return False
 
 
-def report_startup_error(message: str, native=None, platform=None, pids=None) -> bool:
+def report_startup_error(message: str, native=None, platform=None, pids=None, environ=None) -> bool:
     """Windows, started by double-click (its own console, hidden): ``message`` in a box that stays until OK.
 
     The caller has printed ``message`` already; that is all a terminal launch gets, and all
@@ -464,6 +534,9 @@ def report_startup_error(message: str, native=None, platform=None, pids=None) ->
         return False
     try:
         native = native or Win32Console()
+        if (os.environ if environ is None else environ).get(DETACHED):   # no console: the box is all there is
+            native.message_box(message, "cast-tv")
+            return True
         hwnd = _own_console(native, pids or (os.getpid(), os.getppid()))
         if hwnd is None or native.visible(hwnd):
             return False
