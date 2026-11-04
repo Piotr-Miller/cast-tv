@@ -1281,3 +1281,34 @@ Side observation: in that run the photo never played (`tv_fetched_nothing`). The
 `Downloads\s12-phase3d` had got Windows Firewall **Block** rules (profile Public, TCP and UDP),
 which is what Windows writes when its "allow access" prompt is cancelled or dismissed. Not a
 cast-tv fault; the next exe goes to an already allowed path.
+
+**Rows 3.10-3.12 on the second exe** (release run 41919804753, built from 8b7418a: Windows `size:
+26096516 bytes`, `window-check: edgechromium OK (10.9 s)`; Linux `size: 260520216 bytes`,
+`window-check: qtwebengine OK (5.6 s)`; both `POST /api/quit: ended, port 8099 free`; test run
+41919804796 green). Copied over the exe in `Downloads\s12-phase3c` (that path has Allow rules):
+26,096,516 bytes, SHA-256 `e83c9eee346837ee202d44da71728be429e09eae64cf8b6a4ba01a24a5040b97`.
+
+- **3.10** (via `explorer.exe`, polled every 0.1 s): a Terminal window from 2.2 s to 6.4 s, then
+  none; the server answered at 6.4 s, the cast-tv window showed at 8.2 s. For comparison the
+  Phase 2 exe, started windowless, showed its window after 3.2 s, so the second start costs about
+  5 s, and the Terminal window is up for about 4 s of it. The photo played; `WM_CLOSE` to the
+  window: the TV `STOPPED`, no process and no console window left.
+- **3.11** (WMI-started `cmd /c exe > log`, a terminal launch, so no second start): photo
+  `PLAYING`, Ctrl+C: down at once, the TV `STOPPED`, no process; the log ends with `Stopped.` and
+  no traceback.
+- **3.12 failed.** With `CAST_TV_WINDOW_FAIL=1` in a new console, the copy's fallback opened a
+  new console (a Terminal window titled with the exe's path), `window: false`. The photo played;
+  `WM_CLOSE` to that console ended the process at once, but the TV kept `PLAYING`.
+
+**Spike** (plain Python started with `CREATE_NO_WINDOW`, handler registered, then `FreeConsole`
+and `AllocConsole`, stdout to `CONOUT$`): closing the new console's window ended the process with
+no call to the handler. Registered after `AllocConsole`, the handler got `CTRL_CLOSE_EVENT` (2),
+its `print` to `CONOUT$` worked, and it ran out its 2 s sleep. So a handler registered before the
+console changed gets nothing from the new one. Python's own Ctrl+C handler is registered at start
+the same way.
+
+**The fix.** After `AllocConsole`, `show_console()` installs `ConsoleClose` again
+(`_console_close_again`), which also takes Ctrl+C and Ctrl+Break in the copy (`ctrl_c_too`:
+interrupt the main thread, as Python's own handler would). The earlier ctypes callback is kept
+alive. Tests: `test_console_close_takes_ctrl_c_after_a_new_console`, and
+`test_the_copy_without_a_console_gets_one_and_a_box` checks the new registration.

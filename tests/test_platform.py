@@ -270,6 +270,15 @@ def test_console_close_interrupts_main_and_waits_out_the_grace():
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="ctypes.WINFUNCTYPE is Windows-only")
+def test_console_close_takes_ctrl_c_after_a_new_console():
+    """After AllocConsole Python's own Ctrl+C handler is gone: the handler interrupts the main thread itself."""
+    interrupted = []
+    handler = ConsoleClose(interrupt=lambda: interrupted.append(True), sleep=lambda s: None)
+    assert handler.handle(0) is False and interrupted == []          # Python's handler takes it
+    handler.ctrl_c_too = True
+    assert handler.handle(0) is True and handler.handle(1) is True and len(interrupted) == 2
+
+
 def test_console_close_registers_a_callback_that_outlives_install():
     registered = []
     k32 = types.SimpleNamespace(SetConsoleCtrlHandler=lambda cb, add: registered.append((cb, add)) or 1)
@@ -455,12 +464,14 @@ def test_the_copy_inherits_a_console_without_a_window(monkeypatch):
     assert kw["creationflags"] == 0x08000000 and kw["env"] == {"CAST_TV_DETACHED": "1"}
 
 
-def test_the_copy_without_a_console_gets_one_and_a_box():
+def test_the_copy_without_a_console_gets_one_and_a_box(monkeypatch):
     """The copy ``leave_terminal_tab`` started: a fallback opens a new console, a startup failure a box."""
     detached = {"CAST_TV_DETACHED": "1"}
+    again = []
+    monkeypatch.setattr(platform, "_console_close_again", lambda: again.append(True))
     native = FakeConsole(hwnd=None)
     assert real_show_console(native=native, platform="win32", pids=PIDS, environ=detached) is True
-    assert native.calls == ["AllocConsole"]
+    assert native.calls == ["AllocConsole"] and again == [True]   # the close handler, registered for the new console
     native = FakeConsole(hwnd=None)
     assert real_report_startup_error("Cannot bind port 8895", native=native, platform="win32",
                                      pids=PIDS, environ=detached) is True

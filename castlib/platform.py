@@ -329,10 +329,15 @@ class ConsoleClose:
         self._interrupt = interrupt
         self._sleep = sleep
         self.on_end = on_end        # None: interrupt the main thread, as Ctrl+C would
+        self.ctrl_c_too = False     # True after AllocConsole: Python's own Ctrl+C handler went with the old console
         self._callback = None       # the ctypes callback must outlive the registration
+        self._earlier = []
 
     def handle(self, event: int) -> bool:
         """True when the event is ours; Ctrl+C and Ctrl+Break go on to Python's own handler."""
+        if event in (0, 1) and self.ctrl_c_too:     # CTRL_C_EVENT, CTRL_BREAK_EVENT
+            self._interrupt()
+            return True
         if event not in self.CLOSE_EVENTS:
             return False
         (self.on_end or self._interrupt)()
@@ -347,6 +352,8 @@ class ConsoleClose:
             k32 = ctypes.WinDLL("kernel32")
             k32.SetConsoleCtrlHandler.restype = wintypes.BOOL
         routine = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.DWORD)
+        if self._callback is not None:      # installed again after AllocConsole: the old one stays alive too
+            self._earlier.append(self._callback)
         self._callback = routine(lambda event: bool(self.handle(event)))
         return bool(k32.SetConsoleCtrlHandler(self._callback, True))
 
@@ -367,6 +374,13 @@ def end_on_console_close() -> bool:
         return False
     _console_close = handler
     return True
+
+
+def _console_close_again() -> None:
+    """After ``AllocConsole``: handlers registered before it get no event from the new console (spike, 2026-11-04)."""
+    if _console_close is not None:
+        _console_close.ctrl_c_too = True
+        _console_close.install()
 
 
 def console_close_ends(on_end) -> None:
@@ -519,7 +533,10 @@ def show_console(native=None, platform=None, pids=None, environ=None) -> bool:
     try:
         native = native or Win32Console()
         if (os.environ if environ is None else environ).get(DETACHED):
-            return bool(native.alloc())
+            if not native.alloc():
+                return False
+            _console_close_again()
+            return True
         hwnd = _own_console(native, pids or (os.getpid(), os.getppid()))
         if hwnd is None:
             return False
