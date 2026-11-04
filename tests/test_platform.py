@@ -10,6 +10,7 @@ from castlib.platform import ConsoleClose, ExecutionState, StayAwake, SystemdInh
 from castlib.platform import default_backend as real_default_backend   # bound before conftest swaps it
 from castlib.platform import end_on_console_close as real_end_on_console_close   # likewise
 from castlib.platform import end_on_session_end as real_end_on_session_end       # likewise
+from castlib.platform import leave_terminal_tab as real_leave_terminal_tab       # likewise
 from castlib.platform import report_startup_error as real_report_startup_error   # likewise
 from castlib.platform import show_console as real_show_console                   # likewise
 
@@ -347,9 +348,16 @@ def test_end_on_console_close_only_on_windows_and_once(monkeypatch):
 class FakeConsole:
     """``Win32Console``'s calls, recorded: a console window, the process that owns it, whether it shows."""
 
-    def __init__(self, hwnd=0x1234, owner=100, visible=False):
-        self.hwnd, self.owner_pid, self.is_visible = hwnd, owner, visible
+    def __init__(self, hwnd=0x1234, owner=100, visible=False, cls="ConsoleWindowClass"):
+        self.hwnd, self.owner_pid, self.is_visible, self.cls = hwnd, owner, visible, cls
         self.calls = []
+
+    def window_class(self, hwnd):
+        return self.cls
+
+    def alloc(self):
+        self.calls.append("AllocConsole")
+        return True
 
     def window(self):
         self.calls.append("GetConsoleWindow")
@@ -396,6 +404,60 @@ def test_show_console_leaves_other_consoles_alone():
     assert real_show_console(native=Broken(), platform="win32", pids=PIDS) is False
 
 
+TERMINAL = "PseudoConsoleWindow"   # Windows Terminal hosts the console
+
+
+def _leave(native, **kw):
+    spawned = []
+    kw.setdefault("platform", "win32")
+    kw.setdefault("frozen", True)
+    kw.setdefault("environ", {"PATH": "/usr/bin"})
+    result = real_leave_terminal_tab(native=native, pids=PIDS, spawn=lambda args, env: spawned.append((args, env)),
+                                     argv=[], executable="cast-tv-windows-x64.exe", **kw)
+    return result, spawned
+
+
+def test_double_click_into_windows_terminal_starts_again_without_a_console():
+    """Row 3.10 on Windows 11's default terminal: the release starts a copy with no console and exits."""
+    for owner in PIDS:                                   # this process or the onefile bootloader opened it
+        result, spawned = _leave(FakeConsole(owner=owner, cls=TERMINAL))
+        assert result is True
+        ((args, env),) = spawned
+        assert args == ["cast-tv-windows-x64.exe"]
+        assert env["CAST_TV_DETACHED"] == "1" and env["PYINSTALLER_RESET_ENVIRONMENT"] == "1"
+        assert env["PATH"] == "/usr/bin"
+
+
+def test_every_other_start_keeps_its_console():
+    cases = [
+        (FakeConsole(owner=100), {}),                             # the console host: hide-early hid it
+        (FakeConsole(owner=7, cls=TERMINAL), {}),                 # PowerShell in Windows Terminal
+        (FakeConsole(hwnd=None, cls=TERMINAL), {}),               # no console at all
+        (FakeConsole(owner=100, cls=TERMINAL), {"frozen": False}),   # a checkout or pipx: nothing is hidden
+        (FakeConsole(owner=100, cls=TERMINAL), {"environ": {"CAST_TV_DETACHED": "1"}}),   # the copy itself
+        (FakeConsole(owner=100, cls=TERMINAL), {"platform": "linux"}),
+    ]
+    for native, kw in cases:
+        assert _leave(native, **kw) == (False, [])
+
+    class Broken(FakeConsole):
+        def window_class(self, hwnd):
+            raise OSError("no user32")
+    assert _leave(Broken(owner=100, cls=TERMINAL)) == (False, [])
+
+
+def test_the_copy_without_a_console_gets_one_and_a_box():
+    """The copy ``leave_terminal_tab`` started: a fallback opens a new console, a startup failure a box."""
+    detached = {"CAST_TV_DETACHED": "1"}
+    native = FakeConsole(hwnd=None)
+    assert real_show_console(native=native, platform="win32", pids=PIDS, environ=detached) is True
+    assert native.calls == ["AllocConsole"]
+    native = FakeConsole(hwnd=None)
+    assert real_report_startup_error("Cannot bind port 8895", native=native, platform="win32",
+                                     pids=PIDS, environ=detached) is True
+    assert native.calls == [("MessageBoxW", "cast-tv", "Cannot bind port 8895")]
+
+
 @pytest.mark.skipif(sys.platform != "win32", reason="user32 and kernel32 are Windows-only")
 def test_win32_console_reads_the_real_console():
     """The ctypes signatures hold on a real Windows; nothing is shown and no box opens."""
@@ -403,6 +465,7 @@ def test_win32_console_reads_the_real_console():
     hwnd = native.window()
     if hwnd is not None:
         assert native.owner(hwnd) > 0 and native.visible(hwnd) in (True, False)
+        assert isinstance(native.window_class(hwnd), str)
 
 
 def test_startup_error_box_only_for_a_hidden_owned_console():

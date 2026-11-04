@@ -225,6 +225,7 @@ def _no_stay_awake(monkeypatch):
     monkeypatch.setattr(platform, "default_backend", lambda: platform.NullBackend())
     monkeypatch.setattr(platform, "end_on_console_close", lambda: False)
     monkeypatch.setattr(platform, "end_on_session_end", lambda on_end: None)   # no hidden native window
+    monkeypatch.setattr(platform, "leave_terminal_tab", lambda: False)      # never start a second cast-tv
     monkeypatch.setattr(platform, "show_console", lambda: False)            # the runner's console stays as it is
     monkeypatch.setattr(platform, "report_startup_error", lambda message: False)   # a message box would block
     monkeypatch.setattr(platform, "firewall_policy", platform.FirewallPolicy(platform="none"))
