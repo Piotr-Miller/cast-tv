@@ -1,4 +1,4 @@
-# Next steps (2026-11-04, PR #89: rows 3.6, 3.7 and 3.10-3.12 accepted on the home machine; 3.8 to decide)
+# Next steps (2026-11-04, PR #89: every Phase 3 row accepted; merge it)
 
 The standing note for a pause in the work (a reboot, a switch of machine): it stays in the
 repository and is overwritten at the next pause.
@@ -43,11 +43,11 @@ machine"): 3.6 and 3.7 accepted at 2bab65f. 3.10 failed on Windows Terminal (thi
 default terminal) and is fixed in b56aba8, 8b7418a and 7415a17: a double-click starts a copy
 without a console, and the Terminal window shows for about 2-4 s. 3.10-3.12 are accepted at
 7415a17 on release run 41921369531's exe (in `Downloads\s12-phase3c`). 3.8: with Wi-Fi off the
-panel lists only Hyper-V's 172.18.48.1, as on the work laptop; the message itself never shows on
-either machine.
+panel listed only Hyper-V's 172.18.48.1; with that adapter disabled too, it said "This computer
+has no network address" (accepted at 7415a17).
 
 
-- [ ] 8. **Home Windows 11**, in PowerShell, in `C:\Source\cast-tv`:
+- [x] 8. **Home Windows 11**, in PowerShell, in `C:\Source\cast-tv`:
    ```powershell
    git fetch; git switch s12-phase3; git pull
    mkdir $HOME\Downloads\s12-phase3c -Force; cd $HOME\Downloads\s12-phase3c
@@ -62,7 +62,7 @@ either machine.
      camera: the cast-tv UI opens on the phone.
    - [x] **3.7:** on the phone, the page shows no "Open on your phone" panel and no "Quit cast-tv"
      button. Close the cast-tv window with X.
-   - [ ] **3.8:** turn the Wi-Fi tile off in the taskbar's network menu (and unplug Ethernet),
+   - [x] **3.8:** turn the Wi-Fi tile off in the taskbar's network menu (and unplug Ethernet),
      wait 10 s, start the exe again. The panel says "This computer has no network address.
      Connect it to Wi-Fi or Ethernet." If a virtual adapter (Hyper-V, WSL, VPN) is still listed
      instead, say which; the Wi-Fi address must **not** be listed. Close with X, turn Wi-Fi back on.

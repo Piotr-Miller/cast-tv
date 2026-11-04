@@ -1340,3 +1340,12 @@ decorator back (tests only, so the exe is the same code). Copied over the exe in
 Not seen in these runs: the browser tab's "cast-tv is not answering" after 3.12's close. That is the
 page's own check and nothing on this path changed it; it was seen on the work laptop (2026-10-28).
 e2744c3: test run 41921951579 and release run 41921951505 green on both systems. Rows 3.10, 3.11 and 3.12 accepted at 7415a17.
+
+**Row 3.8, with Hyper-V's adapter off** (the owner, the home machine, 2026-11-04, the same exe:
+26,097,484 bytes, built from 7415a17). In PowerShell as administrator,
+`Disable-NetAdapter -Name 'vEthernet (Default Switch)'`; Wi-Fi turned off in the taskbar's network
+menu; the exe started. The window (owner's screenshot): "Open on your phone" said "This computer
+has no network address. Connect it to Wi-Fi or Ethernet." and listed no address; "No TV found",
+"Searched on: default route — 0 responses". Closed with X, the adapter enabled again, Wi-Fi back
+on. Claude then found `vEthernet (Default Switch)` 172.18.48.1 and `Wi-Fi 2` 192.168.50.213 both
+`Up` and `Preferred`, and no `cast-tv*` process. Row 3.8 accepted at 7415a17.
