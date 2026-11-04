@@ -529,6 +529,14 @@ process.
   double-click. Non-Windows behavior stays text-only. Route pre-GUI fatal startup exceptions
   through this reporting path after cleanup, without turning normal Ctrl+C/cancellation into
   an error or opening a dialog for a successful second launch.
+- Windows Terminal (added 2026-11-04, row 3.10): when Windows 11 hands a new console to Windows
+  Terminal, `GetConsoleWindow()` is a hidden `PseudoConsoleWindow` owned by this process or the
+  bootloader, and hide-early cannot hide the Terminal window. `platform.leave_terminal_tab()`
+  then starts the release again with `DETACHED_PROCESS`, `CAST_TV_DETACHED=1` and
+  `PYINSTALLER_RESET_ENVIRONMENT=1`, and `cli.ui()` returns 0 before `App.start`; the tab closes
+  with this copy. Only the frozen release does it, only for an owned pseudoconsole, never for the
+  copy itself. In the copy, `show_console()` allocates a new console (`AllocConsole`, stdout and
+  stderr to `CONOUT$`) and `report_startup_error()` always shows the box.
 
 ### Success Criteria:
 
@@ -853,8 +861,8 @@ The Progress Manual rows, run on the Windows laptop and the Fedora desktop, each
 
 #### Manual
 
-- [ ] 3.6 Windows window: the phone panel's QR opens the UI on the phone
-- [ ] 3.7 The phone shows no phone panel and no Quit control
+- [x] 3.6 Windows window: the phone panel's QR opens the UI on the phone — accepted at 2bab65f
+- [x] 3.7 The phone shows no phone panel and no Quit control — accepted at 2bab65f
 - [ ] 3.8 Offline: the panel says there is no network address
 - [x] 3.9 Fedora: the phone panel and QR codes work in the Qt window — accepted at efac3c5bed1c033f3879c63d34c64efa469a1cba
 - [ ] 3.10 Windows double-click: only the window, closing it stops the TV

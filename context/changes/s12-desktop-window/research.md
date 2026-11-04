@@ -1195,3 +1195,70 @@ downloaded into `Downloads\s12-phase3c`: 26,088,117 bytes, SHA-256
   then `Close the window or press Ctrl+C to end it (playback stops on the TV too)` once the
   window showed, then the firewall warning and the TV line. Closed with X; no `cast-tv*` process
   was left.
+
+## Manual rows 3.6-3.12 on the home Windows machine (2026-11-04)
+
+Windows 11 Pro 10.0.26300 (`DESKTOP-35JAM1C`), PR #89 at 2bab65f (acc256e plus `main`'s
+ai-toolkit pins; no code change). The exe from release run 40760424209, downloaded into
+`Downloads\s12-phase3c`: 26,088,117 bytes, `--version` ends `Window: edgechromium`. IPv4:
+Wi-Fi 192.168.50.213 (the default route), Hyper-V `vEthernet (Default Switch)` 172.18.48.1,
+several 169.254.x (Tentative). The TV: 83" OLED at 192.168.50.142. `HKCU\Console\%%Startup`
+has no `DelegationConsole`, so the default terminal is "Let Windows decide", which is Windows
+Terminal here.
+
+Claude drove the casts and the closes from a script (`/api/cast` with a OneDrive photo, `1.png`;
+the TV's `GetTransportInfo` over DLNA; `WM_CLOSE` to the windows, which is what their X sends;
+`GenerateConsoleCtrlEvent` for Ctrl+C). The owner did the phone and Wi-Fi parts.
+
+**Rows 3.6 and 3.7.** `/api/status` from 127.0.0.1: `host: true`, addresses `localhost`, then
+`192.168.50.213`, then `172.18.48.1`, so the Wi-Fi address leads the panel. From 192.168.50.213
+(not loopback, as the phone): `host: false`, and `POST /api/quit` answered 403. The owner scanned
+the QR code of 192.168.50.213 with the phone: the cast-tv UI opened on the phone, with no "Open on
+your phone" panel and no "Quit cast-tv" (owner: "tak"). Both rows accepted.
+
+**Row 3.8.** The owner turned Wi-Fi off and started the exe (owner's screenshot): "Open on your
+phone" listed only `http://172.18.48.1:8895/ui/`, "Searched on: Hyper-V Virtual Ethernet Adapter
+172.18.48.1 — 0 responses", "No TV found". The Wi-Fi address is gone, as on the work laptop with
+the fix, but the "no network address" message cannot show while Hyper-V's adapter is up (listed by
+design). The row stays open.
+
+**Row 3.11** (Ctrl+C). A process started from Claude's shell inherits "ignore Ctrl+C", so the
+first try (the exe under `cmd /c` in a new console) proved nothing: a plain `python -c sleep`
+there ignored the event too. Started through WMI (`Win32_Process.Create`, a clean parent),
+`cmd /c cast-tv-windows-x64.exe > log 2>&1` in its own console (a Windows Terminal tab): the photo
+played (`PLAYING`), and Ctrl+C was sent to that console. Within a second the server was down, the
+cast-tv window gone, the TV `STOPPED`, no `cast-tv*` process left. The log: the three addresses,
+the netsh hint, `Close the window or press Ctrl+C ...`, the TV, then `Stopped.` and no traceback.
+
+**Row 3.12** (forced fallback). `CAST_TV_WINDOW_FAIL=1`, started in a new console: a Windows
+Terminal window titled with the exe's path, `/api/status` `window: false`, a browser tab opened.
+The photo played; `WM_CLOSE` to that Terminal window: the server was down at once, the TV
+`STOPPED`, no process left. Whether the tab then said "cast-tv is not answering" was not seen: by
+the time the owner looked, it had reconnected to row 3.8's run on the same port.
+
+**Row 3.10 fails here.** Started the way a double-click starts it (`explorer.exe <exe>`): the
+cast-tv window opened, and so did a **Windows Terminal window** titled
+`C:\Users\pmill\Downloads\s12-phase3c\cast-tv-windows-x64.exe`. It stayed for the whole run
+(checked every 3 s) and closed only when cast-tv ended. Two runs, the same. The rest of the row
+held: the photo played, `WM_CLOSE` to the cast-tv window, the TV `STOPPED`, no process left. On
+the work laptop the same exe showed no console (its default terminal is evidently the console
+host).
+
+**Spike** (Python 3.14 in a new console, which Windows hands to Windows Terminal here):
+`GetConsoleWindow()` returned a visible window owned by the process itself, and the console's
+process list held only that process. `ShowWindow(SW_HIDE)` on it made `IsWindowVisible` false,
+but the Terminal window stayed on screen. So hide-early hides the pseudoconsole window and
+changes nothing visible, while our owned-console test passes. In a second run the process started
+a copy of itself with `DETACHED_PROCESS` and exited: no Terminal window was left within 2 s, and
+the copy ran on with no console.
+
+**The fix** (owner's decision: on PR #89). `platform.leave_terminal_tab()`: on Windows, in the
+frozen release, when the console is ours and its window's class is `PseudoConsoleWindow`, start
+`sys.executable` with the same arguments, `DETACHED_PROCESS`, `CAST_TV_DETACHED=1` and
+`PYINSTALLER_RESET_ENVIRONMENT=1`; `cli.ui()` then returns 0 before `App.start`. The copy has no
+console: on a fallback `show_console()` allocates one and points stdout and stderr at it, and a
+startup failure always gets the message box. Tests:
+`test_double_click_into_windows_terminal_starts_again_without_a_console`,
+`test_every_other_start_keeps_its_console`, `test_the_copy_without_a_console_gets_one_and_a_box`,
+`test_a_copy_without_a_console_takes_over_before_anything_starts`. Rows 3.10-3.12 run again on the
+fix's exe.
