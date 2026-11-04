@@ -446,6 +446,15 @@ def test_every_other_start_keeps_its_console():
     assert _leave(Broken(owner=100, cls=TERMINAL)) == (False, [])
 
 
+def test_the_copy_inherits_a_console_without_a_window(monkeypatch):
+    """Not DETACHED_PROCESS: the onefile bootloader's Python child would get a new console, in Windows Terminal again."""
+    made = []
+    monkeypatch.setattr(platform.subprocess, "Popen", lambda args, **kw: made.append((args, kw)))
+    platform._spawn_detached(["cast-tv-windows-x64.exe"], {"CAST_TV_DETACHED": "1"})
+    ((args, kw),) = made
+    assert kw["creationflags"] == 0x08000000 and kw["env"] == {"CAST_TV_DETACHED": "1"}
+
+
 def test_the_copy_without_a_console_gets_one_and_a_box():
     """The copy ``leave_terminal_tab`` started: a fallback opens a new console, a startup failure a box."""
     detached = {"CAST_TV_DETACHED": "1"}

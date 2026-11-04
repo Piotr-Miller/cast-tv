@@ -532,10 +532,11 @@ process.
 - Windows Terminal (added 2026-11-04, row 3.10): when Windows 11 hands a new console to Windows
   Terminal, `GetConsoleWindow()` is a hidden `PseudoConsoleWindow` owned by this process or the
   bootloader, and hide-early cannot hide the Terminal window. `platform.leave_terminal_tab()`
-  then starts the release again with `DETACHED_PROCESS`, `CAST_TV_DETACHED=1` and
+  then starts the release again with `CREATE_NO_WINDOW`, `CAST_TV_DETACHED=1` and
   `PYINSTALLER_RESET_ENVIRONMENT=1`, and `cli.ui()` returns 0 before `App.start`; the tab closes
   with this copy. Only the frozen release does it, only for an owned pseudoconsole, never for the
-  copy itself. In the copy, `show_console()` allocates a new console (`AllocConsole`, stdout and
+  copy itself. In the copy, `show_console()` swaps the windowless console for a visible one
+  (`FreeConsole`, `AllocConsole`, stdout and
   stderr to `CONOUT$`) and `report_startup_error()` always shows the box.
 
 ### Success Criteria:
