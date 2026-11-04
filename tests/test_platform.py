@@ -269,7 +269,6 @@ def test_console_close_interrupts_main_and_waits_out_the_grace():
         assert calls == []
 
 
-@pytest.mark.skipif(sys.platform != "win32", reason="ctypes.WINFUNCTYPE is Windows-only")
 def test_console_close_takes_ctrl_c_after_a_new_console():
     """After AllocConsole Python's own Ctrl+C handler is gone: the handler interrupts the main thread itself."""
     interrupted = []
@@ -279,6 +278,7 @@ def test_console_close_takes_ctrl_c_after_a_new_console():
     assert handler.handle(0) is True and handler.handle(1) is True and len(interrupted) == 2
 
 
+@pytest.mark.skipif(sys.platform != "win32", reason="ctypes.WINFUNCTYPE is Windows-only")
 def test_console_close_registers_a_callback_that_outlives_install():
     registered = []
     k32 = types.SimpleNamespace(SetConsoleCtrlHandler=lambda cb, add: registered.append((cb, add)) or 1)
