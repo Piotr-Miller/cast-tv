@@ -874,16 +874,16 @@ The Progress Manual rows, run on the Windows laptop and the Fedora desktop, each
 
 #### Automated
 
-- [x] 4.1 Desktop entry and .lnk tests — c4ce4e1
-- [x] 4.2 favicon serves the PNG and /api/shortcut is host-only — c4ce4e1
-- [x] 4.3 The full suite passes — c4ce4e1
-- [x] 4.4 The release workflow on the PR is green — c4ce4e1
+- [x] 4.1 Desktop entry and .lnk tests — 89735ba
+- [x] 4.2 favicon serves the PNG and /api/shortcut is host-only — 89735ba
+- [x] 4.3 The full suite passes — 89735ba
+- [x] 4.4 The release workflow on the PR is green — 89735ba
 
 #### Manual
 
-- [x] 4.5 Windows: the icon on the exe, the window and the taskbar — accepted at c21e2b6699e6ec8713e0471548f1dbd99f4677e3
-- [x] 4.6 Fedora: the window's taskbar entry shows the cast-tv icon — accepted at 2d032a365138a5c3df08dad1ff3f4b9ec26756cb
-- [x] 4.7 Fedora: Add to menu, found in the overview, starts with no terminal — accepted at 204e31bae9ae061c0ac3f78e55e1601851e90d6c
-- [x] 4.8 Windows: Add to Start menu, starts with no console, pinning works — accepted at 5aba1531c7d368bf418454690abec428634f63f0
-- [x] 4.9 A moved file: Update menu entry repoints the entry — accepted at c21e2b6699e6ec8713e0471548f1dbd99f4677e3
-- [x] 4.10 Remove from menu removes the entry on both machines — accepted at 2d032a365138a5c3df08dad1ff3f4b9ec26756cb
+- [x] 4.5 Windows: the icon on the exe, the window and the taskbar — accepted at 8e7d001b7da035e9bafeac5da12fe29443fe79d2
+- [x] 4.6 Fedora: the window's taskbar entry shows the cast-tv icon — accepted at 9376efdb90d95d37d85e9e9979f5fc117b354d6e
+- [x] 4.7 Fedora: Add to menu, found in the overview, starts with no terminal — accepted at f971be55e8dbc786a923f9b6f23ea9409194fea3
+- [x] 4.8 Windows: Add to Start menu, starts with no console, pinning works — accepted at 35ba96c9fbf2302c39f5abda53d443009cbd7cdb
+- [x] 4.9 A moved file: Update menu entry repoints the entry — accepted at 8e7d001b7da035e9bafeac5da12fe29443fe79d2
+- [x] 4.10 Remove from menu removes the entry on both machines — accepted at 9376efdb90d95d37d85e9e9979f5fc117b354d6e

@@ -1,4 +1,4 @@
-# Next steps (2026-11-05 late, Phase 4 is PR #97; every row done, waiting for the merge)
+# Next steps (2026-11-05 late, Phase 4 is on `main`; step 15a, the reopened rows, is next)
 
 The standing note for a pause in the work (a reboot, a switch of machine): it stays in the
 repository and is overwritten at the next pause.
@@ -13,8 +13,8 @@ recorded row, the PR or commit.
 - **Phase 3 is on `main`** (PR #89, rebase merge 2026-11-05, main 46d5d76). Every row 3.1-3.12 is done.
 - **Phase 4 is PR #97** (branch `s12-phase4`); rows 4.1-4.10 all done (2026-11-05). Fedora found two
   bugs, both fixed on the PR (`research.md`, "Manual rows 4.6 and 4.7 on Fedora"):
-  1a281a2, GNOME showed a new menu entry with a gear until a re-login (the hicolor theme folder's
-  time is now bumped); fa0071f, a pipx copy started from the menu took the first `cast-tv` on PATH
+  134266b, GNOME showed a new menu entry with a gear until a re-login (the hicolor theme folder's
+  time is now bumped); c4a4e5a, a pipx copy started from the menu took the first `cast-tv` on PATH
   for its own launcher (Linux now uses `sys.argv[0]`). Last green runs: test 42097549541, release
   42097549651 (Windows 26123093 bytes, Linux 260586272 bytes).
 - **2026-10-28, on the Intune work laptop** (`C:\Source\Trainings\AI\cast-tv`; its MDM rule
@@ -86,22 +86,43 @@ has no network address" (accepted at d607d09).
 ## Phase 4: icon and menu entry
 
 - [x] 12. **Either machine:** `/rune-implement s12-desktop-window phase 4`, then its PR.
-    — 2026-11-05, commit c4ce4e1, **PR #97** (branch `s12-phase4`). Test run 42072787693 and
+    — 2026-11-05, commit 89735ba, **PR #97** (branch `s12-phase4`). Test run 42072787693 and
     release run 42072787694 green on both systems: Windows 26121290 bytes,
     `window-check: edgechromium OK`; Linux 260585144 bytes, `window-check: qtwebengine OK`.
     Phase 4 changed the surfaces of 3.6-3.12, so they are reopened and go into step 15a.
-- [x] 13. **Windows 11:** 4.5, 4.8, 4.9 and 4.10's Windows part — accepted 2026-11-05 (c21e2b6, 5aba153,
-    9609f12; `research.md`, "Manual rows 4.5, 4.8 and 4.9 on the home Windows machine").
-- [x] 14. **Fedora:** 4.6, 4.7 and 4.10 — accepted 2026-11-05 at 2d032a3 and 204e31b, on 1a281a2's
-    binary and fa0071f's checkout and scratchpad pipx (`research.md`, "Manual rows 4.6 and 4.7 on
+- [x] 13. **Windows 11:** 4.5, 4.8, 4.9 and 4.10's Windows part — accepted 2026-11-05 (8e7d001, 35ba96c,
+    d27006f; `research.md`, "Manual rows 4.5, 4.8 and 4.9 on the home Windows machine").
+- [x] 14. **Fedora:** 4.6, 4.7 and 4.10 — accepted 2026-11-05 at 9376efd and f971be5, on 134266b's
+    binary and c4a4e5a's checkout and scratchpad pipx (`research.md`, "Manual rows 4.6 and 4.7 on
     Fedora"). In the cast-tv window the menu control sits at the top right, under the TV pill.
-- [ ] 15. **You:** merge PR #97 ("Rebase and merge"); then Claude rewrites the recorded SHAs from `main`.
+- [x] 15. **You:** merge PR #97 ("Rebase and merge"); then Claude rewrites the recorded SHAs from `main`.
+  — 2026-11-05, main d8b7ee4; SHAs rewritten on branch `s12-phase4-shas`.
 
 ## Closing S-12
 
 - [ ] 15a. **Windows 11 and Fedora:** confirm again the rows that Phases 2-4 reopened: 1.8-1.16,
-    2.6-2.9 and 3.6-3.12 (`cli.py`, `platform.py`, `window.py`, the UI and the spec changed). Once,
-    on the release binaries built after the Phase 4 merge. Claude gives the steps.
+    2.6-2.9 and 3.6-3.12, once each. **The binaries:** PR #97's release run 42097549651, built
+    from fa0071f, whose code is main's c4a4e5a (the two trees differ only in
+    `context/foundation/roadmap.md`); the release workflow does not run on `main`. Windows
+    26123093 bytes, Linux 260586272 bytes; the artifacts expire 2027-02-03. Claude gives each
+    row's exact steps in chat, drives the browser tab and the CLI where it can, and records each
+    observation in `research.md` before ticking the row.
+    - [ ] **Fedora** (the Linux binary in `~/Downloads/s12-15a`, the checkout, a scratchpad pipx):
+      1.9 pipx with `[window]` opens a Qt window; 1.10 pipx without the extra opens a tab whose
+      Quit control works; 1.11 `--no-window` opens the tab; 1.12 `CAST_TV_WINDOW_FAIL=1` opens the
+      tab, Diagnostics shows `window_unavailable`; 1.13 X with a video playing stops the TV;
+      1.14 Ctrl+C and `kill <pid>` stop the TV and close the window; 1.15 a second launch brings
+      the window to the front; 1.16 the phone's UI has no Quit control; 2.7 the binary opens a Qt
+      window with the GPU on (size, start time); 2.8 a HEIC photo shows upright on the TV;
+      2.9 the Ubuntu 24.04 VM was deleted on 2026-10-27, so the row records "not run" and why,
+      as its criterion allows; 3.9 the phone panel and QR codes work in the Qt window.
+    - [ ] **Windows 11** (the exe in `Downloads\s12-15a`, the checkout's venv): 1.8 the venv with
+      `[window]` opens a window; 1.13 X with a video playing; 1.14 Ctrl+C, and Sign out with a
+      video playing; 1.15 a second launch; 2.6 the exe opens the window (size, start time);
+      3.6 the QR code opens the UI on the phone; 3.7 the phone shows no panel and no Quit;
+      3.8 Wi-Fi off (and Hyper-V's adapter disabled): "no network address"; 3.10 a double-click
+      shows only the window; 3.11 PowerShell, Ctrl+C, no traceback; 3.12 the fallback console and
+      the startup error box.
 - [ ] 16. **Windows 11:** review Phases 2-4 (`/rune-impl-review`) and fix what it finds.
 - [ ] 17. **You:** decide on the release tag (e.g. `v0.5.0`); the release workflow builds and publishes
     the files on GitHub Releases. This run also checks ci-actions-node24's row 1.4: on the Actions
@@ -121,5 +142,5 @@ has no network address" (accepted at d607d09).
 
 ## How to resume with Claude
 
-Write "co dalej" in the cast-tv checkout. Until PR #97 is merged, work on its branch:
-`git fetch; git switch s12-phase4; git pull`. After the merge: `git switch main; git pull`.
+Write "co dalej" in the cast-tv checkout. Work from `main` (`git switch main; git pull`); until the
+SHA-rewrite PR is merged, its branch is `s12-phase4-shas`.

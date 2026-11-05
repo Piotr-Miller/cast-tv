@@ -1352,7 +1352,7 @@ on. Claude then found `vEthernet (Default Switch)` 172.18.48.1 and `Wi-Fi 2` 192
 
 ## Manual rows 4.5, 4.8 and 4.9 on the home Windows machine (2026-11-05)
 
-Windows 11 Pro 10.0.26300 (`DESKTOP-35JAM1C`), the owner. PR #97 at 15e71e3 (c4ce4e1 plus
+Windows 11 Pro 10.0.26300 (`DESKTOP-35JAM1C`), the owner. PR #97 at d9efbbb (89735ba plus
 bookkeeping): the exe from release run 42072787694, downloaded into `Downloads\s12-phase4`,
 26,121,290 bytes (printed by `(Get-Item …).Length`). Steps as written in this session's chat.
 
@@ -1373,7 +1373,7 @@ bookkeeping): the exe from release run 42072787694, downloaded into `Downloads\s
   `[window]`, started with `$HOME` as the current directory, `python -m castlib`: the window showed
   **Add to Start menu** (the release's entry had been removed before, so nothing pointed elsewhere);
   added, closed, started from Start: the window with the icon and Python's console minimised on the
-  taskbar. pipx (`cast-tv[window] @ git+…@s12-phase4`, resolved to commit 5aba153, replacing pipx's cast-tv 0.2.0 and its `~/.local/bin` launchers;
+  taskbar. pipx (`cast-tv[window] @ git+…@s12-phase4`, resolved to commit 35ba96c, replacing pipx's cast-tv 0.2.0 and its `~/.local/bin` launchers;
   installed 19:07 with `castlib/shortcut.py`,
   `castlib/ui/cast-tv.ico` and `webview` in its venv, checked by Claude): **Update menu entry**,
   started from Start: the window with the icon. "Wszystko ok" (owner).
@@ -1387,7 +1387,7 @@ bookkeeping): the exe from release run 42072787694, downloaded into `Downloads\s
 ## Manual rows 4.6 and 4.7 on Fedora: the menu entry's gear (2026-11-05)
 
 Fedora (GNOME Shell 51.1, Wayland, icon theme Tela-circle-orange-dark), the owner. PR #97 at
-9609f12: `cast-tv-linux-x64` from release run 42072787694 in `~/Downloads/s12-phase4`,
+d27006f: `cast-tv-linux-x64` from release run 42072787694 in `~/Downloads/s12-phase4`,
 260,585,144 bytes (`stat -c %s`); `--version` ends `Window: qtwebengine`.
 
 - **4.6 before 4.7** (owner's screenshot, 20:0x): the window opened from the terminal; the window
@@ -1410,14 +1410,14 @@ Fedora (GNOME Shell 51.1, Wayland, icon theme Tela-circle-orange-dark), the owne
   as `xdg-icon-resource` does (`castlib/shortcut.py`, `_touch_icon_theme`); the test
   `test_install_and_remove_bump_the_icon_theme_folder` failed without it. Rows 4.6 and 4.7 are
   run again on the fix's Linux binary.
-- **The entry started, and removed, on 9609f12's binary** (owner, 2026-11-05, after the 20:07
+- **The entry started, and removed, on d27006f's binary** (owner, 2026-11-05, after the 20:07
   `touch`; "od 1 do 7 wszystko działa jak trzeba"): Windows key, `cast-tv` in the search field,
   the cast-tv tile with the TV icon: the window opened with no terminal; Alt+Tab showed the TV
   icon. **Remove from menu** printed "Removed from the menu."; after X, the search showed no
   cast-tv app (only `cast-tv-linux-x64` files under `Downloads`). Claude checked
   `cast-tv.desktop` and `hicolor/256x256/apps/cast-tv.png` gone and no `cast-tv-linux-x64`
-  process. That binary predates the fix, so 4.6, 4.7 and 4.10 are accepted on 1a281a2's.
-- **The fix's binary**: release run 42091573487 (1a281a2), `cast-tv-linux-x64` 260,586,064 bytes,
+  process. That binary predates the fix, so 4.6, 4.7 and 4.10 are accepted on 134266b's.
+- **The fix's binary**: release run 42091573487 (134266b), `cast-tv-linux-x64` 260,586,064 bytes,
   `window-check: qtwebengine OK`; test run 42091573279 green on both systems. Saved to
   `~/Downloads/s12-phase4-fix`. Before its run Claude touched `~/.local/share/icons/hicolor` again
   (the icon file absent), so GNOME Shell drops the cached icon and a TV icon after **Add to menu**
@@ -1436,7 +1436,7 @@ Fedora (GNOME Shell 51.1, Wayland, icon theme Tela-circle-orange-dark), the owne
   the theme folder's time 20:32:08. Rows 4.6 and 4.10 accepted (4.10's Windows part above; the
   fix touches only the Linux path). 4.7's checkout and pipx runs are still to do.
 - **4.7, the checkout and pipx** (owner, 2026-11-05, ~20:38-20:45). Part A: the checkout's
-  `.venv` (`[window]`, Python 3.15, s12-phase4 at b67b882), `cd ~ && .venv/bin/python -m castlib`,
+  `.venv` (`[window]`, Python 3.15, s12-phase4 at 4feaaab), `cd ~ && .venv/bin/python -m castlib`,
   **Add to menu**, then started from the cast-tv tile; the owner went on to part B with no
   problem reported (A.4 not stated explicitly). Part B: pipx 1.x in Claude's scratchpad
   (`PIPX_HOME`/`PIPX_BIN_DIR` there, `cast-tv[window] @ git+…@s12-phase4`, `webview` present,
@@ -1457,13 +1457,13 @@ Fedora (GNOME Shell 51.1, Wayland, icon theme Tela-circle-orange-dark), the owne
   `which` (its launcher is an .exe; 4.8's pipx run passed). The new test failed with the lookup
   disabled. Part B is run again on the fix.
 - **4.7, part B again on the fix** (owner, 2026-11-05, ~20:48-20:55, "C i D wszystko OK").
-  Scratchpad pipx reinstalled from fa0071f (`_own_launcher` present). C: the entry pointing to the
+  Scratchpad pipx reinstalled from c4a4e5a (`_own_launcher` present). C: the entry pointing to the
   scratchpad launcher, cast-tv started from the tile: **Remove from menu** (the B.5 failure gone).
   D: the checkout's copy showed **Update menu entry (points to another file)**, clicked: **Remove
   from menu**; the pipx copy (scratchpad `bin` first on PATH) showed **Update menu entry**,
   clicked; started from the tile: the window with the TV icon, no terminal, **Remove from menu**;
   clicked to clean up. Claude checked at 20:55: no `cast-tv.desktop`, no icon, the theme folder's
-  time 20:55:14, no cast-tv process; `~/.local/bin/cast-tv` still Phase 1's symlink. fa0071f: test
+  time 20:55:14, no cast-tv process; `~/.local/bin/cast-tv` still Phase 1's symlink. c4a4e5a: test
   run 42097549541 and release run 42097549651 green (Windows 26,123,093 bytes, `edgechromium OK`;
-  Linux 260,586,272 bytes, `qtwebengine OK`). fa0071f changes only the non-frozen Linux path, so
-  the release-binary part of 4.7 (on 1a281a2's binary, above) stands. Row 4.7 accepted.
+  Linux 260,586,272 bytes, `qtwebengine OK`). c4a4e5a changes only the non-frozen Linux path, so
+  the release-binary part of 4.7 (on 134266b's binary, above) stands. Row 4.7 accepted.
