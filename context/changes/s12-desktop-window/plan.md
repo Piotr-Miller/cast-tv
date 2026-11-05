@@ -874,10 +874,10 @@ The Progress Manual rows, run on the Windows laptop and the Fedora desktop, each
 
 #### Automated
 
-- [x] 4.1 Desktop entry and .lnk tests
-- [x] 4.2 favicon serves the PNG and /api/shortcut is host-only
-- [x] 4.3 The full suite passes
-- [ ] 4.4 The release workflow on the PR is green
+- [x] 4.1 Desktop entry and .lnk tests — c4ce4e1
+- [x] 4.2 favicon serves the PNG and /api/shortcut is host-only — c4ce4e1
+- [x] 4.3 The full suite passes — c4ce4e1
+- [x] 4.4 The release workflow on the PR is green — c4ce4e1
 
 #### Manual
 
