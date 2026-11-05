@@ -1422,3 +1422,16 @@ Fedora (GNOME Shell 51.1, Wayland, icon theme Tela-circle-orange-dark), the owne
   `~/Downloads/s12-phase4-fix`. Before its run Claude touched `~/.local/share/icons/hicolor` again
   (the icon file absent), so GNOME Shell drops the cached icon and a TV icon after **Add to menu**
   can only come from the fix.
+- **4.6, 4.7 (the release) and 4.10 on the fix's binary** (owner, 2026-11-05, 20:30-20:32;
+  "od 1 do 7 wszystko ok", and a screenshot for the removal). The Windows key and `cast` in the
+  search field, Esc (so GNOME Shell rescans hicolor, the icon file absent). Started
+  `~/Downloads/s12-phase4-fix/cast-tv-linux-x64` from a terminal, **Add to menu**: "Added: find
+  cast-tv in the applications menu."; the entry (`Exec=` that file) and the icon were written at
+  20:30:20 and the theme folder's time moved with them. Closed with X; the Windows key and
+  `cast-tv`: the cast-tv tile showed the **TV icon at once**, no `touch` by Claude. Clicked: the
+  window opened at 20:30:48 with no terminal; Alt+Tab showed the TV icon. The first "ok" came
+  before the removal (Claude found the entry still there and cast-tv running, `/api/status`
+  `installed: true`); then **Remove from menu** (owner's screenshot): "Removed from the menu.",
+  the button back to **Add to menu**. Claude checked at 20:32: `cast-tv.desktop` and the icon gone,
+  the theme folder's time 20:32:08. Rows 4.6 and 4.10 accepted (4.10's Windows part above; the
+  fix touches only the Linux path). 4.7's checkout and pipx runs are still to do.
