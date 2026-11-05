@@ -155,7 +155,7 @@ class MenuEntry:
     """The menu entry of this machine and this running file; every outside dependency can be injected."""
 
     def __init__(self, platform=None, environ=None, home=None, run=subprocess.run, frozen=None,
-                 executable=None, which=shutil.which, root=None, config=None):
+                 executable=None, which=shutil.which, root=None, config=None, argv0=None):
         self.platform = platform or sys.platform
         self.environ = os.environ if environ is None else environ
         self.home = home or os.path.expanduser("~")
@@ -163,6 +163,7 @@ class MenuEntry:
         self.frozen = getattr(sys, "frozen", False) if frozen is None else frozen
         self.executable = executable or sys.executable
         self.which = which
+        self.argv0 = argv0
         self.root = root
         self._config = config
         self._lock = threading.Lock()
@@ -181,10 +182,22 @@ class MenuEntry:
         root = self.root if self.root is not None else checkout_root()
         if root:
             return Command((self.executable, "-m", "castlib"), root)        # checkout_root() is absolute
-        launcher = self.which(NAME)
+        launcher = self._own_launcher() or self.which(NAME)
         if launcher:
             return Command((launcher,))
         return Command((self.executable, "-m", "castlib"))
+
+    def _own_launcher(self) -> str | None:
+        """The ``cast-tv`` script that started this process, on Linux. PATH may name another one, or none:
+        the old symlink install next to pipx, or a desktop session's PATH without the launcher's folder
+        (row 4.7, 2026-11-05). Windows keeps ``which``: its launcher is an .exe, accepted in row 4.8."""
+        if self.platform == "win32":
+            return None
+        arg = self.argv0 if self.argv0 is not None else (sys.argv[0] if sys.argv else "")
+        if os.path.basename(arg) != NAME:
+            return None
+        path = os.path.abspath(arg)                    # not realpath: pipx's bin/ symlink outlives a reinstall
+        return path if os.path.isfile(path) else None
 
     # ---------------------------------------------------------------- where
     def _data_home(self) -> str:
