@@ -92,20 +92,22 @@ has no network address" (accepted at d607d09).
    (Get-Item .\cast-tv-windows-x64.exe).Length
    ```
    The length should be 26121290. Tell Claude each row's result; Claude records it and ticks the row.
-   - [ ] **4.5:** in File Explorer, open `Downloads\s12-phase4`: `cast-tv-windows-x64.exe` shows the
+   - [x] **4.5:** in File Explorer, open `Downloads\s12-phase4`: `cast-tv-windows-x64.exe` shows the
      amber TV icon (press F5 if Explorer still shows a generic one). Double-click it: the cast-tv
      window's title bar and its taskbar button show the same icon.
+     — accepted 2026-11-05 at c21e2b6 (`research.md`).
    - [ ] **4.8:** in that window, under "Open on your phone", click **Add to Start menu**: next to
      it "Added: find cast-tv in Start." appears and the button turns into **Remove from menu**.
      Close the window with X. Press the Windows key, type `cast-tv`: the entry shows the icon;
      press Enter: the window opens and no console window appears. Right-click its taskbar button →
      **Pin to taskbar**, close the window with X, click the pinned icon: the window opens again.
      Close it with X.
-   - [ ] **4.9:** in PowerShell, `Move-Item .\cast-tv-windows-x64.exe .\moved\; .\moved\cast-tv-windows-x64.exe`.
+   - [x] **4.9:** in PowerShell, `Move-Item .\cast-tv-windows-x64.exe .\moved\; .\moved\cast-tv-windows-x64.exe`.
      The button in the window reads **Update menu entry (points to another file)**; click it: it
      turns into **Remove from menu**. Close with X, start cast-tv from Start: the window opens
      (Task Manager → Details → right-click `cast-tv-windows-x64.exe` → Open file location opens
      `moved`). Close it with X.
+     — accepted 2026-11-05 at c21e2b6.
    - [ ] **4.8, pipx and checkout:** in `C:\Source\cast-tv`:
      `.\.venv\Scripts\pip install -e ".[window]"; Set-Location $HOME; C:\Source\cast-tv\.venv\Scripts\python -m castlib`.
      The window shows **Update menu entry (points to another file)**; click it, close with X, start
