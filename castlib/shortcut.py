@@ -282,18 +282,29 @@ class MenuEntry:
                 pass
             except OSError as e:
                 raise ConfigError("menu_failed", "The menu entry could not be removed: %s" % e)
+        if self.platform != "win32":
+            self._touch_icon_theme()
         return self._remember(self.state())
 
     def _write_desktop(self, command: Command) -> None:
         icon = self.icon_path()
         os.makedirs(os.path.dirname(icon), exist_ok=True)
         shutil.copyfile(ICON_PNG, icon)
+        self._touch_icon_theme()
         path = self.path()
         os.makedirs(os.path.dirname(path), exist_ok=True)
         tmp = path + ".tmp"
         with open(tmp, "w", encoding="utf-8", newline="\n") as fh:
             fh.write(desktop_text(command))
         os.replace(tmp, path)
+
+    def _touch_icon_theme(self) -> None:
+        """Bump the theme folder's time, as ``xdg-icon-resource`` does: GNOME Shell rescans an icon theme
+        only when that folder changes, not when a file lands in ``256x256/apps`` (row 4.7, 2026-11-05)."""
+        try:
+            os.utime(os.path.join(self._data_home(), "icons", "hicolor"))
+        except OSError:
+            pass                                       # the entry still works; the icon shows after a re-login
 
     def _powershell(self, script: str, env: dict):
         full = dict(self.environ)

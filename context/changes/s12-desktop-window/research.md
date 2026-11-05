@@ -1383,3 +1383,30 @@ bookkeeping): the exe from release run 42072787694, downloaded into `Downloads\s
   in `Downloads` (the moved one with the cast-tv icon; six older builds of 2026-10-13 to 11-04 with
   PyInstaller's default icon): Windows Search indexing the files, not a menu entry. The row stays
   open until the Fedora part.
+
+## Manual rows 4.6 and 4.7 on Fedora: the menu entry's gear (2026-11-05)
+
+Fedora (GNOME Shell 51.1, Wayland, icon theme Tela-circle-orange-dark), the owner. PR #97 at
+9609f12: `cast-tv-linux-x64` from release run 42072787694 in `~/Downloads/s12-phase4`,
+260,585,144 bytes (`stat -c %s`); `--version` ends `Window: qtwebengine`.
+
+- **4.6 before 4.7** (owner's screenshot, 20:0x): the window opened from the terminal; the window
+  switcher shows a gear for it. Expected: the window's `app_id` is `cast-tv`
+  (`castlib/window.py`), and no `cast-tv.desktop` existed yet.
+- **Add to menu** (owner): the control sits at the top right, under the TV pill, not under "Open on
+  your phone" as `temp_steps.md` said. It printed "Added: find cast-tv in the applications menu."
+  and turned into **Remove from menu**; the open window kept its gear. Claude checked
+  `~/.local/share/applications/cast-tv.desktop` (written 20:03: `Exec=` the downloaded file,
+  `Icon=cast-tv`, `StartupWMClass=cast-tv`; `desktop-file-validate` silent) and
+  `~/.local/share/icons/hicolor/256x256/apps/cast-tv.png` (12,958 bytes, 20:03).
+- **Finding** (owner's screenshot, 20:06): Super + `cast-tv` lists the **cast-tv** app with a
+  **gear**. A fresh GTK 4 process found the icon (`IconTheme.has_icon('cast-tv')` true), so the file
+  was right and GNOME Shell's loaded theme was stale. `256x256/apps` already existed (Chrome's
+  and Steam's icons), so writing a file there changed only that folder; the theme folder
+  `~/.local/share/icons/hicolor` kept its time of 2026-10-01, and GTK rescans a theme only when
+  the theme folder's time changes. Claude ran `touch ~/.local/share/icons/hicolor` (20:07); at
+  20:10 (owner's screenshot) the same search showed cast-tv with the amber TV icon. Cause confirmed.
+- **Fix**: `MenuEntry` bumps the theme folder's time after writing the icon and after removing it,
+  as `xdg-icon-resource` does (`castlib/shortcut.py`, `_touch_icon_theme`); the test
+  `test_install_and_remove_bump_the_icon_theme_folder` failed without it. Rows 4.6 and 4.7 are
+  run again on the fix's Linux binary.

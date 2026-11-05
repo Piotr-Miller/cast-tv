@@ -83,6 +83,19 @@ def test_install_writes_the_entry_and_the_icon(tmp_path):
     assert icon.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
 
 
+def test_install_and_remove_bump_the_icon_theme_folder(tmp_path):
+    # GNOME Shell rescans hicolor only when the theme folder's time changes (row 4.7, 2026-11-05)
+    entry = linux(tmp_path)
+    theme = tmp_path / ".local" / "share" / "icons" / "hicolor"
+    (theme / "256x256" / "apps").mkdir(parents=True)
+    os.utime(theme, (1, 1))
+    entry.install()
+    assert theme.stat().st_mtime > 1
+    os.utime(theme, (1, 1))
+    entry.remove()
+    assert theme.stat().st_mtime > 1
+
+
 def test_xdg_data_home_is_respected(tmp_path):
     entry = MenuEntry(platform="linux", environ={"XDG_DATA_HOME": str(tmp_path / "data")}, home=str(tmp_path / "h"),
                       frozen=True, executable="/x")
