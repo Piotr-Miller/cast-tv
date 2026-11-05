@@ -3,7 +3,7 @@ project: cast-tv
 version: 1
 status: active
 created: 2026-09-19
-updated: 2026-10-26
+updated: 2026-11-05
 prd_version: 1
 main_goal: personal-use-then-share
 top_blocker: time
@@ -48,6 +48,7 @@ conversion and the cast supervisor. Delivered with `cloud-source-ui` (PR #1, 202
 | S-13 | s13-gopro-auth | connect GoPro without copying a token by hand | S-03 | FR-010 | done |
 | S-14 | (proposed) | cast to Google TV and Chromecast devices, not only DLNA TVs | S-02 | — | proposed |
 | S-15 | s15-share-link-album | cast an album from a share link | S-09 | FR-012 | parked (2026-10-15): the picker covers the owner's own albums |
+| S-16 | (proposed) | start the release file faster (and smaller, if it can be), especially on Linux | S-12 | NFR platforms | proposed |
 
 ## Streams
 
@@ -209,6 +210,25 @@ plan. The ideas under each are starting points, not findings.
   entries hold every item's base, and its kind sits in undocumented keys (`"76647426"` video,
   `"146008172"` motion photo). Reopen if albums from other people's libraries are wanted; large
   albums (paging) were never measured.
+
+### S-16: A faster-starting release file
+
+- **Phase:** phase:post-mvp
+- **Owner's words:** (2026-11-05, after reading about `scriptc`, which compiles TypeScript to
+  native executables) "maybe is similar tool for python scripts for desktop win and linux apps"
+- **Starting point:** the S-12 release is a PyInstaller onefile that unpacks itself on every
+  start: Linux 260.6 MB, Windows 26.1 MB (PR #97's run 42072787694). Most of the Linux size is Qt
+  WebEngine (Chromium), which no Python compiler shrinks; Windows uses the system's WebView2.
+- **To find out:** whether Nuitka (Python compiled to C; standalone and onefile on Windows and
+  Linux, a PySide6 plugin) builds cast-tv with pywebview, PySide6 and pillow-heif; whether its
+  onefile can unpack once into a fixed cache directory (`--onefile-tempdir-spec`) and reuse it on
+  later starts; the start time and size against PyInstaller on the Fedora desktop and the Windows
+  laptop; whether `--window-check` still passes on the expected engine. The other way out, a
+  Linux onedir archive, is the fallback S-12's plan already names.
+- **Not candidates:** Codon (a subset of Python, no arbitrary pip packages), mypyc (still needs
+  CPython, no single file), Briefcase (installers, a PRD Non-Goal).
+- **Ideas:** a spike build in CI next to the PyInstaller one, measured by `packaging/smoke.py`;
+  switch only if the start is clearly faster and the smoke test passes on both systems.
 
 ## Open Roadmap Questions
 
