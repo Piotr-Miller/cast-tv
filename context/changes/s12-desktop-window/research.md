@@ -961,7 +961,7 @@ Row 2.8 rests on the cast that played, so it stands.
 
 ## Phase 3: the release builds (2026-10-27)
 
-Implemented on Fedora (PR #89, commit 0561081). The PR's test run 40578872429 passed on
+Implemented on Fedora (PR #89, commit 3712375). The PR's test run 40578872429 passed on
 `ubuntu-latest` and `windows-latest`. Its release run 40578872547 built and smoke-tested both
 files:
 
@@ -1022,7 +1022,7 @@ to the checkout) and the page reloaded. The owner clicked Copy and scanned the Q
 Row 3.9's criterion (the phone panel and QR codes work in the Qt window) is met with the fix.
 The checks of the rebuilt binary are below.
 
-**The rebuilt binary** (Claude, 2026-10-27). PR #89's release run 40580688484, built from 1134162:
+**The rebuilt binary** (Claude, 2026-10-27). PR #89's release run 40580688484, built from 4e26f7f:
 Windows `size: 26086907 bytes`, `window-check: edgechromium OK (7.9 s)`; Linux `size: 260510504
 bytes`, SHA-256 `b75a2e2d906cdfaaf4e2ef6fa674e4f4edee4799d4ecfcee65df298877dc432b`,
 `window-check: qtwebengine OK (3.2 s)`; both `POST /api/quit: ended, port 8099 free`. Its Qt
@@ -1146,7 +1146,7 @@ the token file), and `test_cli.py::test_cast_replaced_from_the_ui_keeps_serving`
 (`'App' object has no attribute 'current'`, read before `__init__` finished; alone it passes).
 CI decides. Row 3.8 is to be run again on the PR's new release exe.
 
-**The fix's builds** (Claude, 2026-10-28). PR #89 at 731ccab: test run 40750043256 green on
+**The fix's builds** (Claude, 2026-10-28). PR #89 at 55f5c12: test run 40750043256 green on
 `ubuntu-latest` and `windows-latest`. Release run 40750049252: Windows `size: 26089838 bytes`,
 `POST /api/quit: ended, port 8099 free`, `window-check: edgechromium OK (7.2 s)`; Linux
 `size: 260518120 bytes`, the same quit line, `window-check: qtwebengine OK (5.3 s)`.
@@ -1180,7 +1180,7 @@ Locally 457 passed, 5 skipped, and only `test_token_file_mode_0600` failed (as b
 laptop).
 
 **The fallback on the fix's exe** (the owner, the work laptop, 2026-10-28). Release run
-40760424209, built from acc256e: Windows `size: 26088117 bytes`, `window-check: edgechromium OK
+40760424209, built from 7861809: Windows `size: 26088117 bytes`, `window-check: edgechromium OK
 (7.6 s)`; Linux `size: 260517152 bytes`, `window-check: qtwebengine OK (5.3 s)`; both `POST
 /api/quit: ended, port 8099 free`. Test run 40760424122 is green on both systems. The exe was
 downloaded into `Downloads\s12-phase3c`: 26,088,117 bytes, SHA-256
@@ -1198,8 +1198,8 @@ downloaded into `Downloads\s12-phase3c`: 26,088,117 bytes, SHA-256
 
 ## Manual rows 3.6-3.12 on the home Windows machine (2026-11-04)
 
-Windows 11 Pro 10.0.26300 (`DESKTOP-35JAM1C`), PR #89 at 2bab65f (acc256e plus `main`'s
-ai-toolkit pins; no code change). The exe from release run 40760424209, downloaded into
+Windows 11 Pro 10.0.26300 (`DESKTOP-35JAM1C`), PR #89 at the merge 2bab65f, whose tree is 55a1e9b on `main`
+(7861809 plus `main`'s ai-toolkit pins; no code change). The exe from release run 40760424209, downloaded into
 `Downloads\s12-phase3c`: 26,088,117 bytes, `--version` ends `Window: edgechromium`. IPv4:
 Wi-Fi 192.168.50.213 (the default route), Hyper-V `vEthernet (Default Switch)` 172.18.48.1,
 several 169.254.x (Tentative). The TV: 83" OLED at 192.168.50.142. `HKCU\Console\%%Startup`
@@ -1263,7 +1263,7 @@ startup failure always gets the message box. Tests:
 `test_a_copy_without_a_console_takes_over_before_anything_starts`. Rows 3.10-3.12 run again on the
 fix's exe.
 
-**Row 3.10 on the fix's first exe** (release run 41918241584, built from 7e85338: Windows `size:
+**Row 3.10 on the fix's first exe** (release run 41918241584, built from be7891d: Windows `size:
 26096231 bytes`, `window-check: edgechromium OK (9.7 s)`; Linux `size: 260519808 bytes`,
 `window-check: qtwebengine OK (7.5 s)`; both `POST /api/quit: ended, port 8099 free`; test run
 41918241724 green). Downloaded into `Downloads\s12-phase3d`: 26,096,231 bytes, SHA-256
@@ -1282,7 +1282,7 @@ Side observation: in that run the photo never played (`tv_fetched_nothing`). The
 which is what Windows writes when its "allow access" prompt is cancelled or dismissed. Not a
 cast-tv fault; the next exe goes to an already allowed path.
 
-**Rows 3.10-3.12 on the second exe** (release run 41919804753, built from 8b7418a: Windows `size:
+**Rows 3.10-3.12 on the second exe** (release run 41919804753, built from 16b7a1d: Windows `size:
 26096516 bytes`, `window-check: edgechromium OK (10.9 s)`; Linux `size: 260520216 bytes`,
 `window-check: qtwebengine OK (5.6 s)`; both `POST /api/quit: ended, port 8099 free`; test run
 41919804796 green). Copied over the exe in `Downloads\s12-phase3c` (that path has Allow rules):
@@ -1313,11 +1313,11 @@ interrupt the main thread, as Python's own handler would). The earlier ctypes ca
 alive. Tests: `test_console_close_takes_ctrl_c_after_a_new_console`, and
 `test_the_copy_without_a_console_gets_one_and_a_box` checks the new registration.
 
-**Rows 3.10-3.12 on the third exe** (release run 41921369531, built from 7415a17: Windows `size:
+**Rows 3.10-3.12 on the third exe** (release run 41921369531, built from d607d09: Windows `size:
 26097484 bytes`, `window-check: edgechromium OK (7.8 s)`; Linux `size: 260530344 bytes`,
 `window-check: qtwebengine OK (5.1 s)`; both `POST /api/quit: ended, port 8099 free`). Its test run
 41921369568 failed on `ubuntu-latest` only: the new `test_console_close_takes_ctrl_c_after_a_new_console`
-had been inserted under the `skipif` of the next test, which then ran off Windows. e2744c3 moves the
+had been inserted under the `skipif` of the next test, which then ran off Windows. 5190543 moves the
 decorator back (tests only, so the exe is the same code). Copied over the exe in
 `Downloads\s12-phase3c`: 26,097,484 bytes, SHA-256
 `66e2a932afe6bfa51dd71b52652115a850fc735a9e804a83a986f8bde9f91c6c`. Claude's script as before:
@@ -1339,13 +1339,13 @@ decorator back (tests only, so the exe is the same code). Copied over the exe in
 
 Not seen in these runs: the browser tab's "cast-tv is not answering" after 3.12's close. That is the
 page's own check and nothing on this path changed it; it was seen on the work laptop (2026-10-28).
-e2744c3: test run 41921951579 and release run 41921951505 green on both systems. Rows 3.10, 3.11 and 3.12 accepted at 7415a17.
+5190543: test run 41921951579 and release run 41921951505 green on both systems. Rows 3.10, 3.11 and 3.12 accepted at d607d09.
 
 **Row 3.8, with Hyper-V's adapter off** (the owner, the home machine, 2026-11-04, the same exe:
-26,097,484 bytes, built from 7415a17). In PowerShell as administrator,
+26,097,484 bytes, built from d607d09). In PowerShell as administrator,
 `Disable-NetAdapter -Name 'vEthernet (Default Switch)'`; Wi-Fi turned off in the taskbar's network
 menu; the exe started. The window (owner's screenshot): "Open on your phone" said "This computer
 has no network address. Connect it to Wi-Fi or Ethernet." and listed no address; "No TV found",
 "Searched on: default route — 0 responses". Closed with X, the adapter enabled again, Wi-Fi back
 on. Claude then found `vEthernet (Default Switch)` 172.18.48.1 and `Wi-Fi 2` 192.168.50.213 both
-`Up` and `Preferred`, and no `cast-tv*` process. Row 3.8 accepted at 7415a17.
+`Up` and `Preferred`, and no `cast-tv*` process. Row 3.8 accepted at d607d09.

@@ -3,7 +3,7 @@ change_id: s12-desktop-window
 title: "Run cast-tv as a desktop window on Windows and Linux"
 status: implementing
 created: 2026-10-15
-updated: 2026-11-04
+updated: 2026-11-05
 archived_at: null
 ---
 
@@ -30,3 +30,4 @@ Run cast-tv as a desktop window on Windows and Linux (roadmap S-12)
 2026-10-28: owner decision — row 3.8's finding (Windows keeps a disconnected adapter's address as Deprecated, and the phone panel listed it) is fixed on PR #89: the address list and discovery skip IPv4 addresses that are not Preferred (castlib/discovery.py stale_addresses, castlib/app.py); rows 3.6 and 3.8 get castlib/app.py and castlib/discovery.py in their surfaces. 3.9 stays accepted: off Windows nothing is stale, so the Linux list is unchanged (test_stale_addresses_only_on_windows)
 2026-10-28: owner decision — row 3.12's side finding is fixed on PR #89: the console prints "Close the window or press Ctrl+C" only once the window is shown (window.run's on_shown), so a fallback prints only "No cast-tv window ...; Ctrl+C ends it" (castlib/cli.py, castlib/window.py, castlib/app.py). No accepted row's surface is newly touched: 1.8-1.16 and 2.6-2.9 are already reopened, 3.9 lists only the UI and server files
 2026-11-04: owner decision — row 3.10's finding (on Windows 11's default terminal a double-click opens the console in Windows Terminal, and hide-early cannot hide that window) is fixed on PR #89: the release, double-clicked into a Windows Terminal console, starts a copy of itself without a console and exits (castlib/platform.py leave_terminal_tab, castlib/cli.py). The copy gets a new console on a fallback and a message box on a startup failure. Rows 3.10-3.12 run again on the new exe; 3.6 and 3.7 do not list castlib/cli.py or castlib/platform.py and stay accepted
+2026-11-05: PR #89 was merged by rebase (main 46d5d76): every PR commit has a new SHA with the same tree; Progress 3.1-3.12, research.md and temp_steps.md rewritten (8f75b06 -> 46d5d76, 7415a17 -> d607d09, efac3c5 -> 05508af, ...). Rows 3.6 and 3.7 were accepted at the branch's merge commit 2bab65f, which has no counterpart on main; its tree is 55a1e9b's, so they are accepted at 55a1e9b. 3.9's efac3c5 and 05508af differ only in .ai-toolkit/config.json and README.md (the ai-toolkit pins)

@@ -1,4 +1,4 @@
-# Next steps (2026-11-04, PR #89: every Phase 3 row accepted; merge it)
+# Next steps (2026-11-05, Phase 3 is on main; next: Phase 4)
 
 The standing note for a pause in the work (a reboot, a switch of machine): it stays in the
 repository and is overwritten at the next pause.
@@ -10,7 +10,7 @@ recorded row, the PR or commit.
 
 - S-12 Phases 1 and 2 are on `main`. Phase 3 reopened 1.14, 1.16 and 2.6-2.9 (`change.md`,
   2026-10-27); with 1.8-1.13 and 1.15 they are confirmed again once, in step 15a.
-- **Phase 3 is PR #89** (branch `s12-phase3`). Rows 3.1-3.5 are done, 3.9 (Fedora) is accepted.
+- **Phase 3 is on `main`** (PR #89, rebase merge 2026-11-05, main 46d5d76). Every row 3.1-3.12 is done.
 - **2026-10-28, on the Intune work laptop** (`C:\Source\Trainings\AI\cast-tv`; its MDM rule
   "Block InBound connection Public Private" blocks every inbound connection, so neither the TV nor
   the phone can reach it). Every part that needs no inbound connection passed, on run
@@ -19,15 +19,15 @@ recorded row, the PR or commit.
   - 3.10: a double-click shows only the window, X ends everything;
   - 3.11: `Stopped.`, the window closes, **no** `atexit` traceback (row 2.6's finding is fixed);
   - 3.12: the console comes back on the fallback; the error box and the text-only terminal error.
-- **Row 3.8 failed and is fixed** in 6878387. With Wi-Fi off, Windows keeps the Wi-Fi address as
+- **Row 3.8 failed and is fixed** in 3dd7f1b. With Wi-Fi off, Windows keeps the Wi-Fi address as
   `Deprecated` and the panel listed it. Addresses that are not `Preferred` are now skipped. On
   run 40750049252's exe, with Wi-Fi off, the work laptop listed only its two Hyper-V addresses
   (2026-10-28); the "no network address" message itself needs a machine without them.
-- **Row 3.12's side finding is fixed** in acc256e: "Close the window or press Ctrl+C" is printed
+- **Row 3.12's side finding is fixed** in 7861809: "Close the window or press Ctrl+C" is printed
   only once the window shows, so a fallback prints only "No cast-tv window ...; Ctrl+C ends it".
   Checked on the work laptop on run 40760424209's exe (2026-10-28).
 - **The exe for the remaining rows** comes from PR #89's release run 40760424209 (built from
-  acc256e): Windows 26088117 bytes, `window-check: edgechromium OK`; Linux 260517152 bytes. Test
+  7861809): Windows 26088117 bytes, `window-check: edgechromium OK`; Linux 260517152 bytes. Test
   run 40760424122 is green on both systems.
 - Locally on the work laptop, `test_onedrive.py::test_token_file_mode_0600` always fails and
   `test_cli.py::test_cast_replaced_from_the_ui_keeps_serving` sometimes does, with or without
@@ -36,15 +36,15 @@ recorded row, the PR or commit.
   entries named only "Device N"). "No TV found" while the TV is on and
   `curl http://192.168.50.142:9197/dmr` answering 401 means that list, not cast-tv.
 
-## Now: the home Windows machine, PR #89's remaining rows
+## Done: the home Windows machine, PR #89's remaining rows
 
 **2026-11-04, the home machine** (`research.md`, "Manual rows 3.6-3.12 on the home Windows
-machine"): 3.6 and 3.7 accepted at 2bab65f. 3.10 failed on Windows Terminal (this machine's
-default terminal) and is fixed in b56aba8, 8b7418a and 7415a17: a double-click starts a copy
+machine"): 3.6 and 3.7 accepted at 55a1e9b. 3.10 failed on Windows Terminal (this machine's
+default terminal) and is fixed in 6fc8930, 16b7a1d and d607d09: a double-click starts a copy
 without a console, and the Terminal window shows for about 2-4 s. 3.10-3.12 are accepted at
-7415a17 on release run 41921369531's exe (in `Downloads\s12-phase3c`). 3.8: with Wi-Fi off the
+d607d09 on release run 41921369531's exe (in `Downloads\s12-phase3c`). 3.8: with Wi-Fi off the
 panel listed only Hyper-V's 172.18.48.1; with that adapter disabled too, it said "This computer
-has no network address" (accepted at 7415a17).
+has no network address" (accepted at d607d09).
 
 
 - [x] 8. **Home Windows 11**, in PowerShell, in `C:\Source\cast-tv`:
@@ -74,7 +74,8 @@ has no network address" (accepted at 7415a17).
      Cast a photo from the browser tab, then close the console window that appeared with its X:
      the TV stops and the tab shows "cast-tv is not answering". Then
      `Remove-Item Env:CAST_TV_WINDOW_FAIL`.
-- [ ] 9. **You:** merge PR #89 once the rows pass (or say what failed; Claude fixes it first).
+- [x] 9. **You:** merge PR #89 once the rows pass (or say what failed; Claude fixes it first).
+  — 2026-11-05, rebase merge, main 46d5d76; SHAs rewritten from main.
 
 ## Phase 4: icon and menu entry
 
@@ -121,5 +122,4 @@ has no network address" (accepted at 7415a17).
 
 ## How to resume with Claude
 
-Write "co dalej" in the cast-tv checkout. Until PR #89 is merged, work on its branch:
-`git fetch; git switch s12-phase3; git pull`. After the merge: `git switch main; git pull`.
+Write "co dalej" in the cast-tv checkout, on an up-to-date `main`: `git switch main; git pull`.
