@@ -1,11 +1,23 @@
-"""Draft of the cast-tv icon: an amber TV with the cast arcs, on a dark warm rounded square."""
+"""The cast-tv icon: an amber TV with the cast arcs, on a dark warm rounded square.
+
+Writes the two committed package resources; the build does not run this script.
+
+    python packaging/make_icon.py                 # castlib/ui/icon.png (256 px) and castlib/ui/cast-tv.ico
+    python packaging/make_icon.py --preview DIR   # also DIR/preview.png: every size on dark and light
+
+The design was approved by the owner on 2026-10-27 (s12-desktop-window, plan.md Phase 4).
+"""
+import os
 import sys
+
 from PIL import Image, ImageDraw
 
 AMBER = (232, 163, 61, 255)          # --accent, #e8a33d
 AMBER_SOFT = (246, 196, 120, 255)
 BG_TOP = (44, 38, 32, 255)
 BG_BOTTOM = (24, 21, 18, 255)
+ICO_SIZES = [16, 24, 32, 48, 64, 128, 256]
+UI_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "castlib", "ui")
 
 
 def draw(size=1024):
@@ -39,20 +51,27 @@ def draw(size=1024):
     return img
 
 
-if __name__ == "__main__":
-    out = sys.argv[1]
-    big = draw(1024)
-    big.resize((256, 256), Image.LANCZOS).save(out + "/icon.png")
-    big.save(out + "/icon-1024.png")
-    sizes = [16, 24, 32, 48, 64, 128, 256]
-    big.save(out + "/cast-tv.ico", sizes=[(n, n) for n in sizes])
-    # a preview: every size on the app's dark background and on a light one
-    sheet = Image.new("RGBA", (40 + sum(n + 24 for n in sizes), 2 * 300), (255, 255, 255, 255))
+def preview(big, path):
+    """Every ICO size on the app's dark background and on a light one."""
+    sheet = Image.new("RGBA", (40 + sum(n + 24 for n in ICO_SIZES), 2 * 300), (255, 255, 255, 255))
     ImageDraw.Draw(sheet).rectangle([0, 0, sheet.width, 300], fill=(30, 30, 30, 255))
     x = 20
-    for n in sizes:
+    for n in ICO_SIZES:
         small = big.resize((n, n), Image.LANCZOS)
         for row in (0, 1):
             sheet.alpha_composite(small, (x, row * 300 + (300 - n) // 2))
         x += n + 24
-    sheet.save(out + "/preview.png")
+    sheet.save(path)
+
+
+def main(argv):
+    big = draw(1024)
+    big.resize((256, 256), Image.LANCZOS).save(os.path.join(UI_DIR, "icon.png"), optimize=True)
+    big.save(os.path.join(UI_DIR, "cast-tv.ico"), sizes=[(n, n) for n in ICO_SIZES])
+    if argv[:1] == ["--preview"] and len(argv) == 2:
+        preview(big, os.path.join(argv[1], "preview.png"))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

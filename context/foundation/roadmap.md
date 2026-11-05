@@ -3,7 +3,7 @@ project: cast-tv
 version: 1
 status: active
 created: 2026-09-19
-updated: 2026-10-26
+updated: 2026-11-05
 prd_version: 1
 main_goal: personal-use-then-share
 top_blocker: time
@@ -44,7 +44,7 @@ conversion and the cast supervisor. Delivered with `cloud-source-ui` (PR #1, 202
 | S-09 | s09-share-link-photos | cast a photo or a motion photo's clip from a share link | S-05 | FR-012 | done |
 | S-10 | (not opened) | connect Google Photos with any Google account, without weekly re-consent | S-08 | US-04 | parked |
 | S-11 | s11-screensaver | watch a slideshow or a long film without the TV's screen saver cutting in | S-02 | US-03 | done |
-| S-12 | (proposed) | run cast-tv as a desktop window on Windows and Linux, not only a browser tab | S-08 | — | proposed |
+| S-12 | s12-desktop-window | run cast-tv as a desktop window on Windows and Linux, not only a browser tab | S-08 | — | in-progress |
 | S-13 | s13-gopro-auth | connect GoPro without copying a token by hand | S-03 | FR-010 | done |
 | S-14 | (proposed) | cast to Google TV and Chromecast devices, not only DLNA TVs | S-02 | — | proposed |
 | S-15 | s15-share-link-album | cast an album from a share link | S-09 | FR-012 | parked (2026-10-15): the picker covers the owner's own albums |
@@ -139,6 +139,9 @@ plan. The ideas under each are starting points, not findings.
 ### S-12: A desktop UI on Windows and Linux
 
 - **Phase:** phase:post-mvp
+- **Change:** `context/changes/s12-desktop-window/`
+- **Change ID:** s12-desktop-window
+- **Status:** in-progress
 - **Owner's words:** "Desktop UI (Win/Linux) zamiast WebUI" ("a desktop UI (Win/Linux) instead
   of the web UI")
 - **To decide:** replace the web UI or wrap it. The phone flow (S-02, the north star) needs the

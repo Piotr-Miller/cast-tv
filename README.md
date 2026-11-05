@@ -26,11 +26,16 @@ laptop's disk (or through the laptop from the cloud), and the remote drives seek
 **Download** (nothing else to install): the latest
 [release](https://github.com/Piotr-Miller/cast-tv/releases) has one file per system.
 
-- **Windows**: `cast-tv-windows-x64.exe`. The file is not signed, so the first start shows
-  "Windows protected your PC": click **More info → Run anyway**. Allow it on private networks
-  when the firewall asks.
+- **Windows**: `cast-tv-windows-x64.exe`. Double-click it: cast-tv opens in its own window. The
+  file is not signed, so the first start shows "Windows protected your PC": click **More info →
+  Run anyway**. Allow it on private networks when the firewall asks.
 - **Linux** (x86-64, glibc 2.35 or newer, e.g. Fedora): `cast-tv-linux-x64`, then
-  `chmod +x cast-tv-linux-x64 && ./cast-tv-linux-x64`.
+  `chmod +x cast-tv-linux-x64 && ./cast-tv-linux-x64`; it opens in its own window.
+
+Keep the file where it is, then click **Add to Start menu** (Windows) or **Add to menu** (Linux)
+in the window: cast-tv appears in Start or in the applications overview with its icon, and starts
+from there without a console. After moving the file, start it once from the new place and click
+**Update menu entry**; **Remove from menu** takes the entry away again. Nothing else is installed.
 
 The download is `cast-tv` only - the UI and the command line below; `cast-gopro` and
 `cast-photos` come with the pipx install. `cast-tv --version` says whether the Google Photos
@@ -50,6 +55,13 @@ py -m pipx ensurepath          # then open a new terminal
 pipx install git+https://github.com/Piotr-Miller/cast-tv
 ```
 
+That install opens the UI in a browser tab. For the cast-tv window, add the `window` extra
+(pywebview with WebView2 on Windows, Qt WebEngine on Linux; about 250 MB on Linux):
+
+```bash
+pipx install --force "cast-tv[window] @ git+https://github.com/Piotr-Miller/cast-tv"
+```
+
 Dependencies come with it: `pillow` and `pillow-heif` (photo conversion), `ifaddr` (discovery on
 every network interface), `platformdirs` (config paths). `ffprobe` is optional and only used to
 warn about audio codecs the TV cannot decode; on Windows it is a manual download.
@@ -67,9 +79,11 @@ symlinked into `~/.local/bin`, the way this was installed before pipx.
 
 ## The UI
 
-`cast-tv` with no arguments starts the server on port 8895, prints its addresses - `localhost`,
-then every LAN address of the machine - and opens the browser. Open the LAN address on a phone
-on the same network and it is the same UI.
+`cast-tv` with no arguments starts the server on port 8895 and opens the UI in the cast-tv
+window - or in a browser tab, without the `window` extra, with `--no-window`, or when the window
+cannot open (Diagnostics then say why). **Open on your phone** in the window lists every LAN
+address of the machine, each with Copy and a QR code: open it on a phone on the same network and
+it is the same UI. Started from a terminal, cast-tv prints the addresses there too.
 
 - **The TV** is shown in the header: the first renderer discovery finds, or the one chosen
   before (remembered), or `-t` / `$CAST_TV`. Several renderers give a dropdown; none gives a
@@ -85,9 +99,11 @@ on the same network and it is the same UI.
   token, a TV that never fetched a byte (with the firewall command), DTS audio (with the
   `ffmpeg` line that fixes it), a source too heavy for the TV.
 
-The process stays in the foreground: it is what streams to the TV. `Ctrl+C` stops playback on
-the TV and ends it; on Windows, closing the console window does the same. Starting a second
-`cast-tv` while one runs opens the running one's UI instead.
+cast-tv runs while its window is open: it is what streams to the TV. **Closing the window**
+stops playback on the TV and ends it, and so do `Ctrl+C` in the terminal that started it, closing
+that console window on Windows, and signing out. A release started by a double-click or from the
+menu shows no console. In a browser tab, **Quit cast-tv** in the header does the same. Starting a
+second `cast-tv` while one runs brings its window to the front (or opens its UI in a tab).
 
 **Exposure.** The server listens on the LAN, because the TV has to reach it. `/api` and `/ui`
 answer only requests whose `Host` is this machine and whose `Origin`, if any, matches it, so a web

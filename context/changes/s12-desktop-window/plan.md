@@ -862,21 +862,21 @@ The Progress Manual rows, run on the Windows laptop and the Fedora desktop, each
 
 #### Manual
 
-- [x] 3.6 Windows window: the phone panel's QR opens the UI on the phone — accepted at 55a1e9b
-- [x] 3.7 The phone shows no phone panel and no Quit control — accepted at 55a1e9b
-- [x] 3.8 Offline: the panel says there is no network address — accepted at d607d09
-- [x] 3.9 Fedora: the phone panel and QR codes work in the Qt window — accepted at 05508af6cee36a67c599bd9328b1878089d63bf9
-- [x] 3.10 Windows double-click: only the window, closing it stops the TV — accepted at d607d09
-- [x] 3.11 Windows from PowerShell: output there, window opens, Ctrl+C stops both — accepted at d607d09
-- [x] 3.12 A fallback with a hidden console shows the console again — accepted at d607d09
+- [ ] 3.6 Windows window: the phone panel's QR opens the UI on the phone
+- [ ] 3.7 The phone shows no phone panel and no Quit control
+- [ ] 3.8 Offline: the panel says there is no network address
+- [ ] 3.9 Fedora: the phone panel and QR codes work in the Qt window
+- [ ] 3.10 Windows double-click: only the window, closing it stops the TV
+- [ ] 3.11 Windows from PowerShell: output there, window opens, Ctrl+C stops both
+- [ ] 3.12 A fallback with a hidden console shows the console again
 
 ### Phase 4: Icon and menu entry
 
 #### Automated
 
-- [ ] 4.1 Desktop entry and .lnk tests
-- [ ] 4.2 favicon serves the PNG and /api/shortcut is host-only
-- [ ] 4.3 The full suite passes
+- [x] 4.1 Desktop entry and .lnk tests
+- [x] 4.2 favicon serves the PNG and /api/shortcut is host-only
+- [x] 4.3 The full suite passes
 - [ ] 4.4 The release workflow on the PR is green
 
 #### Manual

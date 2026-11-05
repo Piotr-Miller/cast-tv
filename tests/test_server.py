@@ -73,12 +73,17 @@ def test_head_and_get_agree_on_length(server, local_file):
     assert h2["contentFeatures.dlna.org"].startswith("DLNA.ORG_OP=01")
 
 
-def test_root_redirects_and_favicon_is_empty(server):
+def test_root_redirects_and_favicon_is_the_icon(server):
+    from castlib.server import ICON_PNG
     srv, base = server
     status, headers, body, conn = request(base, "GET", "/")
     assert status == 302 and headers["Location"] == "/ui/"
     status, headers, body, _ = request(base, "GET", "/favicon.ico", conn=conn)
-    assert status == 204
+    assert status == 200 and headers["Content-Type"] == "image/png"
+    with open(ICON_PNG, "rb") as fh:
+        assert body == fh.read() and headers["Content-Length"] == str(len(body))
+    status, _, body, _ = request(base, "HEAD", "/favicon.ico", conn=conn)
+    assert status == 200 and body == b""
 
 
 def test_post_body_is_drained_under_keepalive(server):
@@ -93,7 +98,7 @@ def test_post_body_is_drained_under_keepalive(server):
     conn.request("GET", "/favicon.ico")
     resp = conn.getresponse()
     resp.read()
-    assert resp.status == 204
+    assert resp.status == 200
 
 
 def test_caption_header_only_on_the_video(server, local_file, tmp_path):
@@ -131,7 +136,7 @@ def test_rejected_ui_post_drains_body_once(server):
     conn.request("GET", "/favicon.ico")
     resp = conn.getresponse()
     resp.read()
-    assert resp.status == 204
+    assert resp.status == 200
 
 
 def test_idle_timeout_restored_after_media_transfer(server, local_file, monkeypatch):

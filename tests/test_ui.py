@@ -1,4 +1,4 @@
-"""The static UI: five files, exact match, nothing else."""
+"""The static UI: six files, exact match, nothing else."""
 from tests.conftest import request
 
 
@@ -12,13 +12,15 @@ def test_static_exact_match_only(server):
     for path, ctype in (("/ui/app.js", "application/javascript"),
                         ("/ui/style.css", "text/css"),
                         ("/ui/alpine.min.js", "application/javascript"),
-                        ("/ui/qrcode.js", "application/javascript")):
+                        ("/ui/qrcode.js", "application/javascript"),
+                        ("/ui/icon.png", "image/png")):
         status, headers, body, _ = request(base, "GET", path, conn=conn)
         assert status == 200, path
         assert headers["Content-Type"].startswith(ctype)
         assert headers["Content-Length"] == str(len(body)) and body
     for path in ("/ui/index.html", "/ui/../castlib/server.py", "/ui/app.js/", "/ui/x", "/ui/qrcode.mjs",
-                 "/ui/%2e%2e/pyproject.toml", "/ui/APP.JS"):
+                 "/ui/%2e%2e/pyproject.toml", "/ui/APP.JS",
+                 "/ui/cast-tv.ico"):
         status, headers, body, _ = request(base, "GET", path, conn=conn)
         assert status == 404, path
         assert headers["Content-Type"].startswith("application/json")
@@ -347,3 +349,50 @@ def test_copy_works_without_the_clipboard_permission():
     assert out["reads"] == ["Copied."]                      # no navigator in node: had it been asked, this fails
     refused = drive_ui([{"copy": False}, {"call": "copy", "args": [ADDRESSES[1], "address"]}])
     assert refused["copied"] == ["prompt: Copy this address: " + ADDRESSES[1]]
+
+
+LNK = r"C:\Users\u\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\cast-tv.lnk"
+DESKTOP = "/home/u/.local/share/applications/cast-tv.desktop"
+
+
+def _menu_status(shortcut, host=True):
+    return dict(_host_status(host, True), shortcut=shortcut)
+
+
+def test_menu_control_labels_follow_the_entry():
+    """One button, on the host only: Add, Update when the entry starts another file, Remove when it is current."""
+    html = _ui_text("index.html")
+    assert 'x-show="menuVisible()"' in html and 'menuAction()' in html and 'x-text="menuNote"' in html
+    out = drive_ui([
+        {"status": _menu_status({"installed": False, "current": False, "path": LNK})}, {"call": "refresh"},
+        {"read": "menuVisible"}, {"read": "menuLabel"},
+        {"status": _menu_status({"installed": False, "current": False, "path": DESKTOP})}, {"call": "refresh"},
+        {"read": "menuLabel"},
+        {"status": _menu_status({"installed": True, "current": False, "path": DESKTOP})}, {"call": "refresh"},
+        {"read": "menuLabel"},
+        {"status": _menu_status({"installed": True, "current": True, "path": DESKTOP})}, {"call": "refresh"},
+        {"read": "menuLabel"},
+        {"status": _menu_status(None)}, {"call": "refresh"}, {"read": "menuVisible"},
+        {"status": _menu_status({"installed": False, "current": False, "path": DESKTOP}, host=False)},
+        {"call": "refresh"}, {"read": "menuVisible"},
+    ])
+    assert out["reads"] == [True, "Add to Start menu", "Add to menu",
+                            "Update menu entry (points to another file)", "Remove from menu", False, False]
+
+
+def test_menu_action_keeps_its_message_across_polls():
+    """The button's answer is its own state (lessons.md); Update installs, a current entry is removed."""
+    stale = {"installed": True, "current": False, "path": DESKTOP}
+    out = drive_ui([
+        {"status": _menu_status(stale)}, {"call": "refresh"},
+        {"answer": {"path": "/api/shortcut", "body": {"error": {"code": "menu_failed",
+                                                                 "message": "The menu entry could not be written: denied"}}}},
+        {"call": "menuAction"}, {"call": "refresh"}, {"read": "menuNote"},
+        {"answer": {"path": "/api/shortcut", "body": {"installed": True, "current": True, "path": DESKTOP}}},
+        {"call": "menuAction"}, {"read": "menuLabel"}, {"call": "refresh"}, {"read": "menuNote"},
+    ])
+    failed, label, note = out["reads"]
+    assert failed == "The menu entry could not be written: denied"
+    assert label == "Remove from menu"                       # the answer counts before the next poll
+    assert note == "Added: find cast-tv in the applications menu."
+    assert out["requests"].count("POST /api/shortcut") == 2

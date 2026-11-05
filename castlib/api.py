@@ -16,7 +16,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from castlib import window
+from castlib import shortcut, window
 from castlib.errors import AuthError, CastError, ConfigError, NotMedia, TVError, UpstreamError
 from castlib.net import BEARER_SAFE
 
@@ -28,7 +28,7 @@ THUMB_LOOSE = ("", "application/octet-stream", "binary/octet-stream")   # CDNs t
 SHOW_CONTROLS = ("pause", "resume", "next", "prev", "stop")
 _SOURCE = re.compile(r"^/api/sources/([A-Za-z0-9_-]+)(?:/(status|connect|disconnect|list|thumb|pick|link))?(?:/(.+))?$")
 SOURCE_EXTRAS = ("pick", "link")   # POST steps a source may offer beyond the contract (Google Photos does)
-HOST_ONLY = ("/api/window", "/api/quit")   # loopback only: a second launch, the UI's Quit; never the phone
+HOST_ONLY = ("/api/window", "/api/quit", "/api/shortcut")   # loopback only: a second launch, Quit, the menu entry
 
 
 class BadRequest(Exception):
@@ -111,8 +111,13 @@ def _route(app, handler, method: str, path: str, params: dict) -> None:
         return
     if path in HOST_ONLY:
         if _method(handler, method, ("POST",)) and handler._check_host_only():
-            _body(handler)
-            if path == "/api/window":
+            body = _body(handler)
+            if path == "/api/shortcut":
+                action = body.get("action")
+                if action not in ("install", "remove"):
+                    raise BadRequest('Give "action": "install" or "remove".')
+                handler._json(200, shortcut.install() if action == "install" else shortcut.remove())
+            elif path == "/api/window":
                 handler._json(200, {"window": window.show()})
             else:
                 handler._json(200, {"ok": True})
