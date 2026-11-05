@@ -854,21 +854,21 @@ The Progress Manual rows, run on the Windows laptop and the Fedora desktop, each
 
 #### Automated
 
-- [x] 3.1 The static files include qrcode.js and nothing else new — 0561081
-- [x] 3.2 Phone panel and firewall banner logic — 0561081
-- [x] 3.3 show_console is covered — 0561081
-- [x] 3.4 The full suite passes — 0561081
-- [x] 3.5 The release workflow on the PR is green — 0561081
+- [x] 3.1 The static files include qrcode.js and nothing else new — 3712375
+- [x] 3.2 Phone panel and firewall banner logic — 3712375
+- [x] 3.3 show_console is covered — 3712375
+- [x] 3.4 The full suite passes — 3712375
+- [x] 3.5 The release workflow on the PR is green — 3712375
 
 #### Manual
 
-- [x] 3.6 Windows window: the phone panel's QR opens the UI on the phone — accepted at 2bab65f
-- [x] 3.7 The phone shows no phone panel and no Quit control — accepted at 2bab65f
-- [x] 3.8 Offline: the panel says there is no network address — accepted at 7415a17
-- [x] 3.9 Fedora: the phone panel and QR codes work in the Qt window — accepted at efac3c5bed1c033f3879c63d34c64efa469a1cba
-- [x] 3.10 Windows double-click: only the window, closing it stops the TV — accepted at 7415a17
-- [x] 3.11 Windows from PowerShell: output there, window opens, Ctrl+C stops both — accepted at 7415a17
-- [x] 3.12 A fallback with a hidden console shows the console again — accepted at 7415a17
+- [x] 3.6 Windows window: the phone panel's QR opens the UI on the phone — accepted at 55a1e9b
+- [x] 3.7 The phone shows no phone panel and no Quit control — accepted at 55a1e9b
+- [x] 3.8 Offline: the panel says there is no network address — accepted at d607d09
+- [x] 3.9 Fedora: the phone panel and QR codes work in the Qt window — accepted at 05508af6cee36a67c599bd9328b1878089d63bf9
+- [x] 3.10 Windows double-click: only the window, closing it stops the TV — accepted at d607d09
+- [x] 3.11 Windows from PowerShell: output there, window opens, Ctrl+C stops both — accepted at d607d09
+- [x] 3.12 A fallback with a hidden console shows the console again — accepted at d607d09
 
 ### Phase 4: Icon and menu entry
 
