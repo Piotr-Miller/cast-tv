@@ -1456,3 +1456,14 @@ Fedora (GNOME Shell 51.1, Wayland, icon theme Tela-circle-orange-dark), the owne
   symlinks, since pipx's `bin` link outlives a reinstall), and falls back to `which`. Windows keeps
   `which` (its launcher is an .exe; 4.8's pipx run passed). The new test failed with the lookup
   disabled. Part B is run again on the fix.
+- **4.7, part B again on the fix** (owner, 2026-11-05, ~20:48-20:55, "C i D wszystko OK").
+  Scratchpad pipx reinstalled from fa0071f (`_own_launcher` present). C: the entry pointing to the
+  scratchpad launcher, cast-tv started from the tile: **Remove from menu** (the B.5 failure gone).
+  D: the checkout's copy showed **Update menu entry (points to another file)**, clicked: **Remove
+  from menu**; the pipx copy (scratchpad `bin` first on PATH) showed **Update menu entry**,
+  clicked; started from the tile: the window with the TV icon, no terminal, **Remove from menu**;
+  clicked to clean up. Claude checked at 20:55: no `cast-tv.desktop`, no icon, the theme folder's
+  time 20:55:14, no cast-tv process; `~/.local/bin/cast-tv` still Phase 1's symlink. fa0071f: test
+  run 42097549541 and release run 42097549651 green (Windows 26,123,093 bytes, `edgechromium OK`;
+  Linux 260,586,272 bytes, `qtwebengine OK`). fa0071f changes only the non-frozen Linux path, so
+  the release-binary part of 4.7 (on 1a281a2's binary, above) stands. Row 4.7 accepted.
