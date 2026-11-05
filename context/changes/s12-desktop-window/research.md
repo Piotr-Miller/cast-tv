@@ -1369,3 +1369,17 @@ bookkeeping): the exe from release run 42072787694, downloaded into `Downloads\s
   before it, `cast-tv is already running; Its window is in front.` (a launch while 4.8's window was
   still open) and a `Move-Item: Cannot find path` error from a repeated move after the file had
   already moved; then the moved exe's addresses, `TV: 83" OLED (192.168.50.…)` and `Stopped.`.
+- **4.8, the checkout and pipx** (owner, the same day): from `C:\Source\cast-tv\.venv` with
+  `[window]`, started with `$HOME` as the current directory, `python -m castlib`: the window showed
+  **Add to Start menu** (the release's entry had been removed before, so nothing pointed elsewhere);
+  added, closed, started from Start: the window with the icon and Python's console minimised on the
+  taskbar. pipx (`cast-tv[window] @ git+…@s12-phase4`, resolved to commit 5aba153, replacing pipx's cast-tv 0.2.0 and its `~/.local/bin` launchers;
+  installed 19:07 with `castlib/shortcut.py`,
+  `castlib/ui/cast-tv.ico` and `webview` in its venv, checked by Claude): **Update menu entry**,
+  started from Start: the window with the icon. "Wszystko ok" (owner).
+- **4.10, Windows part** (owner, with a screenshot): **Remove from menu**, then Start's search: no
+  `cast-tv` entry. Claude checked `%APPDATA%\Microsoft\Windows\Start Menu\Programs\cast-tv.lnk`
+  absent and no `%APPDATA%\cast-tv\*.ico` left. Search still lists `cast-tv-windows-x64.exe` files
+  in `Downloads` (the moved one with the cast-tv icon; six older builds of 2026-10-13 to 11-04 with
+  PyInstaller's default icon): Windows Search indexing the files, not a menu entry. The row stays
+  open until the Fedora part.
