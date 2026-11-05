@@ -1,4 +1,4 @@
-# Next steps (2026-11-05, Phase 4 is PR #97; its manual rows 4.5-4.10)
+# Next steps (2026-11-05 late, Phase 4 is PR #97; every row done, waiting for the merge)
 
 The standing note for a pause in the work (a reboot, a switch of machine): it stays in the
 repository and is overwritten at the next pause.
@@ -11,6 +11,12 @@ recorded row, the PR or commit.
 - S-12 Phases 1 and 2 are on `main`. Phase 3 reopened 1.14, 1.16 and 2.6-2.9 (`change.md`,
   2026-10-27); with 1.8-1.13 and 1.15 they are confirmed again once, in step 15a.
 - **Phase 3 is on `main`** (PR #89, rebase merge 2026-11-05, main 46d5d76). Every row 3.1-3.12 is done.
+- **Phase 4 is PR #97** (branch `s12-phase4`); rows 4.1-4.10 all done (2026-11-05). Fedora found two
+  bugs, both fixed on the PR (`research.md`, "Manual rows 4.6 and 4.7 on Fedora"):
+  1a281a2, GNOME showed a new menu entry with a gear until a re-login (the hicolor theme folder's
+  time is now bumped); fa0071f, a pipx copy started from the menu took the first `cast-tv` on PATH
+  for its own launcher (Linux now uses `sys.argv[0]`). Last green runs: test 42097549541, release
+  42097549651 (Windows 26123093 bytes, Linux 260586272 bytes).
 - **2026-10-28, on the Intune work laptop** (`C:\Source\Trainings\AI\cast-tv`; its MDM rule
   "Block InBound connection Public Private" blocks every inbound connection, so neither the TV nor
   the phone can reach it). Every part that needs no inbound connection passed, on run
@@ -84,64 +90,12 @@ has no network address" (accepted at d607d09).
     release run 42072787694 green on both systems: Windows 26121290 bytes,
     `window-check: edgechromium OK`; Linux 260585144 bytes, `window-check: qtwebengine OK`.
     Phase 4 changed the surfaces of 3.6-3.12, so they are reopened and go into step 15a.
-- [ ] 13. **Windows 11**, in PowerShell, in `C:\Source\cast-tv`:
-   ```powershell
-   git fetch; git switch s12-phase4; git pull
-   mkdir $HOME\Downloads\s12-phase4\moved -Force; cd $HOME\Downloads\s12-phase4
-   gh run download 42072787694 -R Piotr-Miller/cast-tv -n cast-tv-windows-x64.exe
-   (Get-Item .\cast-tv-windows-x64.exe).Length
-   ```
-   The length should be 26121290. Tell Claude each row's result; Claude records it and ticks the row.
-   - [x] **4.5:** in File Explorer, open `Downloads\s12-phase4`: `cast-tv-windows-x64.exe` shows the
-     amber TV icon (press F5 if Explorer still shows a generic one). Double-click it: the cast-tv
-     window's title bar and its taskbar button show the same icon.
-     — accepted 2026-11-05 at c21e2b6 (`research.md`).
-   - [x] **4.8:** in that window, under "Open on your phone", click **Add to Start menu**: next to
-     it "Added: find cast-tv in Start." appears and the button turns into **Remove from menu**.
-     Close the window with X. Press the Windows key, type `cast-tv`: the entry shows the icon;
-     press Enter: the window opens and no console window appears. Right-click its taskbar button →
-     **Pin to taskbar**, close the window with X, click the pinned icon: the window opens again.
-     Close it with X.
-   - [x] **4.9:** in PowerShell, `Move-Item .\cast-tv-windows-x64.exe .\moved\; .\moved\cast-tv-windows-x64.exe`.
-     The button in the window reads **Update menu entry (points to another file)**; click it: it
-     turns into **Remove from menu**. Close with X, start cast-tv from Start: the window opens
-     (Task Manager → Details → right-click `cast-tv-windows-x64.exe` → Open file location opens
-     `moved`). Close it with X.
-     — accepted 2026-11-05 at c21e2b6.
-   - [x] **4.8, pipx and checkout:** in `C:\Source\cast-tv`:
-     `.\.venv\Scripts\pip install -e ".[window]"; Set-Location $HOME; C:\Source\cast-tv\.venv\Scripts\python -m castlib`.
-     The window shows **Update menu entry (points to another file)**; click it, close with X, start
-     cast-tv from Start: the window opens, with a console minimised on the taskbar, and the entry
-     and window show the icon. With pipx, if installed:
-     `pipx install --force "cast-tv[window] @ git+https://github.com/Piotr-Miller/cast-tv@s12-phase4"`,
-     then `cast-tv`, **Update menu entry**, X, start from Start: the window opens with the icon.
-     — 4.8 accepted 2026-11-05 at 5aba153 (release, checkout and pipx; `research.md`). Windows part of
-     4.10 seen too (the entry was removed before the checkout run, and again after pipx).
-   - [ ] **4.10:** start cast-tv from Start, click **Remove from menu**: "Removed from the Start
-     menu." and the button turns into **Add to Start menu**. Close with X; typing `cast-tv` after
-     the Windows key finds no app. Unpin the taskbar icon by hand (right-click → Unpin).
-- [ ] 14. **Fedora**, in a terminal:
-   ```bash
-   mkdir -p ~/Downloads/s12-phase4 && cd ~/Downloads/s12-phase4
-   gh run download 42072787694 -R Piotr-Miller/cast-tv -n cast-tv-linux-x64
-   chmod +x cast-tv-linux-x64 && stat -c %s cast-tv-linux-x64 && ./cast-tv-linux-x64
-   ```
-   The size should be 260585144.
-   - [ ] **4.6:** with the window open, press Super: in the overview and the dash, and in Alt+Tab,
-     the cast-tv window shows its icon, not a gear. If it is still a gear before step 4.7, say so,
-     and look again after 4.7 (GNOME may take the icon only from the menu entry).
-   - [ ] **4.7:** in the window, click **Add to menu**: "Added: find cast-tv in the applications
-     menu." Close the window with X, then press Ctrl+C in the terminal if it still runs. Press
-     Super, type `cast-tv`: the entry shows the icon; Enter opens the window and no terminal.
-     Then the checkout: `cd <checkout> && git switch s12-phase4 && git pull && .venv/bin/pip install -e '.[window]' && cd ~ && <checkout>/.venv/bin/python -m castlib`,
-     **Update menu entry**, X, start from the overview: the window opens. With pipx
-     (`sudo dnf install pipx`):
-     `pipx install --force "cast-tv[window] @ git+https://github.com/Piotr-Miller/cast-tv@s12-phase4"`,
-     `~/.local/bin/cast-tv`, **Update menu entry**, X, start from the overview: the window opens.
-     Phase 1's `~/.local/bin/cast-tv` symlink is replaced by pipx's launcher; say if you want it kept.
-   - [ ] **4.10:** start cast-tv from the overview, click **Remove from menu**: "Removed from the
-     menu."; close with X; Super + `cast-tv` finds no app.
-- [ ] 15. **You:** merge PR #97.
+- [x] 13. **Windows 11:** 4.5, 4.8, 4.9 and 4.10's Windows part — accepted 2026-11-05 (c21e2b6, 5aba153,
+    9609f12; `research.md`, "Manual rows 4.5, 4.8 and 4.9 on the home Windows machine").
+- [x] 14. **Fedora:** 4.6, 4.7 and 4.10 — accepted 2026-11-05 at 2d032a3 and 204e31b, on 1a281a2's
+    binary and fa0071f's checkout and scratchpad pipx (`research.md`, "Manual rows 4.6 and 4.7 on
+    Fedora"). In the cast-tv window the menu control sits at the top right, under the TV pill.
+- [ ] 15. **You:** merge PR #97 ("Rebase and merge"); then Claude rewrites the recorded SHAs from `main`.
 
 ## Closing S-12
 
