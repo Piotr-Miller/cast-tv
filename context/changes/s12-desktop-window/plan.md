@@ -884,6 +884,6 @@ The Progress Manual rows, run on the Windows laptop and the Fedora desktop, each
 - [x] 4.5 Windows: the icon on the exe, the window and the taskbar — accepted at c21e2b6699e6ec8713e0471548f1dbd99f4677e3
 - [ ] 4.6 Fedora: the window's taskbar entry shows the cast-tv icon
 - [ ] 4.7 Fedora: Add to menu, found in the overview, starts with no terminal
-- [ ] 4.8 Windows: Add to Start menu, starts with no console, pinning works
+- [x] 4.8 Windows: Add to Start menu, starts with no console, pinning works — accepted at 5aba1531c7d368bf418454690abec428634f63f0
 - [x] 4.9 A moved file: Update menu entry repoints the entry — accepted at c21e2b6699e6ec8713e0471548f1dbd99f4677e3
 - [ ] 4.10 Remove from menu removes the entry on both machines

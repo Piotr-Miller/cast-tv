@@ -96,7 +96,7 @@ has no network address" (accepted at d607d09).
      amber TV icon (press F5 if Explorer still shows a generic one). Double-click it: the cast-tv
      window's title bar and its taskbar button show the same icon.
      — accepted 2026-11-05 at c21e2b6 (`research.md`).
-   - [ ] **4.8:** in that window, under "Open on your phone", click **Add to Start menu**: next to
+   - [x] **4.8:** in that window, under "Open on your phone", click **Add to Start menu**: next to
      it "Added: find cast-tv in Start." appears and the button turns into **Remove from menu**.
      Close the window with X. Press the Windows key, type `cast-tv`: the entry shows the icon;
      press Enter: the window opens and no console window appears. Right-click its taskbar button →
@@ -108,13 +108,15 @@ has no network address" (accepted at d607d09).
      (Task Manager → Details → right-click `cast-tv-windows-x64.exe` → Open file location opens
      `moved`). Close it with X.
      — accepted 2026-11-05 at c21e2b6.
-   - [ ] **4.8, pipx and checkout:** in `C:\Source\cast-tv`:
+   - [x] **4.8, pipx and checkout:** in `C:\Source\cast-tv`:
      `.\.venv\Scripts\pip install -e ".[window]"; Set-Location $HOME; C:\Source\cast-tv\.venv\Scripts\python -m castlib`.
      The window shows **Update menu entry (points to another file)**; click it, close with X, start
      cast-tv from Start: the window opens, with a console minimised on the taskbar, and the entry
      and window show the icon. With pipx, if installed:
      `pipx install --force "cast-tv[window] @ git+https://github.com/Piotr-Miller/cast-tv@s12-phase4"`,
      then `cast-tv`, **Update menu entry**, X, start from Start: the window opens with the icon.
+     — 4.8 accepted 2026-11-05 at 5aba153 (release, checkout and pipx; `research.md`). Windows part of
+     4.10 seen too (the entry was removed before the checkout run, and again after pipx).
    - [ ] **4.10:** start cast-tv from Start, click **Remove from menu**: "Removed from the Start
      menu." and the button turns into **Add to Start menu**. Close with X; typing `cast-tv` after
      the Windows key finds no app. Unpin the taskbar icon by hand (right-click → Unpin).
