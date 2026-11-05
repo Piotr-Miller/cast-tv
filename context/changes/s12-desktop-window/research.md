@@ -1349,3 +1349,23 @@ has no network address. Connect it to Wi-Fi or Ethernet." and listed no address;
 "Searched on: default route — 0 responses". Closed with X, the adapter enabled again, Wi-Fi back
 on. Claude then found `vEthernet (Default Switch)` 172.18.48.1 and `Wi-Fi 2` 192.168.50.213 both
 `Up` and `Preferred`, and no `cast-tv*` process. Row 3.8 accepted at d607d09.
+
+## Manual rows 4.5, 4.8 and 4.9 on the home Windows machine (2026-11-05)
+
+Windows 11 Pro 10.0.26300 (`DESKTOP-35JAM1C`), the owner. PR #97 at 15e71e3 (c4ce4e1 plus
+bookkeeping): the exe from release run 42072787694, downloaded into `Downloads\s12-phase4`,
+26,121,290 bytes (printed by `(Get-Item …).Length`). Steps as written in this session's chat.
+
+- **4.5** (owner): the cast-tv icon shows on the file in File Explorer, on the window and on its
+  taskbar button.
+- **4.8, the release** (owner): **Add to Start menu**, then cast-tv started from Start: the window
+  opens; a console shows for a moment and goes away (hide-early, the brief flash the Definitions
+  accept). Pinned from the taskbar button, started again from the pin: the window opens. The
+  checkout and pipx variants of 4.8 are not run yet.
+- **4.9** (owner, with a screenshot): the exe moved into `Downloads\s12-phase4\moved` and started
+  from there; the window offered **Update menu entry**, and after it cast-tv started from Start.
+  Task Manager → Open file location on the running `cast-tv-windows-x64.exe` opened
+  `Downloads\s12-phase4\moved` (the file 05/11/2026 18:37, 25,510 KB). The PowerShell window shows,
+  before it, `cast-tv is already running; Its window is in front.` (a launch while 4.8's window was
+  still open) and a `Move-Item: Cannot find path` error from a repeated move after the file had
+  already moved; then the moved exe's addresses, `TV: 83" OLED (192.168.50.…)` and `Stopped.`.
