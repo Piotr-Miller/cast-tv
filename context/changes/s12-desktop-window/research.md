@@ -1435,3 +1435,24 @@ Fedora (GNOME Shell 51.1, Wayland, icon theme Tela-circle-orange-dark), the owne
   the button back to **Add to menu**. Claude checked at 20:32: `cast-tv.desktop` and the icon gone,
   the theme folder's time 20:32:08. Rows 4.6 and 4.10 accepted (4.10's Windows part above; the
   fix touches only the Linux path). 4.7's checkout and pipx runs are still to do.
+- **4.7, the checkout and pipx** (owner, 2026-11-05, ~20:38-20:45). Part A: the checkout's
+  `.venv` (`[window]`, Python 3.15, s12-phase4 at b67b882), `cd ~ && .venv/bin/python -m castlib`,
+  **Add to menu**, then started from the cast-tv tile; the owner went on to part B with no
+  problem reported (A.4 not stated explicitly). Part B: pipx 1.x in Claude's scratchpad
+  (`PIPX_HOME`/`PIPX_BIN_DIR` there, `cast-tv[window] @ git+…@s12-phase4`, `webview` present,
+  so `/home/piotrmiller/.local/bin/cast-tv`, Phase 1's symlink to the checkout's shim, stayed),
+  started with the scratchpad's `bin` first on PATH: **Update menu entry (points to another
+  file)**, clicked; the entry's `Exec=` became the scratchpad launcher (20:42:36). **Finding**
+  (owner's screenshot): the copy started from the tile showed **Update menu entry (points to
+  another file)** again instead of **Remove from menu**; `/api/status` `current: false`. Claude
+  read the process: started as `…/pipx/home/venvs/cast-tv/bin/python …/pipx/bin/cast-tv`, with
+  the desktop session's PATH (no scratchpad `bin`), so `target()`'s `which("cast-tv")` found
+  `~/.local/bin/cast-tv` and compared the entry with that. The scratchpad setup triggered it, but
+  the guess is fragile for real installs too: two `cast-tv` on PATH (the old symlink install and
+  pipx), or a desktop session whose PATH lacks the launcher's folder. Clicking Update there would
+  have pointed the entry at the wrong file; the owner closed the window instead.
+- **Fix** (owner chose it, "(a)"): on Linux `target()` takes the `cast-tv` script that started
+  the process (`sys.argv[0]`, absolute, an existing file named `cast-tv`; not resolved through
+  symlinks, since pipx's `bin` link outlives a reinstall), and falls back to `which`. Windows keeps
+  `which` (its launcher is an .exe; 4.8's pipx run passed). The new test failed with the lookup
+  disabled. Part B is run again on the fix.

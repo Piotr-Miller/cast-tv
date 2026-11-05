@@ -27,10 +27,25 @@ def test_target_per_install_kind(tmp_path):
     checkout = MenuEntry(platform="linux", frozen=False, executable="/venv/bin/python", root=str(tmp_path))
     assert checkout.target() == Command(("/venv/bin/python", "-m", "castlib"), str(tmp_path))
     pipx = MenuEntry(platform="linux", frozen=False, executable="/pipx/venvs/cast-tv/bin/python", root="",
-                     which=lambda name: "/home/u/.local/bin/" + name)
+                     which=lambda name: "/home/u/.local/bin/" + name, argv0="")
     assert pipx.target() == Command(("/home/u/.local/bin/cast-tv",))
     bare = MenuEntry(platform="linux", frozen=False, executable="/usr/bin/python3", root="", which=lambda n: None)
     assert bare.target() == Command(("/usr/bin/python3", "-m", "castlib"))
+
+
+def test_pipx_target_is_the_launcher_that_started_it_not_the_first_on_path(tmp_path):
+    # row 4.7 (2026-11-05): started from the menu, PATH named the old symlink install, so the entry
+    # written by this very launcher read as "points to another file"
+    bin_dir = tmp_path / "pipx" / "bin"
+    bin_dir.mkdir(parents=True)
+    (bin_dir / "cast-tv").write_text("#!/usr/bin/python3\n")
+    kw = dict(platform="linux", frozen=False, executable=str(tmp_path / "venv" / "bin" / "python"), root="",
+              which=lambda name: "/home/u/.local/bin/" + name)
+    assert MenuEntry(argv0=str(bin_dir / "cast-tv"), **kw).target() == Command((str(bin_dir / "cast-tv"),))
+    assert MenuEntry(argv0=str(tmp_path / "gone" / "cast-tv"), **kw).target() == Command(("/home/u/.local/bin/cast-tv",))
+    assert MenuEntry(argv0=str(tmp_path / "pytest"), **kw).target() == Command(("/home/u/.local/bin/cast-tv",))
+    assert MenuEntry(argv0=str(bin_dir / "cast-tv"), **dict(kw, platform="win32")).target() \
+        == Command(("/home/u/.local/bin/cast-tv",))                     # Windows keeps which (row 4.8)
 
 
 def test_checkout_root_comes_from_the_package_not_the_current_directory(tmp_path, monkeypatch):
