@@ -71,8 +71,12 @@ def test_window_show_is_loopback_only(app, monkeypatch):
 def test_host_only_routes_refuse_lan(app, monkeypatch):
     """The phone (any address but loopback, this machine's LAN address included) gets 403 and nothing happens."""
     _from_the_lan(monkeypatch)
-    for path in ("/api/window", "/api/quit"):
-        status, _, d = _json(app.base_url, "POST", path, {})
+    from castlib import shortcut
+    monkeypatch.setattr(shortcut, "install", lambda: pytest.fail("the phone wrote the menu entry"))
+    monkeypatch.setattr(shortcut, "remove", lambda: pytest.fail("the phone removed the menu entry"))
+    for path, body in (("/api/window", {}), ("/api/quit", {}), ("/api/shortcut", {"action": "install"}),
+                       ("/api/shortcut", {"action": "remove"})):
+        status, _, d = _json(app.base_url, "POST", path, body)
         assert status == 403 and d["error"]["code"] == "forbidden_host_only", path
     _, _, s = _json(app.base_url, "GET", "/api/status")
     assert s["host"] is False                             # the phone's UI shows no Quit
@@ -85,6 +89,30 @@ def test_loopback_predicate():
     for addr, ok in (("127.0.0.1", True), ("::1", True), ("::ffff:127.0.0.1", True),
                      ("192.168.1.5", False), ("10.0.0.2", False), ("", False)):
         assert Handler.from_loopback(types.SimpleNamespace(client_address=(addr, 1234))) is ok, addr
+
+
+def test_shortcut_route_writes_and_removes_the_entry(app, monkeypatch, tmp_path):
+    """From this machine the menu entry is written and removed; /api/status carries its state."""
+    from castlib import shortcut
+    entry = shortcut.MenuEntry(platform="linux", environ={}, home=str(tmp_path), frozen=True,
+                               executable="/opt/cast-tv")
+    monkeypatch.setattr(shortcut, "menu_entry", entry)
+    assert _json(app.base_url, "GET", "/api/status")[2]["shortcut"] == {
+        "installed": False, "current": False, "path": entry.path()}
+    status, _, d = _json(app.base_url, "POST", "/api/shortcut", {"action": "install"})
+    assert status == 200 and d == {"installed": True, "current": True, "path": entry.path()}
+    assert os.path.isfile(entry.path())
+    assert _json(app.base_url, "GET", "/api/status")[2]["shortcut"]["installed"] is True
+    status, _, d = _json(app.base_url, "POST", "/api/shortcut", {"action": "remove"})
+    assert status == 200 and d["installed"] is False and not os.path.exists(entry.path())
+    status, _, d = _json(app.base_url, "POST", "/api/shortcut", {"action": "delete"})
+    assert status == 400 and d["error"]["code"] == "bad_request"
+    status, headers, _ = _json(app.base_url, "GET", "/api/shortcut")
+    assert status == 405 and headers["Allow"] == "POST"
+
+
+def test_status_has_no_shortcut_where_there_is_no_menu(app):
+    assert _json(app.base_url, "GET", "/api/status")[2]["shortcut"] is None   # the suite's entry is platform "none"
 
 
 def test_quit_stops_the_tv_and_ends(app, tmp_path):

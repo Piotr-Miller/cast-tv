@@ -21,7 +21,7 @@ import urllib.request
 import webbrowser
 from concurrent.futures import ThreadPoolExecutor
 
-from castlib import __version__, config, dlna, downloads, photos, window
+from castlib import __version__, config, dlna, downloads, photos, shortcut, window
 from castlib.discovery import control_urls, discover, lan_interfaces, local_ip, renderer_name, stale_addresses
 from castlib.dlna import AVT
 from castlib.errors import CastError, ConfigError, NotMedia, TVError
@@ -675,6 +675,7 @@ class App:
                 "firewall_blocked": firewall_blocked(),
                 "firewall_advice": firewall_advice(self.server.port),
                 "window": window.exists(),
+                "shortcut": shortcut.cached(),   # the menu entry, or None until known / where there is none
                 "uptime": round(time.time() - self.started_at)}
 
     def api(self, handler, path: str, query: str) -> None:

@@ -30,14 +30,18 @@ MEDIA_TIMEOUT = 600        # a paused TV may hold a transfer open this long
 MAX_DRAIN = 1 << 20        # request bodies we read and discard before answering
 LOOPBACK = {"127.0.0.1", "::1"}   # the client addresses the host-only routes answer
 
-# The UI is five files served from an exact-match map: no directory listing,
-# no path traversal, nothing else under /ui/ exists.
+# The UI is six files served from an exact-match map: no directory listing,
+# no path traversal, nothing else under /ui/ exists. cast-tv.ico sits next to them
+# for the window and the menu entry, and is not served.
 UI_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ui")
 UI_FILES = {"/ui/": ("index.html", "text/html; charset=utf-8"),
             "/ui/app.js": ("app.js", "application/javascript; charset=utf-8"),
             "/ui/style.css": ("style.css", "text/css; charset=utf-8"),
             "/ui/alpine.min.js": ("alpine.min.js", "application/javascript; charset=utf-8"),
-            "/ui/qrcode.js": ("qrcode.js", "application/javascript; charset=utf-8")}
+            "/ui/qrcode.js": ("qrcode.js", "application/javascript; charset=utf-8"),
+            "/ui/icon.png": ("icon.png", "image/png")}
+ICON_PNG = os.path.join(UI_DIR, "icon.png")      # the favicon, the Linux window and menu entry
+ICON_ICO = os.path.join(UI_DIR, "cast-tv.ico")   # the Windows window and Start entry outside the release
 
 
 def parse_range(header, size):
@@ -215,9 +219,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             return
         if path == "/favicon.ico" and self.command != "POST":
-            self.send_response(204)
-            self.send_header("Content-Length", "0")
-            self.end_headers()
+            self._static("/ui/icon.png", body)
             return
         self._json_error(404, "not_found", "Not found.")
 

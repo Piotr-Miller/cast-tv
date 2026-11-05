@@ -76,6 +76,7 @@ function castTv() {
     pickNote: '',            // the outcome of the last pick that did not land (timeout, error)
     linkNote: '',            // why the last pasted share link was refused; the status poll leaves it alone
     quitNote: '',            // what the last Quit answered; the status poll leaves it alone
+    menuNote: '',            // what the last menu-entry action answered; the status poll leaves it alone
     qrOpen: '',              // the phone address whose QR code is shown
     _qr: {},                 // address -> its QR code as one SVG path, made once
     ended: false,            // Quit went through: cast-tv is gone, nothing is polled any more
@@ -91,7 +92,7 @@ function castTv() {
     panel: false,
     toast: '',
     offline: false,
-    busy: { discover: false, connect: false, show: false, stop: false, cast: false, quit: false },
+    busy: { discover: false, connect: false, show: false, stop: false, cast: false, quit: false, menu: false },
     gateNote: {},
     dismissedCast: null,
     dismissedShowId: null,
@@ -591,6 +592,33 @@ function castTv() {
         this.quitNote = String(e.message || '').split('\n')[0] || 'cast-tv did not end.';
       }
       this.busy.quit = false;
+    },
+    // ------------------------------------------------------------ the menu entry
+    // only on the computer running cast-tv, and only where it has a menu (status.shortcut is null elsewhere)
+    menuVisible() { return !!this.status.host && !!this.status.shortcut && !this.ended; },
+    menuLabel() {
+      const s = this.status.shortcut || {};
+      if (this.busy.menu) return 'Working…';
+      if (!s.installed) return /\.lnk$/i.test(s.path || '') ? 'Add to Start menu' : 'Add to menu';
+      if (!s.current) return 'Update menu entry (points to another file)';
+      return 'Remove from menu';
+    },
+    async menuAction() {
+      if (this.busy.menu) return;
+      const s = this.status.shortcut || {};
+      const action = s.installed && s.current ? 'remove' : 'install';
+      const start = /\.lnk$/i.test(s.path || '');
+      this.busy.menu = true;
+      try {
+        const d = await api('POST', '/api/shortcut', { action });
+        this.status = Object.assign({}, this.status, { shortcut: d });
+        this.menuNote = action === 'remove'
+          ? (start ? 'Removed from the Start menu.' : 'Removed from the menu.')
+          : (start ? 'Added: find cast-tv in Start.' : 'Added: find cast-tv in the applications menu.');
+      } catch (e) {
+        this.menuNote = String(e.message || '').split('\n')[0] || 'The menu entry could not be changed.';
+      }
+      this.busy.menu = false;
     },
     // ------------------------------------------------------------ the phone
     // only on the computer running cast-tv: the console used to be the one place these addresses were

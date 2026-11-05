@@ -4,6 +4,8 @@
 # PowerShell, cmd or Windows Terminal keeps printing there. When the window cannot open, the
 # console is shown again (castlib.platform.show_console). Linux ignores the option.
 # The window: pywebview with WebView2 on Windows, Qt WebEngine (PySide6) on Linux.
+# The icon: castlib/ui/cast-tv.ico (from packaging/make_icon.py) is the exe's icon, which the
+# Windows window and the Start entry take from the exe; castlib/ui travels whole for the rest.
 import os
 import sys
 
@@ -42,5 +44,6 @@ exe = EXE(
     name="cast-tv",
     console=True,
     hide_console="hide-early",
+    icon=os.path.join(SPECPATH, "..", "castlib", "ui", "cast-tv.ico"),
     upx=False,
 )

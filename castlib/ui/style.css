@@ -114,6 +114,8 @@ svg { flex-shrink: 0; }
 .phone .row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
 .phone .row .mono { font-size: 12px; overflow-wrap: anywhere; }
 .phone .qr { display: block; width: 180px; height: 180px; margin: 8px 0 4px; border-radius: 6px; }
+/* the menu entry's one button, under the phone panel */
+.phone.menu { margin-top: 8px; padding: 8px 14px; }
 .toast {
   position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%); z-index: 40;
   max-width: min(560px, calc(100vw - 32px)); padding: 10px 14px; border-radius: 10px;

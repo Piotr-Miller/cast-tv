@@ -97,6 +97,14 @@
   </template>
 </section>
 
+<!-- only on the computer running cast-tv: a launcher entry that starts this file -->
+<section class="phone menu" x-show="menuVisible()" x-cloak>
+  <div class="row">
+    <button class="ghost" @click="menuAction()" :disabled="busy.menu" x-text="menuLabel()"></button>
+    <span class="small muted" x-show="menuNote" x-text="menuNote"></span>
+  </div>
+</section>
+
 <main>
   <!-- slideshow -->
   <section class="show" x-show="status.show && !showDismissed()" x-cloak>

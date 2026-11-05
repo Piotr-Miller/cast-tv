@@ -760,3 +760,33 @@ def test_session_hook_with_a_real_hidden_window():
         hook.release()
     assert not native._thread.is_alive() and hook._callback is None
     wait_for(lambda: not u32.IsWindow(hwnd))
+
+
+# ------------------------------------------------------------- the icon
+def test_identity_icon_per_platform():
+    from castlib.server import ICON_ICO, ICON_PNG
+    assert window.identity("win32", frozen=True) is None        # the release's window takes the exe's icon
+    assert window.identity("win32", frozen=False) == ICON_ICO   # pipx and a checkout: not python.exe's
+    assert window.identity("linux") == ICON_PNG
+
+
+def test_window_is_started_with_the_icon(fake_webview, monkeypatch):
+    fake_webview.user_closes = True
+    seen = {}
+    real_start = fake_webview.start
+
+    def start(func=None, gui=None, **kw):
+        seen.update(kw)
+        return real_start(func, gui, **kw)
+
+    monkeypatch.setattr(fake_webview, "start", start)
+    monkeypatch.setattr(window, "identity", lambda: "/icons/cast-tv.png")
+    made = []
+    monkeypatch.setattr(window, "_qt_application", made.append)
+    assert window.run(object(), "http://127.0.0.1:8895/ui/") == "closed"
+    assert seen == {"icon": "/icons/cast-tv.png"}
+    assert made == (["/icons/cast-tv.png"] if sys.platform.startswith("linux") else [])
+
+
+def test_qt_application_failure_is_left_to_pywebview(fake_webview):
+    window._qt_application("/nowhere.png")                      # the fake has no webview.platforms.qt: no raise

@@ -15,6 +15,11 @@ pywebview falls back to another engine quietly when the requested one fails
 to load (WebView2 missing gives MSHTML; a broken Qt gives GTK), so a rendered
 page proves nothing: the engine is checked in ``events.initialized``, which
 cancels the window before it appears (owner decision 2026-10-18).
+
+The window carries the cast-tv icon (``identity()``). On Linux GNOME groups a
+window with its menu entry by the Wayland ``app_id`` / X11 ``WM_CLASS``, which
+Qt takes from the application's desktop file name; pywebview reuses a
+``QApplication`` that exists, so cast-tv creates it first, named ``cast-tv``.
 """
 from __future__ import annotations
 
@@ -64,6 +69,35 @@ def _webview():
 
 def _backend_module() -> str:
     return "webview.platforms.winforms" if sys.platform == "win32" else "webview.platforms.qt"
+
+
+def identity(platform=None, frozen=None) -> str | None:
+    """The icon file the window is given: none for the Windows release, whose window takes the exe's own."""
+    from castlib.server import ICON_ICO, ICON_PNG
+    platform = platform or sys.platform
+    if platform == "win32":
+        frozen = getattr(sys, "frozen", False) if frozen is None else frozen
+        return None if frozen else ICON_ICO      # pipx and a checkout would show python.exe's icon
+    return ICON_PNG
+
+
+def _qt_application(icon: str | None) -> None:
+    """Create the QApplication pywebview will reuse, as ``cast-tv`` and with the icon; best effort.
+
+    The backend module goes first: Qt WebEngine must be imported before any
+    QApplication exists. A failure here is left to pywebview's own start,
+    which then reports why the window cannot open.
+    """
+    try:
+        importlib.import_module("webview.platforms.qt")
+        from qtpy.QtGui import QIcon
+        from qtpy.QtWidgets import QApplication
+        app = QApplication.instance() or QApplication(sys.argv)
+        app.setDesktopFileName("cast-tv")
+        if icon:
+            app.setWindowIcon(QIcon(icon))
+    except Exception:
+        pass
 
 
 def _reason(err: BaseException) -> str:
@@ -202,7 +236,11 @@ def _run(current: _Run, url: str, on_shown=None) -> str:
         window.events.restored += restored
         window.events.maximized += restored
         closer.start()
-        webview.start(gui="qt" if sys.platform.startswith("linux") else None)
+        icon = identity()
+        if sys.platform.startswith("linux"):
+            _qt_application(icon)
+        options = {"icon": icon} if icon else {}
+        webview.start(gui="qt" if sys.platform.startswith("linux") else None, **options)
     except Exception as e:
         failure = _reason(e)
     finally:
