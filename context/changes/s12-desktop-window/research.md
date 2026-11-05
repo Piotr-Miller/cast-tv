@@ -1410,3 +1410,15 @@ Fedora (GNOME Shell 51.1, Wayland, icon theme Tela-circle-orange-dark), the owne
   as `xdg-icon-resource` does (`castlib/shortcut.py`, `_touch_icon_theme`); the test
   `test_install_and_remove_bump_the_icon_theme_folder` failed without it. Rows 4.6 and 4.7 are
   run again on the fix's Linux binary.
+- **The entry started, and removed, on 9609f12's binary** (owner, 2026-11-05, after the 20:07
+  `touch`; "od 1 do 7 wszystko działa jak trzeba"): Windows key, `cast-tv` in the search field,
+  the cast-tv tile with the TV icon: the window opened with no terminal; Alt+Tab showed the TV
+  icon. **Remove from menu** printed "Removed from the menu."; after X, the search showed no
+  cast-tv app (only `cast-tv-linux-x64` files under `Downloads`). Claude checked
+  `cast-tv.desktop` and `hicolor/256x256/apps/cast-tv.png` gone and no `cast-tv-linux-x64`
+  process. That binary predates the fix, so 4.6, 4.7 and 4.10 are accepted on 1a281a2's.
+- **The fix's binary**: release run 42091573487 (1a281a2), `cast-tv-linux-x64` 260,586,064 bytes,
+  `window-check: qtwebengine OK`; test run 42091573279 green on both systems. Saved to
+  `~/Downloads/s12-phase4-fix`. Before its run Claude touched `~/.local/share/icons/hicolor` again
+  (the icon file absent), so GNOME Shell drops the cached icon and a TV icon after **Add to menu**
+  can only come from the fix.
