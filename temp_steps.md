@@ -1,4 +1,4 @@
-# Next steps (2026-11-05 late, Phase 4 is on `main`; step 15a, the reopened rows, is next)
+# Next steps (2026-11-07, step 15a: Fedora's rows done; Windows 11's rows are next)
 
 The standing note for a pause in the work (a reboot, a switch of machine): it stays in the
 repository and is overwritten at the next pause.
@@ -107,7 +107,7 @@ has no network address" (accepted at d607d09).
     26123093 bytes, Linux 260586272 bytes; the artifacts expire 2027-02-03. Claude gives each
     row's exact steps in chat, drives the browser tab and the CLI where it can, and records each
     observation in `research.md` before ticking the row.
-    - [ ] **Fedora** (the Linux binary in `~/Downloads/s12-15a`, the checkout, a scratchpad pipx):
+    - [x] **Fedora** (the Linux binary in `~/Downloads/s12-15a`, the checkout, a scratchpad pipx):
       1.9 pipx with `[window]` opens a Qt window; 1.10 pipx without the extra opens a tab whose
       Quit control works; 1.11 `--no-window` opens the tab; 1.12 `CAST_TV_WINDOW_FAIL=1` opens the
       tab, Diagnostics shows `window_unavailable`; 1.13 X with a video playing stops the TV;
@@ -116,6 +116,10 @@ has no network address" (accepted at d607d09).
       window with the GPU on (size, start time); 2.8 a HEIC photo shows upright on the TV;
       2.9 the Ubuntu 24.04 VM was deleted on 2026-10-27, so the row records "not run" and why,
       as its criterion allows; 3.9 the phone panel and QR codes work in the Qt window.
+      — 2026-11-07, accepted at a4694af (`research.md`, "Step 15a, Fedora"); 2.9 recorded as not
+      run. Fedora's parts of 1.13-1.15 passed; those rows close with Windows. Side findings for
+      step 16: the window hint printed on every `shown` event (`castlib/window.py:213`) and the
+      binary's Fontconfig warnings on Fedora 45.
     - [ ] **Windows 11** (the exe in `Downloads\s12-15a`, the checkout's venv): 1.8 the venv with
       `[window]` opens a window; 1.13 X with a video playing; 1.14 Ctrl+C, and Sign out with a
       video playing; 1.15 a second launch; 2.6 the exe opens the window (size, start time);
@@ -137,10 +141,12 @@ has no network address" (accepted at d607d09).
   under rebased SHAs and the remote branch is gone.
 - **Home Windows:** whether to delete `.venv-spike`, `build` and `dist` in
   `C:\Source\cast-tv\context\changes\s12-desktop-window\spike-kit` (gitignored, 1.2 GB).
+- **OneDrive:** whether to delete `Pictures/shelf-christmas-decoration.heic`, uploaded again on
+  2026-11-07 for row 2.8 (the original is in Nextcloud, `Pictures/Test_Pictures`).
 - **Either machine:** whether a later change makes the UI say that the TV refused this computer
   (the description answering 401) instead of "No TV found"; `research.md`, row 2.8, side finding.
 
 ## How to resume with Claude
 
 Write "co dalej" in the cast-tv checkout. Work from `main` (`git switch main; git pull`); until the
-SHA-rewrite PR is merged, its branch is `s12-phase4-shas`.
+PR with Fedora's 15a rows is merged, its branch is `s12-15a-fedora`.

@@ -3,7 +3,7 @@ change_id: s12-desktop-window
 title: "Run cast-tv as a desktop window on Windows and Linux"
 status: implementing
 created: 2026-10-15
-updated: 2026-11-05
+updated: 2026-11-07
 archived_at: null
 ---
 
@@ -37,3 +37,4 @@ Run cast-tv as a desktop window on Windows and Linux (roadmap S-12)
 2026-11-05: reopened 3.10, 3.11, 3.12 — was accepted at d607d09; changed: castlib/window.py, packaging/cast-tv.spec (Phase 4: the window's icon, the exe's icon). 3.6-3.8 and 3.10-3.12 carried short SHAs, which the acceptance script reports unverifiable; git diff from those commits shows their surfaces changed, so they are reopened with 3.9 and confirmed again in temp_steps step 15a
 2026-11-05: owner decision — Phase 4 Manual rows 4.5-4.10 get explicit "— surface:" lists (the Files lines, e.g. castlib/server.py:33-37,195-199, cannot be parsed); plan.md Phase 4 — Manual Verification
 2026-11-05: PR #97 was merged by rebase (main d8b7ee4): every PR commit has a new SHA whose tree differs from the branch's only in context/foundation/roadmap.md (S-16, a978a30, on main first); Progress 4.1-4.10, research.md and temp_steps.md rewritten (c4ce4e1 -> 89735ba, 1a281a2 -> 134266b, fa0071f -> c4a4e5a, 2d032a3 -> 9376efd, 204e31b -> f971be5, ...)
+2026-11-07: re-confirmed 1.9, 1.10, 1.11, 1.12, 1.16, 2.7, 2.8, 2.9, 3.9 on Fedora (step 15a) — were accepted at f04dfcb7fd9105f6a570c29579c1b34240fb5b74 (1.9, 1.10, 1.12), 104dd710afda592c1e16666eec224c232e2a2479 (1.11), ffa982c46ad1f1bd5ea9b81a9283f941dac2690b (1.16), 1239dcb5b8e77e1c992512ef56028a23c5345e51 (2.7-2.9), 05508af6cee36a67c599bd9328b1878089d63bf9 (3.9); accepted at a4694afe63cd17a13708594cb161d72b1447e94a, whose castlib/, packaging/ and pyproject.toml equal c4a4e5a's (the binary: PR #97's release run 42097549651). 2.9 records "not run" and why, as its criterion allows. Fedora's parts of 1.13-1.15 passed; those rows wait for Windows

@@ -1467,3 +1467,118 @@ d27006f: `cast-tv-linux-x64` from release run 42072787694 in `~/Downloads/s12-ph
   run 42097549541 and release run 42097549651 green (Windows 26,123,093 bytes, `edgechromium OK`;
   Linux 260,586,272 bytes, `qtwebengine OK`). c4a4e5a changes only the non-frozen Linux path, so
   the release-binary part of 4.7 (on 134266b's binary, above) stands. Row 4.7 accepted.
+
+## Step 15a, Fedora: the reopened rows again (2026-11-07)
+
+Fedora 45 Workstation (GNOME Shell 51.1, Wayland, kernel 7.2.15-300.fc45), Python 3.15.0, the
+checkout at `main` a4694af, whose `castlib/`, `packaging/` and `pyproject.toml` equal c4a4e5a's
+(PR #97's code; `git diff fa0071f a4694af` over those paths is empty). The TV is the 83" OLED
+(QE83S85FAEXXH) at 192.168.50.142, its `/dmr` answering 200 to this laptop (192.168.50.198, `wlo1`).
+Claude started every copy from a terminal in `/tmp`, drove the browser tab in Chrome and read
+`/api/status`; the owner watched the TV, the phone and the screen, used the Qt windows (Claude
+cannot click inside a Qt window on Wayland) and confirmed each row in the session.
+
+**The copies.** Fedora still has no pipx, and `~/.local/bin/cast-tv` is Phase 1's symlink to the
+checkout's shim, so as on 2026-10-19 pipx 1.18.16 ran from a venv in the session scratchpad, with
+`PIPX_HOME`, `PIPX_BIN_DIR` and `PIPX_MAN_DIR` there: one copy installed from `"${PWD}[window]"`
+(PySide6 6.12.0, pywebview 6.2.1, QtPy 2.4.3; `--version` prints `Window: qtwebengine`), one from
+`"${PWD}"` (`Window: none (pywebview is not installed)`). The binary is the Linux file of PR #97's
+release run 42097549651 (built from fa0071f, whose code is main's c4a4e5a), in
+`~/Downloads/s12-15a`: 260,586,272 bytes, SHA-256
+`a0b86eb6d664ada9101d019d12a972d50311200d75f0a2f4c9af00c4e24a9d0c`; `--version` printed
+`cast-tv 0.4.0`, `Google Photos client: from ~/.config/cast-tv/google-client.json`,
+`GoPro window: /usr/bin/google-chrome`, `Window: qtwebengine`.
+
+**The pipx copy with `[window]`, one session** (12:17-12:36):
+
+- **1.9** (12:17:29): a window titled cast-tv on the UI, not a browser tab (owner: "tak").
+  `/api/status` `window: true`; four `QtWebEngineProcess` helpers. The console printed the
+  addresses, the firewall line and "Close the window or press Ctrl+C to end it", then a
+  `qt.qpa.services` portal warning and three `qt.qpa.wayland.textinput` warnings.
+- **1.15** (12:18:57): with the window covered by another window (owner: "zasłonięte"), a second
+  `cast-tv` printed `cast-tv is already running: http://127.0.0.1:8895/ui/` and `Its window is in
+  front.` and exited 0 after 0.2 s; the first copy kept running. The owner confirmed the window
+  came to the front ("tak").
+- **1.16** (12:20): the phone opened `http://192.168.50.198:8895/ui/` (connections from
+  192.168.50.140 seen on port 8895); the owner: "działa, nie ma Quit ani panelu", the UI works and
+  shows neither Quit cast-tv nor the "Open on your phone" panel.
+- **1.13** (12:36): the owner started OneDrive → Dokumenty → Videos → `Przejazd - SuperCars.mp4`
+  in the window (`starting` 12:36:18.9, TV `PLAYING` 12:36:28.9) and closed the window with X.
+  The server stopped answering at 12:36:33.3, the process was gone at 12:36:33.8 and printed
+  `Stopped.`; port 8895 free, no Qt helper or `systemd-inhibit` left. Owner: the TV stopped
+  "w ciągu ułamka sekundy".
+
+**1.14** (12:37-12:38), the same copy started twice; each time the owner started the same video
+in the window, and Claude sent the signal 5 s after the TV reported `PLAYING`:
+
+| Signal | `PLAYING` | signal sent | process gone | console |
+|---|---|---|---|---|
+| SIGINT (`kill -INT`, the Ctrl+C signal) | 12:37:54.8 | 12:37:59.8 | 12:38:00.7 | `Stopped.` |
+| SIGTERM (`kill <pid>`) | 12:38:27.7 | 12:38:32.7 | 12:38:33.4 | `Stopped.` |
+
+Port 8895 was free after each; the owner: both times the TV stopped and the window closed.
+
+**The tab copies**, in Claude's own Chrome tab on `http://127.0.0.1:8895/ui/` (a direct
+navigation from the extension still gets 403 `forbidden`; `location.href = '/ui/'` from that
+page loads the UI). The owner confirmed that each start opened a Chrome tab, not a window.
+
+- **1.10** (12:39-12:40), the copy without the extra: the console ended with "Ctrl+C ends it
+  (playback stops on the TV too)", `/api/status` `window: false`. Quit cast-tv in the header.
+  Claude clicked the same video (TV `PLAYING` 12:40:17.8), then Quit cast-tv at 12:40:25.3: the
+  process was gone at 12:40:25.7 with `Stopped.`, port free, and the tab showed "cast-tv has
+  ended; you can close this tab." The owner confirmed the TV played and stopped. As on
+  2026-10-19, the tab's now-playing bar kept "playing", the last state before the server went.
+- **1.11** (12:43:53), the `[window]` copy with `--no-window`: `window: false`, no
+  `QtWebEngineProcess`, Quit cast-tv in the tab's header, the same "Ctrl+C ends it" line. SIGINT at
+  12:43:55.8: gone at 12:43:56.2 with `Stopped.`.
+  *A harness pitfall, not a defect:* the first `--no-window` copy (12:40:53) ignored SIGINT,
+  because Claude's launcher started it with `&` from a non-interactive bash, which sets SIGINT and
+  SIGQUIT to ignored (`/proc/<pid>/status` `SigIgn: …1006`); Python then installs no
+  `KeyboardInterrupt` handler. The window mode sets its own handler, so 1.14's SIGINT run is
+  unaffected. That copy was ended with SIGTERM (`Stopped.`), the launcher was changed to reset
+  SIGINT to the default (as a terminal does), and 1.11 was run again as above.
+- **1.12** (12:44:03), `CAST_TV_WINDOW_FAIL=1`: the console printed only "No cast-tv window
+  (CAST_TV_WINDOW_FAIL); the UI opens in the browser. Ctrl+C ends it (playback stops on the TV
+  too)" (2026-10-19's leading "Close the window" line is gone, 7861809). `window: false`;
+  Diagnostics showed the card `window_unavailable`, "No cast-tv window: CAST_TV_WINDOW_FAIL.", hint
+  "The UI opened in the browser instead; Ctrl+C here ends cast-tv." SIGINT: `Stopped.`.
+
+**The release binary, one session** (12:44:52-12:57):
+
+- **2.7**: started with no `QTWEBENGINE_*` variable set. `/api/status` answered 2.5 s after the
+  start and reported `window: true` at 3.3 s; the owner: the window showed the rendered UI at once,
+  at about 4 s (2026-10-27: 7.35 s; the plan's threshold is 15 s). The GPU was on: the main
+  process held eleven descriptors of `/dev/dri/renderD128`. Closed with X at 12:57:02.9:
+  `Stopped.`, no Qt helper left, port 8895 free.
+- **3.9**: in the window's "Open on your phone" panel (`http://192.168.50.198:8895/ui/`), Copy
+  showed "Copied."; QR code drew a code filling its white square (owner's screenshot), the button
+  became "Hide QR code"; the phone's camera opened the cast-tv UI from it (owner: "Copied tak,
+  telefon otworzył UI").
+- **2.8**: the owner had moved `Test_Pictures` from OneDrive to Nextcloud, so
+  `shelf-christmas-decoration.heic` (1,442,278 bytes, the same file as on 2026-10-27, SHA-256
+  prefix `fbb59e78fac17ab7`) was uploaded again into OneDrive → Pictures (by the owner: the Chrome
+  extension's upload found no file input, and the OM Workspace HEIC files are over its 10 MB
+  limit). After Refresh, one Cast now on its tile in the window at 12:53:32: `source: onedrive`,
+  `mime: image/heic`, `converted: true`, 4000x3000, TV `PLAYING` at 12:53:33.7, `error: null`.
+  The owner: the photo of the shelves stood upright on the TV ("zdjęcie stoi prosto").
+- **2.9**: not run. The Ubuntu 24.04 VM was deleted on 2026-10-27 (`change.md`), and no other
+  Ubuntu desktop is at hand; the row's criterion allows "or why not". Its last run (2026-10-27,
+  above) was on Phase 2's binary; Phases 3 and 4 changed `castlib/cli.py`, `castlib/window.py` and
+  `packaging/cast-tv.spec`, which that run did not see.
+
+**Side findings**, none failing a row:
+
+- In the 1.15 session the console printed "Close the window or press Ctrl+C to end it" three
+  times: `window.run`'s `shown` handler (`castlib/window.py:213`) calls `on_shown` on every
+  pywebview `shown` event, and Qt sends one again when the window is raised; the docstring
+  (line 179) says it is called once. A one-line guard would fix it.
+- The release binary prints about 45 Fontconfig errors and warnings at start on Fedora 45
+  (`/etc/fonts/conf.d/48-guessfamily.conf`: "invalid attribute 'xsi:nil'"; `49-sansserif.conf`:
+  "invalid constant used"): the fontconfig bundled in the binary is older than Fedora 45's
+  fontconfig 2.18.3, whose configuration files it reads. The UI's text rendered normally. Also one
+  `atk-bridge: get_device_events_reply: unknown signature` warning.
+- The "Add to menu" control sits open-looking under the TV pill at the top right on every load
+  (`section.phone.menu`, `x-show="menuVisible()"`): that is Phase 4's design, not a dropdown left
+  open.
+
+Fedora's parts of 1.13, 1.14 and 1.15 are done; those rows stay open for their Windows parts.
