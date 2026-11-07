@@ -824,14 +824,14 @@ The Progress Manual rows, run on the Windows laptop and the Fedora desktop, each
 #### Manual
 
 - [ ] 1.8 Windows venv with [window]: cast-tv opens a window on the UI
-- [ ] 1.9 Fedora pipx with [window]: cast-tv opens a Qt window
-- [ ] 1.10 Without the extra: tab as today, with a working Quit control
-- [ ] 1.11 --no-window opens the tab
-- [ ] 1.12 A forced fallback opens the tab with window_unavailable in Diagnostics
+- [x] 1.9 Fedora pipx with [window]: cast-tv opens a Qt window — accepted at a4694afe63cd17a13708594cb161d72b1447e94a
+- [x] 1.10 Without the extra: tab as today, with a working Quit control — accepted at a4694afe63cd17a13708594cb161d72b1447e94a
+- [x] 1.11 --no-window opens the tab — accepted at a4694afe63cd17a13708594cb161d72b1447e94a
+- [x] 1.12 A forced fallback opens the tab with window_unavailable in Diagnostics — accepted at a4694afe63cd17a13708594cb161d72b1447e94a
 - [ ] 1.13 X with a video playing stops the TV and ends the process
 - [ ] 1.14 Ctrl+C and kill stop the TV and close the window
 - [ ] 1.15 A second launch brings the window to the front
-- [ ] 1.16 The phone's UI is unchanged and has no Quit control
+- [x] 1.16 The phone's UI is unchanged and has no Quit control — accepted at a4694afe63cd17a13708594cb161d72b1447e94a
 
 ### Phase 2: The release carries the window
 
@@ -846,9 +846,9 @@ The Progress Manual rows, run on the Windows laptop and the Fedora desktop, each
 #### Manual
 
 - [ ] 2.6 Windows: the PR exe opens the window; size and start time recorded
-- [ ] 2.7 Fedora: the PR Linux binary opens a Qt window with the GPU on; size and start time recorded
-- [ ] 2.8 Fedora: a HEIC photo cast through the window shows upright
-- [ ] 2.9 Ubuntu 24.04 VM: the Linux binary opens its window, or why not
+- [x] 2.7 Fedora: the PR Linux binary opens a Qt window with the GPU on; size and start time recorded — accepted at a4694afe63cd17a13708594cb161d72b1447e94a
+- [x] 2.8 Fedora: a HEIC photo cast through the window shows upright — accepted at a4694afe63cd17a13708594cb161d72b1447e94a
+- [x] 2.9 Ubuntu 24.04 VM: the Linux binary opens its window, or why not — accepted at a4694afe63cd17a13708594cb161d72b1447e94a
 
 ### Phase 3: The console's information moves into the window, and the console hides
 
@@ -865,7 +865,7 @@ The Progress Manual rows, run on the Windows laptop and the Fedora desktop, each
 - [ ] 3.6 Windows window: the phone panel's QR opens the UI on the phone
 - [ ] 3.7 The phone shows no phone panel and no Quit control
 - [ ] 3.8 Offline: the panel says there is no network address
-- [ ] 3.9 Fedora: the phone panel and QR codes work in the Qt window
+- [x] 3.9 Fedora: the phone panel and QR codes work in the Qt window — accepted at a4694afe63cd17a13708594cb161d72b1447e94a
 - [ ] 3.10 Windows double-click: only the window, closing it stops the TV
 - [ ] 3.11 Windows from PowerShell: output there, window opens, Ctrl+C stops both
 - [ ] 3.12 A fallback with a hidden console shows the console again
