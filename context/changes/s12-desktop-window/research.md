@@ -1654,3 +1654,9 @@ What Claude could not see (a short Terminal flash, the browser tab's text) is ma
   and both processes were still there; after OK both processes ended. From PowerShell the same exe
   printed `Cannot bind port 8895: [WinError 10048] ...` and exited 1 after 1.6 s, with no dialog
   (a dialog would have held it until OK). The HTTP server was stopped afterwards.
+- **The owner's part** (2026-11-16): the Chrome tab of 3.12's fallback showed "cast-tv is not
+  answering" after the console closed, and during 3.10's start no Terminal window stayed beyond
+  the short flash (owner: "3.12 i 3.10 wszystko ok"). In 3.11 the output went to a file, not to a
+  visible console; the owner saw cast-tv's output in the PowerShell window in 1.14 the same evening.
+
+Rows 3.10, 3.11 and 3.12 are accepted at f68fd5e on Windows.
