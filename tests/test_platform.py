@@ -633,3 +633,38 @@ def test_ca_bundle_only_in_the_frozen_linux_build(monkeypatch):
         env = {}
         assert platform.use_system_ca_bundle(env, FEDORA_FILES.__contains__) is None
         assert env == {}
+
+
+def test_linux_release_uses_bundled_font_config(monkeypatch, tmp_path):
+    bundle = tmp_path / "bundle"
+    path = bundle / "fontconfig" / "fonts.conf"
+    path.parent.mkdir(parents=True)
+    path.write_text("<fontconfig/>", encoding="utf-8")
+    monkeypatch.setattr(platform, "sys", types.SimpleNamespace(platform="linux", frozen=True, _MEIPASS=str(bundle)))
+    env = {}
+    assert platform.use_bundled_font_config(env) == str(path)
+    assert env == {"FONTCONFIG_FILE": str(path), "FONTCONFIG_PATH": str(path.parent)}
+
+
+@pytest.mark.parametrize("key", ["FONTCONFIG_FILE", "FONTCONFIG_PATH"])
+def test_explicit_font_config_overrides_the_release(monkeypatch, key):
+    monkeypatch.setattr(platform, "sys", types.SimpleNamespace(platform="linux", frozen=True, _MEIPASS="/bundle"))
+    env = {key: "/custom/fonts"}
+    assert platform.use_bundled_font_config(env, lambda path: True) is None
+    assert env == {key: "/custom/fonts"}
+
+
+@pytest.mark.parametrize("plat,frozen,bundle", [("win32", True, "/bundle"), ("linux", False, "/bundle"),
+                                                ("linux", True, None)])
+def test_font_config_only_applies_in_a_linux_bundle(monkeypatch, plat, frozen, bundle):
+    monkeypatch.setattr(platform, "sys", types.SimpleNamespace(platform=plat, frozen=frozen, _MEIPASS=bundle))
+    env = {}
+    assert platform.use_bundled_font_config(env, lambda path: True) is None
+    assert env == {}
+
+
+def test_missing_bundled_font_config_keeps_the_environment(monkeypatch):
+    monkeypatch.setattr(platform, "sys", types.SimpleNamespace(platform="linux", frozen=True, _MEIPASS="/bundle"))
+    env = {}
+    assert platform.use_bundled_font_config(env, lambda path: False) is None
+    assert env == {}

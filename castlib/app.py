@@ -218,7 +218,8 @@ class App:
         Raises ``AlreadyRunning`` when another cast-tv answers on the port, and
         ``OSError`` when the port is held by something else. A Ctrl+C (or SIGTERM)
         once ``serve()`` has returned stops and closes the app; between the bind and
-        that point only the socket is closed. Either way the ``KeyboardInterrupt`` goes on.
+        that point only the socket is closed. Ordinary startup failures use the same
+        cleanup before propagating to the CLI's error reporter.
         """
         if open_ui is None:
             open_ui = browser
@@ -283,13 +284,15 @@ class App:
                 app._thread(find, "discover")
             if open_ui:
                 app.open_tab()
-        except KeyboardInterrupt:
-            # Ctrl+C or a kill while starting ends cast-tv like any later one
+        except (Exception, KeyboardInterrupt):
+            # Unwind before the CLI reports the failure (a blocking dialog on Windows).
             if running is None:          # not serving yet: shutdown() would wait for a loop that never ran
                 server.server_close()
             else:
-                running.interrupted()
-                running.close()
+                try:
+                    running.interrupted()
+                finally:
+                    running.close()
             raise
         return app
 

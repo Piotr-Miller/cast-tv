@@ -9,6 +9,7 @@ chosen from the error's class.
 from __future__ import annotations
 
 import json
+import os
 import re
 import sys
 import traceback
@@ -107,7 +108,10 @@ def _route(app, handler, method: str, path: str, params: dict) -> None:
     if path == "/api/status":
         if _method(handler, method, ("GET",)):
             handler._drain()
-            handler._json(200, dict(app.status(), host=handler.from_loopback()))   # which controls the page offers
+            status = dict(app.status(), host=handler.from_loopback())
+            if status["host"]:                   # local smoke tooling; no process metadata on the LAN
+                status["instance"] = {"id": app.server.instance_id, "pid": os.getpid(), "parent_pid": os.getppid()}
+            handler._json(200, status)
         return
     if path in HOST_ONLY:
         if _method(handler, method, ("POST",)) and handler._check_host_only():
@@ -120,6 +124,9 @@ def _route(app, handler, method: str, path: str, params: dict) -> None:
             elif path == "/api/window":
                 handler._json(200, {"window": window.show()})
             else:
+                if "instance" in body and body["instance"] != app.server.instance_id:
+                    handler._json_error(409, "instance_changed", "This is a different cast-tv instance.")
+                    return
                 handler._json(200, {"ok": True})
                 app.quit()                       # after the answer is written: the server goes down with it
         return

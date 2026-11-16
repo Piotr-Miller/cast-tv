@@ -791,6 +791,30 @@ CA_BUNDLES = (
 )
 
 
+def use_bundled_font_config(environ=None, exists=os.path.isfile) -> str | None:
+    """The frozen Linux font parser uses its own compatible rules, while discovering host fonts.
+
+    Host configuration can use syntax newer than the bundled Fontconfig. Keep
+    native libraries together and use the shipped, self-contained configuration;
+    an explicit FONTCONFIG_FILE or FONTCONFIG_PATH still wins.
+    """
+    if not sys.platform.startswith("linux") or not getattr(sys, "frozen", False):
+        return None
+    environ = os.environ if environ is None else environ
+    if "FONTCONFIG_FILE" in environ or "FONTCONFIG_PATH" in environ:
+        return None
+    bundle = getattr(sys, "_MEIPASS", None)
+    if not bundle:
+        return None
+    directory = os.path.join(bundle, "fontconfig")
+    path = os.path.join(directory, "fonts.conf")
+    if not exists(path):
+        return None
+    environ["FONTCONFIG_FILE"] = path
+    environ["FONTCONFIG_PATH"] = directory
+    return path
+
+
 def use_system_ca_bundle(environ=None, exists=os.path.exists) -> str | None:
     """Set ``SSL_CERT_FILE`` to this machine's CA bundle in the Linux release binary; the file chosen, or None.
 

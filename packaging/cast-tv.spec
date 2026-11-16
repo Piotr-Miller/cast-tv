@@ -34,6 +34,9 @@ if sys.platform.startswith("linux"):
     # research.md, 2026-10-16); every distribution in scope has its own copies.
     DROP = {"libgbm.so.1", "libstdc++.so.6"}
     a.binaries = [b for b in a.binaries if os.path.basename(b[0]) not in DROP]
+    # Keep Fontconfig and its native dependencies together. Its private rules discover
+    # host fonts without parsing a newer distribution's /etc/fonts/conf.d syntax.
+    a.datas += [("fontconfig/fonts.conf", os.path.join(SPECPATH, "fonts.conf"), "DATA")]
 pyz = PYZ(a.pure)
 exe = EXE(
     pyz,

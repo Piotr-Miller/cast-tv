@@ -3,7 +3,7 @@ change_id: s12-desktop-window
 title: "Run cast-tv as a desktop window on Windows and Linux"
 status: implementing
 created: 2026-10-15
-updated: 2026-11-07
+updated: 2026-11-17
 archived_at: null
 ---
 
@@ -38,3 +38,20 @@ Run cast-tv as a desktop window on Windows and Linux (roadmap S-12)
 2026-11-05: owner decision — Phase 4 Manual rows 4.5-4.10 get explicit "— surface:" lists (the Files lines, e.g. castlib/server.py:33-37,195-199, cannot be parsed); plan.md Phase 4 — Manual Verification
 2026-11-05: PR #97 was merged by rebase (main d8b7ee4): every PR commit has a new SHA whose tree differs from the branch's only in context/foundation/roadmap.md (S-16, a978a30, on main first); Progress 4.1-4.10, research.md and temp_steps.md rewritten (c4ce4e1 -> 89735ba, 1a281a2 -> 134266b, fa0071f -> c4a4e5a, 2d032a3 -> 9376efd, 204e31b -> f971be5, ...)
 2026-11-07: re-confirmed 1.9, 1.10, 1.11, 1.12, 1.16, 2.7, 2.8, 2.9, 3.9 on Fedora (step 15a) — were accepted at f04dfcb7fd9105f6a570c29579c1b34240fb5b74 (1.9, 1.10, 1.12), 104dd710afda592c1e16666eec224c232e2a2479 (1.11), ffa982c46ad1f1bd5ea9b81a9283f941dac2690b (1.16), 1239dcb5b8e77e1c992512ef56028a23c5345e51 (2.7-2.9), 05508af6cee36a67c599bd9328b1878089d63bf9 (3.9); accepted at a4694afe63cd17a13708594cb161d72b1447e94a, whose castlib/, packaging/ and pyproject.toml equal c4a4e5a's (the binary: PR #97's release run 42097549651). 2.9 records "not run" and why, as its criterion allows. Fedora's parts of 1.13-1.15 passed; those rows wait for Windows
+
+2026-11-17: owner approved all implementation-review findings F1–F8 using the recommended approaches; fixes remain uncommitted on s12-review-fixes.
+2026-11-17: reopened 1.9 — was accepted at a4694afe63cd17a13708594cb161d72b1447e94a; changed: castlib/app.py, castlib/window.py (approved implementation-review fixes F1–F8)
+2026-11-17: reopened 1.10 — was accepted at a4694afe63cd17a13708594cb161d72b1447e94a; changed: castlib/api.py, castlib/app.py, castlib/server.py, castlib/ui/index.html (approved implementation-review fixes F1–F8)
+2026-11-17: reopened 1.11 — was accepted at a4694afe63cd17a13708594cb161d72b1447e94a; changed: castlib/app.py, castlib/window.py (approved implementation-review fixes F1–F8)
+2026-11-17: reopened 1.12 — was accepted at a4694afe63cd17a13708594cb161d72b1447e94a; changed: castlib/app.py, castlib/window.py (approved implementation-review fixes F1–F8)
+2026-11-17: reopened 1.16 — was accepted at a4694afe63cd17a13708594cb161d72b1447e94a; changed: castlib/api.py, castlib/server.py, castlib/ui/index.html (approved implementation-review fixes F1–F8)
+2026-11-17: reopened 2.7 — was accepted at a4694afe63cd17a13708594cb161d72b1447e94a; changed: castlib/window.py, packaging/cast-tv.spec, packaging/entry.py; surface declaration adds packaging/fonts.conf (approved implementation-review fixes F1–F8)
+2026-11-17: reopened 2.8 — was accepted at a4694afe63cd17a13708594cb161d72b1447e94a; changed: packaging/cast-tv.spec (approved implementation-review fixes F1–F8)
+2026-11-17: reopened 2.9 — was accepted at a4694afe63cd17a13708594cb161d72b1447e94a; changed: castlib/window.py, packaging/cast-tv.spec, packaging/entry.py; surface declaration adds packaging/fonts.conf (approved implementation-review fixes F1–F8)
+2026-11-17: reopened 3.9 — was accepted at a4694afe63cd17a13708594cb161d72b1447e94a; changed: castlib/api.py, castlib/server.py, castlib/ui/index.html (approved implementation-review fixes F1–F8)
+2026-11-17: reopened 4.5 — was accepted at 8e7d001b7da035e9bafeac5da12fe29443fe79d2; changed: castlib/window.py, packaging/cast-tv.spec (approved implementation-review fixes F1–F8)
+2026-11-17: reopened 4.6 — was accepted at 9376efdb90d95d37d85e9e9979f5fc117b354d6e; changed: castlib/shortcut.py, castlib/window.py (approved implementation-review fixes F1–F8)
+2026-11-17: reopened 4.7 — was accepted at f971be55e8dbc786a923f9b6f23ea9409194fea3; changed: castlib/api.py, castlib/app.py, castlib/shortcut.py, castlib/ui/index.html, castlib/window.py (approved implementation-review fixes F1–F8)
+2026-11-17: reopened 4.8 — was accepted at 35ba96c9fbf2302c39f5abda53d443009cbd7cdb; changed: castlib/api.py, castlib/app.py, castlib/shortcut.py, castlib/ui/index.html, packaging/cast-tv.spec (approved implementation-review fixes F1–F8)
+2026-11-17: reopened 4.9 — was accepted at 8e7d001b7da035e9bafeac5da12fe29443fe79d2; changed: castlib/api.py, castlib/shortcut.py, castlib/ui/index.html (approved implementation-review fixes F1–F8)
+2026-11-17: reopened 4.10 — was accepted at 9376efdb90d95d37d85e9e9979f5fc117b354d6e; changed: castlib/api.py, castlib/shortcut.py, castlib/ui/index.html (approved implementation-review fixes F1–F8)

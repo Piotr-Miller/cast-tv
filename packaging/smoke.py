@@ -10,14 +10,15 @@ bootloader and a child, and killing the process this script started ends only th
 Then ``--window-check`` shows ``/ui/`` in the window and reads it back; on Linux
 the whole script runs under ``xvfb-run``.
 """
+import http.client
 import json
 import os
+import socket
 import subprocess
 import sys
 import time
 import urllib.request
 
-PORT = 8099
 WINDOW = "Window: edgechromium" if sys.platform == "win32" else "Window: qtwebengine"
 
 
@@ -25,42 +26,83 @@ def run(binary, *args) -> str:
     out = subprocess.run([binary, *args], capture_output=True, text=True, timeout=180)
     if out.returncode != 0:
         sys.exit("%s %s failed (%d): %s%s" % (binary, " ".join(args), out.returncode, out.stdout, out.stderr))
+    if "--window-check" in args and any(label in out.stderr for label in ("Fontconfig error:", "Fontconfig warning:")):
+        sys.exit("the window check reported Fontconfig diagnostics: %s" % out.stderr)
     return out.stdout
 
 
-def get(path) -> tuple[int, bytes]:
-    with urllib.request.urlopen("http://localhost:%d%s" % (PORT, path), timeout=5) as r:
+def free_port() -> int:
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        return sock.getsockname()[1]
+
+
+def get(port, path) -> tuple[int, bytes]:
+    with urllib.request.urlopen("http://127.0.0.1:%d%s" % (port, path), timeout=5) as r:
         return r.status, r.read()
 
 
-def answers() -> bool:
+def answers(port) -> bool:
     try:
-        get("/api/status")
+        get(port, "/api/status")
         return True
     except OSError:
         return False
 
 
-def stop(proc) -> bool:
-    """End the server the way the UI's Quit does; False when it had to be killed or still answered."""
+def owns(proc, instance) -> bool:
+    """A direct binary or its onefile child answered; an existing session never qualifies."""
+    return (proc.poll() is None and isinstance(instance, dict) and bool(instance.get("id"))
+            and proc.pid in (instance.get("pid"), instance.get("parent_pid")))
+
+
+def kill_tree(proc) -> None:
+    if proc.poll() is None:
+        if sys.platform == "win32":
+            subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)], capture_output=True)
+        if proc.poll() is None:
+            proc.kill()
+    proc.wait(timeout=30)
+
+
+def quit_owned(proc, port, instance) -> bool:
+    """Re-check and quit over one TCP connection, which cannot switch to a replacement listener."""
+    connection = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
     try:
-        req = urllib.request.Request("http://127.0.0.1:%d/api/quit" % PORT, data=b"{}", method="POST",
-                                     headers={"Content-Type": "application/json"})
-        urllib.request.urlopen(req, timeout=5).close()
-    except OSError:
-        pass
+        connection.request("GET", "/api/status")
+        response = connection.getresponse()
+        state = json.loads(response.read())
+        if not isinstance(state, dict):
+            return False
+        candidate = state.get("instance")
+        if (response.status != 200 or not owns(proc, candidate) or candidate["id"] != instance["id"]
+                or connection.sock is None):        # never reconnect to send Quit after Connection: close
+            return False
+        connection.request("POST", "/api/quit", body=json.dumps({"instance": instance["id"]}),
+                           headers={"Content-Type": "application/json"})
+        response = connection.getresponse()
+        response.read()
+        return response.status == 200
+    except (OSError, ValueError, http.client.HTTPException):
+        return False
+    finally:
+        connection.close()
+
+
+def stop(proc, port, instance=None) -> bool:
+    """Quit only the verified instance; on failure kill only the process tree we launched."""
+    if not owns(proc, instance) or not quit_owned(proc, port, instance):
+        kill_tree(proc)
+        return False
     try:
         proc.wait(timeout=30)
     except subprocess.TimeoutExpired:
         pass
     deadline = time.time() + 30
-    while answers() and time.time() < deadline:
+    while answers(port) and time.time() < deadline:
         time.sleep(0.5)
-    if proc.poll() is None or answers():
-        if sys.platform == "win32":     # the whole tree: the bootloader and the child that serves
-            subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)], capture_output=True)
-        proc.kill()
-        proc.wait(timeout=30)
+    if proc.poll() is None or answers(port):
+        kill_tree(proc)
         return False
     return True
 
@@ -78,14 +120,23 @@ def main(binary) -> int:
     if "GoPro window: " not in version or "GoPro window: none found" in version:
         sys.exit("no browser for the gopro.com window was found on this runner")
     print(run(binary, "--self-check").strip())
-    proc = subprocess.Popen([binary, "--no-browser", "-p", str(PORT)],
+    port = free_port()
+    proc = subprocess.Popen([binary, "--no-browser", "-p", str(port)],
                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     ended = False
+    instance = None
     try:
         deadline = time.time() + 60
         while True:
+            if proc.poll() is not None:
+                sys.exit("the server exited early (%d)" % proc.returncode)
             try:
-                status, body = get("/ui/")
+                status, body = get(port, "/api/status")
+                state = json.loads(body)
+                candidate = state.get("instance")
+                if not owns(proc, candidate):
+                    sys.exit("the smoke port answered from another process")
+                instance = candidate
                 break
             except OSError:
                 if proc.poll() is not None:
@@ -93,16 +144,16 @@ def main(binary) -> int:
                 if time.time() > deadline:
                     sys.exit("/ui/ never answered")
                 time.sleep(1)
+        status, body = get(port, "/ui/")
         if status != 200 or b"cast-tv" not in body:
             sys.exit("/ui/ answered %d" % status)
-        status, body = get("/api/status")
-        gphotos = json.loads(body)["sources"]["gphotos"]["state"]
+        gphotos = state["sources"]["gphotos"]["state"]
         print("/ui/ 200, /api/status 200, gphotos %s" % gphotos)
     finally:
-        ended = stop(proc)          # also after a failure above, whose exit goes on afterwards
+        ended = stop(proc, port, instance)   # no HTTP Quit until ownership is established
     if not ended:
         sys.exit("the server did not end on POST /api/quit")
-    print("POST /api/quit: ended, port %d free" % PORT)
+    print("POST /api/quit: ended, port %d free" % port)
     started = time.time()
     print("%s (%.1f s)" % (run(binary, "--window-check").strip(), time.time() - started))
     return 0

@@ -275,7 +275,7 @@ def test_phone_panel_lists_lan_addresses():
     """S-12 Phase 3: every LAN address in the server's order, the default route first; localhost dropped."""
     html = _ui_text("index.html")
     assert html.index('src="/ui/qrcode.js"') < html.index('src="/ui/app.js"')
-    panel = html[html.index('<section class="phone"'):html.index("</section>", html.index('<section class="phone"'))]
+    panel = html[html.index('<section class="phone-panel"'):html.index("</section>", html.index('<section class="phone-panel"'))]
     assert "Open on your phone" in panel and 'x-for="a in phoneAddresses()"' in panel
     assert "copy(a, 'address')" in panel and "toggleQr(a)" in panel and "qrSvg(a).d" in panel
     # row 3.9: the HTML parser lowercases ":viewBox", and an SVG without its viewBox drew a 37 px code

@@ -211,6 +211,8 @@ def _run(current: _Run, url: str, on_shown=None) -> str:
         return True
 
     def shown():
+        if current.shown:
+            return
         current.shown = True
         if on_shown is not None:
             try:
