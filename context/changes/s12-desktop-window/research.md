@@ -1582,3 +1582,33 @@ page loads the UI). The owner confirmed that each start opened a Chrome tab, not
   open.
 
 Fedora's parts of 1.13, 1.14 and 1.15 are done; those rows stay open for their Windows parts.
+
+## Step 15a, Windows 11: the reopened rows again (2026-11-16)
+
+The home Windows 11 Pro machine (10.0.26300), Wi-Fi 2 at 192.168.50.213 (also Hyper-V's
+vEthernet WSL 172.29.128.1 and Default Switch 172.22.208.1), the checkout at `main` f68fd5e, whose
+`castlib/`, `packaging/` and `pyproject.toml` equal c4a4e5a's (PR #97's code), its `.venv` with
+`[window]`. The exe is the Windows file of PR #97's release run 42097549651 (built from fa0071f),
+in `Downloads\s12-15a`: 26,123,093 bytes; `--version` printed `cast-tv 0.4.0`,
+`Google Photos client: built in`, `GoPro window: ...chrome.exe`, `Window: edgechromium`. The TV is
+the 83" OLED at 192.168.50.142, its `/dmr` answering 200 to this machine.
+
+**The checkout's venv with `[window]`:**
+
+- **1.8:** started from PowerShell in `$HOME` with
+  `C:\Source\cast-tv\.venv\Scripts\python -m castlib`, cast-tv opened a window on the UI, not a
+  browser tab (owner, 2026-11-16).
+- **1.15:** with that window covered by another window, the same command in a second PowerShell
+  printed `Its window is in front.` and exited, and the cast-tv window came to the front.
+- **1.13:** with a video (`Przejazd - SuperCars.mp4`, OneDrive) playing on the TV, X on the window
+  stopped the TV and the PowerShell prompt came back.
+- **1.14, Ctrl+C:** started again with the video playing, Ctrl+C in the PowerShell window running
+  cast-tv printed `Stopped.`, the window closed, the TV stopped, no traceback.
+- **1.14, Windows sign-out:** with cast-tv started from PowerShell
+  (`Set-Location $HOME; C:\Source\cast-tv\.venv\Scripts\python -m castlib`) and a video playing
+  on the TV from its window, the owner signed out of Windows (Start → account → Sign out) without
+  closing cast-tv: the video on the TV stopped (owner, 2026-11-16; the delay was not timed). After signing back in, at
+  22:23, no `python.exe` or `cast-tv-windows-x64.exe` ran and `127.0.0.1:8895` refused connections.
+
+Rows 1.8 and 1.13-1.15 are accepted at f68fd5e on Windows; with Fedora's parts (above, at
+a4694af) 1.13, 1.14 and 1.15 close.
