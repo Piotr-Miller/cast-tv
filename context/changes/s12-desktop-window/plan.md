@@ -823,14 +823,14 @@ The Progress Manual rows, run on the Windows laptop and the Fedora desktop, each
 
 #### Manual
 
-- [ ] 1.8 Windows venv with [window]: cast-tv opens a window on the UI
+- [x] 1.8 Windows venv with [window]: cast-tv opens a window on the UI — accepted at f68fd5e
 - [x] 1.9 Fedora pipx with [window]: cast-tv opens a Qt window — accepted at a4694afe63cd17a13708594cb161d72b1447e94a
 - [x] 1.10 Without the extra: tab as today, with a working Quit control — accepted at a4694afe63cd17a13708594cb161d72b1447e94a
 - [x] 1.11 --no-window opens the tab — accepted at a4694afe63cd17a13708594cb161d72b1447e94a
 - [x] 1.12 A forced fallback opens the tab with window_unavailable in Diagnostics — accepted at a4694afe63cd17a13708594cb161d72b1447e94a
-- [ ] 1.13 X with a video playing stops the TV and ends the process
-- [ ] 1.14 Ctrl+C and kill stop the TV and close the window
-- [ ] 1.15 A second launch brings the window to the front
+- [x] 1.13 X with a video playing stops the TV and ends the process — accepted at f68fd5e (Windows), a4694af (Fedora)
+- [x] 1.14 Ctrl+C and kill stop the TV and close the window — accepted at f68fd5e (Windows), a4694af (Fedora)
+- [x] 1.15 A second launch brings the window to the front — accepted at f68fd5e (Windows), a4694af (Fedora)
 - [x] 1.16 The phone's UI is unchanged and has no Quit control — accepted at a4694afe63cd17a13708594cb161d72b1447e94a
 
 ### Phase 2: The release carries the window
