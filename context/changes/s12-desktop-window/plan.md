@@ -866,9 +866,9 @@ The Progress Manual rows, run on the Windows laptop and the Fedora desktop, each
 - [x] 3.7 The phone shows no phone panel and no Quit control — accepted at f68fd5e
 - [ ] 3.8 Offline: the panel says there is no network address
 - [x] 3.9 Fedora: the phone panel and QR codes work in the Qt window — accepted at a4694afe63cd17a13708594cb161d72b1447e94a
-- [ ] 3.10 Windows double-click: only the window, closing it stops the TV
-- [ ] 3.11 Windows from PowerShell: output there, window opens, Ctrl+C stops both
-- [ ] 3.12 A fallback with a hidden console shows the console again
+- [x] 3.10 Windows double-click: only the window, closing it stops the TV — accepted at f68fd5e
+- [x] 3.11 Windows from PowerShell: output there, window opens, Ctrl+C stops both — accepted at f68fd5e
+- [x] 3.12 A fallback with a hidden console shows the console again — accepted at f68fd5e
 
 ### Phase 4: Icon and menu entry
 
