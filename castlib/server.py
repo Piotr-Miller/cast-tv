@@ -361,6 +361,7 @@ class Server(socketserver.ThreadingTCPServer):
         super().__init__(address, handler)
         self.registry = registry or Registry()
         self.media_token = secrets.token_urlsafe(16)
+        self.instance_id = secrets.token_hex(16)   # lets local tooling make shutdown conditional on this instance
         self.allowed_hosts = {h.lower() for h in (allowed_hosts or local_addresses())}
         self.app = None
         self.host = address[0]     # what media URLs name; the CLI sets the LAN address

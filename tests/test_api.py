@@ -68,6 +68,23 @@ def test_window_show_is_loopback_only(app, monkeypatch):
     assert status == 403 and d["error"]["code"] == "forbidden_host_only"
 
 
+def test_instance_identity_is_loopback_only(app, monkeypatch):
+    instance = _json(app.base_url, "GET", "/api/status")[2]["instance"]
+    assert instance == {"id": app.server.instance_id, "pid": os.getpid(), "parent_pid": os.getppid()}
+    _from_the_lan(monkeypatch)
+    assert "instance" not in _json(app.base_url, "GET", "/api/status")[2]
+
+
+def test_conditional_quit_does_not_end_a_replacement_instance(app, monkeypatch):
+    quit_calls = []
+    monkeypatch.setattr(app, "quit", lambda: quit_calls.append(True))
+    status, _, body = _json(app.base_url, "POST", "/api/quit", {"instance": "another-instance"})
+    assert status == 409 and body["error"]["code"] == "instance_changed"
+    assert quit_calls == []
+    assert _json(app.base_url, "POST", "/api/quit", {"instance": app.server.instance_id})[0] == 200
+    assert quit_calls == [True]
+
+
 def test_host_only_routes_refuse_lan(app, monkeypatch):
     """The phone (any address but loopback, this machine's LAN address included) gets 403 and nothing happens."""
     _from_the_lan(monkeypatch)

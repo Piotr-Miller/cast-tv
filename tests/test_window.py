@@ -162,8 +162,16 @@ def test_window_opens_the_ui_and_closes(fake_webview):
     assert fake_webview.errors == [] and _closers() == []
 
 
-def test_on_shown_runs_once_the_window_shows(fake_webview):
+def test_on_shown_runs_once_the_window_shows(fake_webview, monkeypatch):
     fake_webview.user_closes = True
+    start = fake_webview.start
+
+    def shown_again(*args, **kwargs):
+        start(*args, **kwargs)
+        fake_webview.windows[-1].events.shown.fire()
+        fake_webview.windows[-1].events.shown.fire()
+
+    monkeypatch.setattr(fake_webview, "start", shown_again)
     seen = []
     assert window.run(object(), "http://127.0.0.1:1/ui/", on_shown=lambda: seen.append("shown")) == "closed"
     assert seen == ["shown"]

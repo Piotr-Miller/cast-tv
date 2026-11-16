@@ -77,7 +77,7 @@
 </div>
 
 <!-- only on the computer running cast-tv: what the console used to print for the phone -->
-<section class="phone" x-show="phoneVisible()" x-cloak>
+<section class="phone-panel" x-show="phoneVisible()" x-cloak>
   <h2>Open on your phone</h2>
   <template x-if="!phoneAddresses().length">
     <div class="small muted">This computer has no network address. Connect it to Wi-Fi or Ethernet.</div>
@@ -98,7 +98,7 @@
 </section>
 
 <!-- only on the computer running cast-tv: a launcher entry that starts this file -->
-<section class="phone menu" x-show="menuVisible()" x-cloak>
+<section class="phone-panel launcher" x-show="menuVisible()" x-cloak>
   <div class="row">
     <button class="ghost" @click="menuAction()" :disabled="busy.menu" x-text="menuLabel()"></button>
     <span class="small muted" x-show="menuNote" x-text="menuNote"></span>

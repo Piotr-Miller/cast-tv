@@ -450,6 +450,64 @@ def test_startup_failure_is_reported_before_any_window(app, start_env, upstream,
     assert "RuntimeError" in capsys.readouterr().err   # the traceback stays for a bug report
 
 
+@pytest.mark.parametrize("stage", ["construct", "serve"])
+def test_startup_failure_before_serving_frees_socket_before_reporting(start_env, monkeypatch, stage):
+    from castlib import platform
+    port = _free_port()
+    reported = []
+
+    def broken(*args, **kwargs):
+        raise RuntimeError("startup fixture failed")
+
+    monkeypatch.setattr(start_env.App, "__init__" if stage == "construct" else "serve", broken)
+    monkeypatch.setattr(start_env.Server, "shutdown", lambda self: pytest.fail("no HTTP loop exists to shut down"))
+
+    def report(message):
+        assert _port_is_free(port), "the socket must be closed before the blocking dialog"
+        reported.append(message)
+
+    monkeypatch.setattr(platform, "report_startup_error", report)
+    assert cli.ui(port=port, browser=False) == 1
+    assert reported == ["cast-tv could not start: startup fixture failed"]
+
+
+def test_bad_tv_after_serving_closes_sources_and_port_before_reporting(start_env, monkeypatch):
+    from castlib import platform
+    port = _free_port()
+    apps, sources_closed, expected_sources, reported = [], [], [], []
+    init = start_env.App.__init__
+
+    def remember(self, *args, **kwargs):
+        init(self, *args, **kwargs)
+        apps.append(self)
+        for name, source in self.sources.items():
+            close_source = getattr(source, "close", None)
+            if close_source is None:
+                continue
+            expected_sources.append(name)
+
+            def close(name=name, close_source=close_source):
+                sources_closed.append(name)
+                close_source()
+
+            monkeypatch.setattr(source, "close", close)
+
+    def report(message):
+        assert _port_is_free(port), "failed startup must release the port before the dialog"
+        assert apps[0]._close_done.is_set()
+        assert sorted(sources_closed) == sorted(expected_sources)
+        reported.append(message)
+
+    monkeypatch.setattr(start_env.App, "__init__", remember)
+    monkeypatch.setattr(platform, "report_startup_error", report)
+    try:
+        assert cli.ui(port=port, tv="invalid-address", browser=False) == 1
+        assert len(reported) == 1 and "IPv4 address" in reported[0]
+    finally:
+        for app in apps:
+            app.close()
+
+
 def test_a_copy_without_a_console_takes_over_before_anything_starts(start_env, monkeypatch):
     """Double-clicked into Windows Terminal: the copy started without a console runs cast-tv; this one only exits."""
     from castlib import platform, window

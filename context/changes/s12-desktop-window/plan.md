@@ -464,9 +464,9 @@ the GPU path.
 #### Manual Verification:
 
 - On the Windows laptop, the PR run's `cast-tv-windows-x64.exe` (downloaded into `Downloads\s12-phase2`), started from PowerShell, opens the window. `--version` shows `Window: edgechromium`. Record the file size and the time from Enter to a rendered UI (owner decision 2026-10-26: surface declared) — surface: packaging/cast-tv.spec, packaging/entry.py, .github/workflows/release.yml, castlib/window.py, castlib/cli.py
-- On the Fedora desktop, the PR run's `cast-tv-linux-x64`, after `chmod +x` and a start from a terminal, opens a Qt window with the GPU on (no `--disable-gpu`). `--version` shows `Window: qtwebengine`. Record the size and the start time (owner decision 2026-10-26: surface declared) — surface: packaging/cast-tv.spec, packaging/entry.py, .github/workflows/release.yml, castlib/window.py, castlib/cli.py
+- On the Fedora desktop, the PR run's `cast-tv-linux-x64`, after `chmod +x` and a start from a terminal, opens a Qt window with the GPU on (no `--disable-gpu`). `--version` shows `Window: qtwebengine`. Record the size and the start time (owner decision 2026-10-26: surface declared) — surface: packaging/cast-tv.spec, packaging/entry.py, .github/workflows/release.yml, castlib/window.py, castlib/cli.py, packaging/fonts.conf
 - On the Fedora desktop, with that Linux binary: cast a HEIC photo from Google Photos or a local file through the window and see it upright on the TV (pillow-heif without the bundled `libstdc++`) (owner decision 2026-10-26: surface declared) — surface: packaging/cast-tv.spec, .github/workflows/release.yml, castlib/photos.py
-- On the Ubuntu 24.04 VM from the 2026-10-16 spike, if it still exists: the Linux binary opens its window. Otherwise record that it was not run, and why (owner decision 2026-10-26: surface declared) — surface: packaging/cast-tv.spec, packaging/entry.py, .github/workflows/release.yml, castlib/window.py, castlib/cli.py
+- On the Ubuntu 24.04 VM from the 2026-10-16 spike, if it still exists: the Linux binary opens its window. Otherwise record that it was not run, and why (owner decision 2026-10-26: surface declared) — surface: packaging/cast-tv.spec, packaging/entry.py, .github/workflows/release.yml, castlib/window.py, castlib/cli.py, packaging/fonts.conf
 
 ---
 
@@ -824,14 +824,14 @@ The Progress Manual rows, run on the Windows laptop and the Fedora desktop, each
 #### Manual
 
 - [x] 1.8 Windows venv with [window]: cast-tv opens a window on the UI — accepted at f68fd5e
-- [x] 1.9 Fedora pipx with [window]: cast-tv opens a Qt window — accepted at a4694afe63cd17a13708594cb161d72b1447e94a
-- [x] 1.10 Without the extra: tab as today, with a working Quit control — accepted at a4694afe63cd17a13708594cb161d72b1447e94a
-- [x] 1.11 --no-window opens the tab — accepted at a4694afe63cd17a13708594cb161d72b1447e94a
-- [x] 1.12 A forced fallback opens the tab with window_unavailable in Diagnostics — accepted at a4694afe63cd17a13708594cb161d72b1447e94a
+- [ ] 1.9 Fedora pipx with [window]: cast-tv opens a Qt window
+- [ ] 1.10 Without the extra: tab as today, with a working Quit control
+- [ ] 1.11 --no-window opens the tab
+- [ ] 1.12 A forced fallback opens the tab with window_unavailable in Diagnostics
 - [x] 1.13 X with a video playing stops the TV and ends the process — accepted at f68fd5e (Windows), a4694af (Fedora)
 - [x] 1.14 Ctrl+C and kill stop the TV and close the window — accepted at f68fd5e (Windows), a4694af (Fedora)
 - [x] 1.15 A second launch brings the window to the front — accepted at f68fd5e (Windows), a4694af (Fedora)
-- [x] 1.16 The phone's UI is unchanged and has no Quit control — accepted at a4694afe63cd17a13708594cb161d72b1447e94a
+- [ ] 1.16 The phone's UI is unchanged and has no Quit control
 
 ### Phase 2: The release carries the window
 
@@ -846,9 +846,9 @@ The Progress Manual rows, run on the Windows laptop and the Fedora desktop, each
 #### Manual
 
 - [x] 2.6 Windows: the PR exe opens the window; size and start time recorded — accepted at f68fd5e
-- [x] 2.7 Fedora: the PR Linux binary opens a Qt window with the GPU on; size and start time recorded — accepted at a4694afe63cd17a13708594cb161d72b1447e94a
-- [x] 2.8 Fedora: a HEIC photo cast through the window shows upright — accepted at a4694afe63cd17a13708594cb161d72b1447e94a
-- [x] 2.9 Ubuntu 24.04 VM: the Linux binary opens its window, or why not — accepted at a4694afe63cd17a13708594cb161d72b1447e94a
+- [ ] 2.7 Fedora: the PR Linux binary opens a Qt window with the GPU on; size and start time recorded
+- [ ] 2.8 Fedora: a HEIC photo cast through the window shows upright
+- [ ] 2.9 Ubuntu 24.04 VM: the Linux binary opens its window, or why not
 
 ### Phase 3: The console's information moves into the window, and the console hides
 
@@ -865,7 +865,7 @@ The Progress Manual rows, run on the Windows laptop and the Fedora desktop, each
 - [x] 3.6 Windows window: the phone panel's QR opens the UI on the phone — accepted at f68fd5e
 - [x] 3.7 The phone shows no phone panel and no Quit control — accepted at f68fd5e
 - [x] 3.8 Offline: the panel says there is no network address — accepted at f68fd5e (Windows)
-- [x] 3.9 Fedora: the phone panel and QR codes work in the Qt window — accepted at a4694afe63cd17a13708594cb161d72b1447e94a
+- [ ] 3.9 Fedora: the phone panel and QR codes work in the Qt window
 - [x] 3.10 Windows double-click: only the window, closing it stops the TV — accepted at f68fd5e
 - [x] 3.11 Windows from PowerShell: output there, window opens, Ctrl+C stops both — accepted at f68fd5e
 - [x] 3.12 A fallback with a hidden console shows the console again — accepted at f68fd5e
@@ -881,9 +881,9 @@ The Progress Manual rows, run on the Windows laptop and the Fedora desktop, each
 
 #### Manual
 
-- [x] 4.5 Windows: the icon on the exe, the window and the taskbar — accepted at 8e7d001b7da035e9bafeac5da12fe29443fe79d2
-- [x] 4.6 Fedora: the window's taskbar entry shows the cast-tv icon — accepted at 9376efdb90d95d37d85e9e9979f5fc117b354d6e
-- [x] 4.7 Fedora: Add to menu, found in the overview, starts with no terminal — accepted at f971be55e8dbc786a923f9b6f23ea9409194fea3
-- [x] 4.8 Windows: Add to Start menu, starts with no console, pinning works — accepted at 35ba96c9fbf2302c39f5abda53d443009cbd7cdb
-- [x] 4.9 A moved file: Update menu entry repoints the entry — accepted at 8e7d001b7da035e9bafeac5da12fe29443fe79d2
-- [x] 4.10 Remove from menu removes the entry on both machines — accepted at 9376efdb90d95d37d85e9e9979f5fc117b354d6e
+- [ ] 4.5 Windows: the icon on the exe, the window and the taskbar
+- [ ] 4.6 Fedora: the window's taskbar entry shows the cast-tv icon
+- [ ] 4.7 Fedora: Add to menu, found in the overview, starts with no terminal
+- [ ] 4.8 Windows: Add to Start menu, starts with no console, pinning works
+- [ ] 4.9 A moved file: Update menu entry repoints the entry
+- [ ] 4.10 Remove from menu removes the entry on both machines

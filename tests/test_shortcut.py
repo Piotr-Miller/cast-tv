@@ -269,6 +269,52 @@ def test_cached_reads_the_shortcut_in_the_background(tmp_path):
 
 
 # ------------------------------------------------------- the packaged icons
+def test_windows_cache_refreshes_after_another_copy_changes_the_entry(tmp_path):
+    from tests.conftest import wait_for
+    now = [0.0]
+    ps = FakePowerShell()
+    first = windows(tmp_path, ps, clock=lambda: now[0])
+    second = windows(tmp_path, ps, executable=str(tmp_path / "other.exe"))
+    first.install()
+    second.install()
+    assert first.cached()["current"] is True       # the last reading stays available during the refresh
+    now[0] += shortcut.REFRESH_INTERVAL
+    first.cached()
+    wait_for(lambda: first.cached()["current"] is False)
+    assert first.cached()["installed"] is True
+    second.remove()
+    now[0] += shortcut.REFRESH_INTERVAL
+    first.cached()
+    wait_for(lambda: first.cached()["installed"] is False)
+
+
+@pytest.mark.parametrize("action", ["install", "remove"])
+def test_old_windows_read_cannot_overwrite_a_new_menu_action(tmp_path, monkeypatch, action):
+    import threading
+    from tests.conftest import wait_for
+    entry = windows(tmp_path, FakePowerShell())
+    if action == "remove":
+        entry.install()
+    state = entry.state
+    read, release = threading.Event(), threading.Event()
+
+    def delayed_state():
+        value = state()
+        read.set()
+        assert release.wait(5)
+        return value
+
+    monkeypatch.setattr(entry, "state", delayed_state)
+    entry._refresh_at = 0
+    entry.cached()
+    assert read.wait(5)
+    monkeypatch.setattr(entry, "state", state)
+    expected = getattr(entry, action)()
+    release.set()
+    wait_for(lambda: not entry._refreshing)
+    assert entry.cached() == expected
+
+
 def test_packaged_icons_without_the_repository():
     from castlib.server import ICON_ICO, ICON_PNG, UI_FILES
     with open(ICON_PNG, "rb") as fh:

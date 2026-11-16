@@ -1672,3 +1672,99 @@ Rows 3.10, 3.11 and 3.12 are accepted at f68fd5e on Windows.
 - **Side finding, the GoPro error** (both screenshots): with the network off, "Could not fetch
   https://api.gopro.com/media/search?fields=..." does not wrap; the long URL widens the page and
   the window shows a horizontal scroll bar. Not a row's criterion; for step 2's review.
+
+## Implementation-review fixes: automated verification (2026-11-17)
+
+The owner approved all eight findings' recommended fixes in the implementation-review
+conversation (2026-11-16). Changes are on `s12-review-fixes`, uncommitted. This section records
+automation and reproduction evidence, not human acceptance of a Progress row.
+
+### Changes and verification
+
+- **F1:** `App.start()` now cleans up ordinary exceptions as well as KeyboardInterrupt before
+  the CLI's reporter can block. Tests check a failure during construction, before serving, and
+  an invalid TV after serving: the port is free and closable sources are closed before the
+  reporter callback. Existing cancellation and AlreadyRunning tests still pass.
+- **F2:** smoke testing chooses a per-run port and checks loopback-only process/instance
+  identity. Shutdown rechecks the identity and sends conditional Quit on the same TCP
+  connection, refusing a closed connection, a replacement/older responder, or malformed
+  identity JSON. Fallback terminates only the spawned tree. The optional instance guard on
+  `/api/quit` rejects a mismatch with 409; ordinary UI Quit remains unchanged. Final regression
+  set: 11 passed on Windows and Linux.
+- **F3/F5:** host panels use `phone-panel`, and the launcher also uses `launcher`; the TV
+  dropdown retains `menu`, while existing sign-in help retains `phone`. Source errors and
+  sibling diagnostic/action-message fields wrap unbroken text. Headless Chrome using the real
+  stylesheet and panel markup at 1180 px and 420 px: panel position `static`, below the phone
+  panel, TV menu hidden, scrollWidth equal to viewport width with 1200-character error text;
+  the sign-in-help border remains 0 px. Screenshots: `.git/rune/s12-fixes/layout-1180.png` and
+  `layout-420.png`. This is not native-window or phone acceptance.
+- **F4:** Windows shortcut state refreshes in the background at a 5 s interval. A revision
+  guard prevents a read started before install/remove from overwriting that action. Tests cover
+  another copy changing/removing the entry and both install/remove races. Linux still reads
+  state directly.
+- **F6:** the first shown transition alone invokes the startup callback. The fake now emits
+  three shown events; the callback runs once, including when its output raises an exception.
+
+### F7: Fontconfig reproduction and fix
+
+The original Linux artifact from PR #97 run 42097549651 was downloaded into the task scratch
+directory. On WSL Ubuntu 26.04 (kernel 6.6.114.1, glibc 2.43), LD_DEBUG showed the main process
+and Qt helper loading `libfontconfig.so.1` from the onefile extraction directory. Reading
+`FcGetVersion()` from that archive member returned 21301: Fontconfig 2.13.1. No credentials or
+tokens were extracted or inspected.
+
+An isolated configuration included the upstream Fontconfig 2.18.3
+[48-guessfamily.conf](https://raw.githubusercontent.com/fontconfig/fontconfig/2.18.3/conf.d/48-guessfamily.conf)
+and [49-sansserif.conf](https://raw.githubusercontent.com/fontconfig/fontconfig/2.18.3/conf.d/49-sansserif.conf).
+The **same original executable**, run with `--window-check`, produced exactly **45** Fontconfig
+diagnostics and still reported `window-check: qtwebengine OK`. Switching only FONTCONFIG_FILE
+and FONTCONFIG_PATH to the proposed `packaging/fonts.conf` produced **zero** Fontconfig
+diagnostics and again reported `qtwebengine OK`. An isolated parser/font lookup also found
+DejaVu Sans in the host's `/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf` for Polish.
+
+The fix ships self-contained rules inside the Linux bundle and selects them from
+`packaging/entry.py` before Qt imports. It keeps the native library chain together, standard
+system/XDG/user font directories and an app-specific writable XDG cache, without including
+newer host configuration snippets. Existing explicit FONTCONFIG_FILE/PATH overrides win.
+[Fontconfig's reference](https://fontconfig.pages.freedesktop.org/fontconfig/fontconfig-user.html)
+documents these configuration overrides. This policy does not import arbitrary host/user font
+substitutions or custom directories declared only through configuration snippets.
+
+This reproduces the parser incompatibility on WSL using the relevant upstream rules. It does
+not claim a new Fedora 45 observation or certify visible glyph rendering there; that remains
+an owner check after the fixes are committed and new PR artifacts exist.
+
+### Gates and environment
+
+- **Windows 11, Python 3.14.5, test-only venv**, pytest 9.1.1 / platformdirs 4.13.4:
+  `python -m pytest`: **524 passed, 5 skipped**, exit 0, 121.65 s. A newer-dependency run had
+  523 passed and the documented OneDrive account timeout; the cause is not established, and
+  that excluded test was not changed.
+- **WSL Ubuntu 26.04, Python 3.14.4, test-only venv**, pytest 9.2.0 and Node 26.13.1:
+  `python -m pytest`: **525 passed, 4 skipped**, exit 0, 64.02 s; all 21 UI cases ran.
+- One final smoke-only malformed-JSON guard and regression case followed the full runs. All
+  **11 smoke tests** then passed on both OSes, and both binaries passed the final smoke script.
+- Final `python -m pyflakes castlib tests packaging`, `node --check castlib/ui/app.js` and
+  `git diff --check`: exit 0.
+- **Fresh Windows build:** 26,223,246 bytes; final smoke exit 0, `Window: edgechromium`,
+  HEIC 16x16 OK, HTTP 200, owned Quit freed port 57916, `edgechromium OK (9.8 s)`.
+- **Fresh Linux build:** 249,746,352 bytes; final smoke exit 0, `Window: qtwebengine`,
+  HEIC 16x16 OK, HTTP 200, owned Quit freed port 53517, `qtwebengine OK (6.6 s)`, no Fontconfig
+  diagnostics. WSL lacked native build libraries and a browser initially; the successful local
+  build used isolated support libraries from the prior CI artifact and portable official
+  [Chrome for Testing](https://googlechromelabs.github.io/chrome-for-testing/) for discovery.
+  No system packages were installed. The local Ubuntu 26.04 / Python 3.14 build is not a release
+  compatibility artifact for older distributions; the PR must still build on Ubuntu 22.04.
+- All local builds used a synthetic Google client only in the scratch source export and
+  isolated settings/cache directories. The source stub remains unchanged. No real sign-in,
+  TV playback, Windows session end or desktop acceptance was certified.
+
+The shared acceptance script succeeded in Git Bash and WSL, identifying the same affected
+rows. Reopened on 2026-11-17: **1.9–1.12, 1.16, 2.7–2.9, 3.9, 4.5–4.10**. Prior revisions and
+changed surfaces are preserved in change.md; Linux release rows also name the new font rules
+in their declarations. The final script reports 15 pending and 11 unverifiable rows in the
+whole plan, with no remaining stale checked rows. Existing malformed short/combined revisions
+were left unchanged. No manual row was newly confirmed.
+
+Full logs, build inputs, local test binaries and screenshots are under
+`.git/rune/s12-fixes/`; actionable follow-up is in `follow-ups/review-fixes.md`.

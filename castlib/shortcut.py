@@ -24,6 +24,7 @@ import shutil
 import subprocess
 import sys
 import threading
+import time
 from dataclasses import dataclass
 
 from castlib.errors import ConfigError
@@ -31,6 +32,7 @@ from castlib.server import ICON_ICO, ICON_PNG
 
 NAME = "cast-tv"
 TIMEOUT = 20      # seconds PowerShell may take to write or read the shortcut
+REFRESH_INTERVAL = 5.0   # seconds between background Windows shortcut reads
 
 # The values travel in environment variables, so no path is ever quoted into a script.
 LNK_WRITE = r"""
@@ -155,7 +157,7 @@ class MenuEntry:
     """The menu entry of this machine and this running file; every outside dependency can be injected."""
 
     def __init__(self, platform=None, environ=None, home=None, run=subprocess.run, frozen=None,
-                 executable=None, which=shutil.which, root=None, config=None, argv0=None):
+                 executable=None, which=shutil.which, root=None, config=None, argv0=None, clock=time.monotonic):
         self.platform = platform or sys.platform
         self.environ = os.environ if environ is None else environ
         self.home = home or os.path.expanduser("~")
@@ -169,6 +171,9 @@ class MenuEntry:
         self._lock = threading.Lock()
         self._cached: dict | None = None
         self._refreshing = False
+        self._clock = clock
+        self._refresh_at = 0.0
+        self._revision = 0
 
     @property
     def supported(self) -> bool:
@@ -248,25 +253,33 @@ class MenuEntry:
         if self.platform != "win32":
             return self.state()                   # a small file: read it every time
         with self._lock:
-            known, start = self._cached, not self._refreshing and self._cached is None
+            known = self._cached
+            start = not self._refreshing and (known is None or self._clock() >= self._refresh_at)
             if start:
                 self._refreshing = True
+                revision = self._revision
         if start:
-            threading.Thread(target=self._refresh, name="menu-entry", daemon=True).start()
+            threading.Thread(target=self._refresh, args=(revision,), name="menu-entry", daemon=True).start()
         return known
 
-    def _refresh(self) -> None:
+    def _refresh(self, revision: int) -> None:
+        value = None
         try:
             value = self.state()
+        except Exception:
+            pass                                 # retain the last reading; retry on the next interval
         finally:
             with self._lock:
+                if revision == self._revision and value is not None:
+                    self._cached = value
+                self._refresh_at = self._clock() + REFRESH_INTERVAL
                 self._refreshing = False
-        with self._lock:
-            self._cached = value
 
     def _remember(self, value: dict) -> dict:
         with self._lock:
+            self._revision += 1                   # a background read started before this action is obsolete
             self._cached = value
+            self._refresh_at = self._clock() + REFRESH_INTERVAL
         return value
 
     # ---------------------------------------------------------------- write
