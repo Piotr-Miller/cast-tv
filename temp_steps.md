@@ -1,4 +1,4 @@
-# Next steps (2026-11-07, step 15a: Fedora's half is on `main`; Windows 11's rows are next)
+# Next steps (2026-11-16, step 15a done on both machines; the review of Phases 2-4 is next)
 
 The standing note for a pause in the work (a reboot, a switch of machine): it stays in the
 repository and is overwritten at the next pause.
@@ -15,12 +15,17 @@ recorded row, the PR or commit.
     Fedora"): 1.9-1.12, 1.16, 2.7, 2.8 and 3.9 accepted at a4694af; 2.9 recorded as not run (the
     Ubuntu VM is gone), as its criterion allows. Fedora's parts of 1.13, 1.14 and 1.15 passed;
     those rows close with Windows.
-  - **Windows 11's half is next** (step 1 below).
+  - **Windows 11's half is done** (2026-11-16, branch `s12-15a-windows`; `research.md`, "Step
+    15a, Windows 11"): 1.8, 1.13-1.15, 2.6, 3.6-3.8 and 3.10-3.12 accepted at f68fd5e. Claude ran
+    3.10-3.12 itself (window messages, a real Ctrl+C, the TV's transport state); the owner confirmed
+    the parts only a person sees. Every manual row of S-12 is now ticked.
 - **The binaries** come from PR #97's release run 42097549651, built from fa0071f, whose code is
   main's c4a4e5a; `castlib/`, `packaging/` and `pyproject.toml` have not changed on `main` since.
   Windows 26123093 bytes, Linux 260586272 bytes; the artifacts expire 2027-02-03. The release
   workflow does not run on `main`.
-- **Side findings for step 2** (none fails a row, `research.md`, "Step 15a, Fedora"): the console
+- **Side findings for step 2** (none fails a row; `research.md`, "Step 15a, Fedora" and "Step 15a,
+  Windows 11"): with the network off, GoPro's "Could not fetch https://api.gopro.com/..." error
+  does not wrap and gives the window a horizontal scroll bar; the console
   prints "Close the window or press Ctrl+C" on every `shown` event, not once
   (`castlib/window.py:213`); the Linux binary prints about 45 Fontconfig warnings on Fedora 45.
 - **The TV** allows DLNA per client (Settings → General → Device Connection Manager → Device List,
@@ -34,7 +39,8 @@ recorded row, the PR or commit.
 
 ## Closing S-12
 
-- [ ] 1. **Windows 11 (home machine), step 15a's Windows half.** In PowerShell:
+- [x] 1. **Windows 11 (home machine), step 15a's Windows half.** — 2026-11-16, every row accepted
+   at f68fd5e; PR from `s12-15a-windows`. In PowerShell:
    ```powershell
    cd C:\Source\cast-tv; git switch main; git pull
    if (-not (Test-Path .venv)) { python -m venv .venv }
@@ -79,4 +85,4 @@ recorded row, the PR or commit.
 ## How to resume with Claude
 
 Write "co dalej" in the cast-tv checkout. Work from `main` (`git switch main; git pull`); until
-the PR carrying this note is merged, its branch is `s12-15a-windows-steps`.
+the PR carrying this note is merged, its branch is `s12-15a-windows`.

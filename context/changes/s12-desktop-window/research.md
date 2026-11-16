@@ -1660,3 +1660,15 @@ What Claude could not see (a short Terminal flash, the browser tab's text) is ma
   visible console; the owner saw cast-tv's output in the PowerShell window in 1.14 the same evening.
 
 Rows 3.10, 3.11 and 3.12 are accepted at f68fd5e on Windows.
+
+- **3.8** (owner, 2026-11-16, screenshots): first try with the Wi-Fi tile off: the panel listed
+  only `http://172.19.80.1:8895/ui/`, the address of `vEthernet (Default Switch)` (after the
+  sign-out the WSL adapter was gone and Default Switch had a new address); the Wi-Fi address
+  192.168.50.213 was **not** listed. Second try, with `Disable-NetAdapter -Name 'vEthernet
+  (Default Switch)'` in an administrator Terminal and the Wi-Fi tile off, the exe started from that
+  Terminal: "Open on your phone" read "This computer has no network address. Connect it to Wi-Fi
+  or Ethernet."; "No TV found" said it searched on "default route — 0 responses". Both adapters
+  were enabled again afterwards (Claude checked: `Up`). Accepted at f68fd5e.
+- **Side finding, the GoPro error** (both screenshots): with the network off, "Could not fetch
+  https://api.gopro.com/media/search?fields=..." does not wrap; the long URL widens the page and
+  the window shows a horizontal scroll bar. Not a row's criterion; for step 2's review.
