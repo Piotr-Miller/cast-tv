@@ -1623,3 +1623,34 @@ a4694af) 1.13, 1.14 and 1.15 close.
   the same Wi-Fi, opened the cast-tv UI on the phone.
 - **3.7:** the phone's page showed no "Open on your phone" panel and no "Quit cast-tv" button.
   After X on the window, no `cast-tv-windows-x64.exe` ran and port 8895 refused connections.
+
+Rows 3.10-3.12 were run by Claude at the owner's request (2026-11-16, 22:40-22:55), on the same exe:
+Claude started each copy, cast a OneDrive photo (`Pictures`, a 1000 px JPEG) through `/api/cast`,
+read the TV's state with `GetTransportInfo`, listed the visible top-level windows of the
+`cast-tv-windows-x64.exe` processes with `EnumWindows`, and acted on them with window messages.
+What Claude could not see (a short Terminal flash, the browser tab's text) is marked below.
+
+- **3.10:** `explorer.exe <exe>` (the shell's double-click path): the only visible window of the
+  two processes (onefile bootstrap and child) was `cast-tv`; no console window appeared in the
+  window list. With the photo `PLAYING` on the TV, `WM_CLOSE` on that window (what X sends): both
+  processes ended within 2.2 s and the TV went `STOPPED`. A Terminal flash lasting under a second
+  or two between polls would not show in this check.
+- **3.11:** a console started by Explorer (`run311.cmd`, cmd's parent `explorer`) ran the exe with
+  its output going to a file. It printed the three addresses, the firewall line, `Close the window
+  or press Ctrl+C to end it (playback stops on the TV too)` and `TV: 83" OLED (192.168.50.142)`;
+  the window opened (`window: true`). With the photo `PLAYING`, a `CTRL_C_EVENT` sent to that
+  console: `Stopped.`, both processes gone in 2.6 s, the TV `STOPPED`, no traceback.
+  A first try from Claude's own shell ignored Ctrl+C: processes started from the Claude Code
+  harness inherit its "ignore Ctrl+C" console flag, so that try says nothing about cast-tv (the
+  owner's Ctrl+C in 1.14 the same evening worked).
+- **3.12, the fallback:** `$env:CAST_TV_WINDOW_FAIL='1'; Start-Process <exe>`: `window: false`,
+  `/api/errors` held `window_unavailable` "No cast-tv window: CAST_TV_WINDOW_FAIL.", a Chrome
+  tab "cast-tv" opened, and the console reappeared as a new Windows Terminal window titled with
+  the exe's path. With the photo `PLAYING`, `WM_CLOSE` on that Terminal window: both processes
+  gone in 0.9 s and the TV `STOPPED`.
+- **3.12, an error before the window:** with `python -m http.server 8895 --bind 127.0.0.1`
+  running, `explorer.exe <exe>` showed a visible `cast-tv` dialog reading `Cannot bind port 8895:
+  [WinError 10048] Only one usage of each socket address ...` with an OK button; after 30 s it
+  and both processes were still there; after OK both processes ended. From PowerShell the same exe
+  printed `Cannot bind port 8895: [WinError 10048] ...` and exited 1 after 1.6 s, with no dialog
+  (a dialog would have held it until OK). The HTTP server was stopped afterwards.
