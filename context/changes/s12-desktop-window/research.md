@@ -1612,3 +1612,14 @@ the 83" OLED at 192.168.50.142, its `/dmr` answering 200 to this machine.
 
 Rows 1.8 and 1.13-1.15 are accepted at f68fd5e on Windows; with Fedora's parts (above, at
 a4694af) 1.13, 1.14 and 1.15 close.
+
+**The exe:**
+
+- **2.6:** Claude started `cast-tv-windows-x64.exe` (26,123,093 bytes) from `Downloads\s12-15a`
+  with `Start-Process` and polled `/api/status`: the server answered after 2.7 s, `window: true`
+  after 4.2 s. The owner saw a cast-tv window, not a browser tab, at a normal size with the whole UI
+  visible (2026-11-16). The panel listed `192.168.50.213` and Hyper-V's `172.19.80.1`.
+- **3.6:** in that window, **QR code** next to 192.168.50.213, scanned with the phone's camera on
+  the same Wi-Fi, opened the cast-tv UI on the phone.
+- **3.7:** the phone's page showed no "Open on your phone" panel and no "Quit cast-tv" button.
+  After X on the window, no `cast-tv-windows-x64.exe` ran and port 8895 refused connections.

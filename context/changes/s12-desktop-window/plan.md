@@ -845,7 +845,7 @@ The Progress Manual rows, run on the Windows laptop and the Fedora desktop, each
 
 #### Manual
 
-- [ ] 2.6 Windows: the PR exe opens the window; size and start time recorded
+- [x] 2.6 Windows: the PR exe opens the window; size and start time recorded — accepted at f68fd5e
 - [x] 2.7 Fedora: the PR Linux binary opens a Qt window with the GPU on; size and start time recorded — accepted at a4694afe63cd17a13708594cb161d72b1447e94a
 - [x] 2.8 Fedora: a HEIC photo cast through the window shows upright — accepted at a4694afe63cd17a13708594cb161d72b1447e94a
 - [x] 2.9 Ubuntu 24.04 VM: the Linux binary opens its window, or why not — accepted at a4694afe63cd17a13708594cb161d72b1447e94a
@@ -862,8 +862,8 @@ The Progress Manual rows, run on the Windows laptop and the Fedora desktop, each
 
 #### Manual
 
-- [ ] 3.6 Windows window: the phone panel's QR opens the UI on the phone
-- [ ] 3.7 The phone shows no phone panel and no Quit control
+- [x] 3.6 Windows window: the phone panel's QR opens the UI on the phone — accepted at f68fd5e
+- [x] 3.7 The phone shows no phone panel and no Quit control — accepted at f68fd5e
 - [ ] 3.8 Offline: the panel says there is no network address
 - [x] 3.9 Fedora: the phone panel and QR codes work in the Qt window — accepted at a4694afe63cd17a13708594cb161d72b1447e94a
 - [ ] 3.10 Windows double-click: only the window, closing it stops the TV
