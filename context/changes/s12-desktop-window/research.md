@@ -1814,3 +1814,49 @@ Rows 4.5, 4.8 and 4.9 are accepted at cd4dc1aa0d8250449935b1d7e3bab39df71635f9.
 `api.py`, `server.py`, `platform.py`, `window.py`, `ui/index.html`, `packaging/cast-tv.spec` and
 `entry.py`, all inside those rows' surfaces. They are unticked; their 2026-11-16 observations
 above stand as history, and they are confirmed again on this PR's binaries.
+
+### The reopened Windows rows again, at cd4dc1a (2026-11-17)
+
+Run by Claude at the owner's request, the same way as above: the checkout at aca98e1 (whose
+`castlib/`, `packaging/` and `pyproject.toml` equal cd4dc1a's) with its `.venv` and `[window]`,
+and the exe of run 43978457151 in `Downloads\s12-fixes\moved` (the firewall already knew that
+path). Consoles that must take Ctrl+C were started by Explorer from a `.cmd` file (processes
+started from Claude's shell inherit its "ignore Ctrl+C" flag); output went to a file. Video:
+`Przejazd - SuperCars.mp4` (OneDrive), TV state read with `GetTransportInfo`.
+
+- **1.8:** `python -m castlib` from `%USERPROFILE%`: a window `cast-tv` owned by `python` (no
+  browser tab); screenshot: the UI with the phone panel and "Add to Start menu" below it.
+- **1.13:** with the video `PLAYING` (0:00:00.185 of 0:02:59), `WM_CLOSE` (X): no castlib process
+  after 2.4 s, the TV `STOPPED`, output ended with `Stopped.` and `EXIT=0`. Side finding: before
+  `Stopped.` the console showed a `ConnectionAbortedError [WinError 10053]` traceback from
+  `castlib/relay.py:133` (`handler.wfile.write`) for a request from the TV (192.168.50.142) that
+  the TV aborted; `relay.py` is unchanged by the fixes, and the row's criterion holds.
+- **1.15:** with the window covered by the Terminal (the foreground window), a second
+  `python -m castlib` printed `cast-tv is already running: http://127.0.0.1:8895/ui/` and `Its
+  window is in front.`, exit 0 after 0.5 s; the screenshot shows the cast-tv window above the
+  Terminal. Keyboard focus stayed in the Terminal: Windows does not hand the foreground to a request
+  from a background process (Claude's shell); the window was raised, not activated.
+- **1.14, Ctrl+C:** started again, video `PLAYING`, `CTRL_C_EVENT` to the console: `Stopped.`, no
+  process after 2 s, the window gone, the TV `STOPPED`, no traceback. "Close the window or press
+  Ctrl+C" was printed once although 1.15 had raised the window (F6).
+- **2.6:** `explorer.exe <exe>`: `/api/status` answered after 3.6 s, `window: true` after 4.0 s; the
+  window is 1180x820 with the whole UI visible (screenshot).
+- **3.10:** in that start, the only new windows were a minimised Windows Terminal window titled
+  with the exe's path (first seen at 1.2 s, at -32000,-32000, gone by the end) and the `cast-tv`
+  window; with a photo `PLAYING`, `WM_CLOSE`: no process after 2.3 s, the TV `STOPPED`.
+- **3.11:** a console started by Explorer: the addresses, the firewall line, "Close the window or
+  press Ctrl+C ..." and `TV: 83" OLED (192.168.50.142)`; photo `PLAYING`, `CTRL_C_EVENT`:
+  `Stopped.`, no process after 2.8 s, the TV `STOPPED`, no traceback.
+- **3.12, the fallback:** `CAST_TV_WINDOW_FAIL=1` and `Start-Process`: `window: false`,
+  `window_unavailable` "No cast-tv window: CAST_TV_WINDOW_FAIL.", a Chrome window "cast-tv" on
+  `localhost:8895/ui/` and the console as a visible Windows Terminal window. Photo `PLAYING`,
+  `WM_CLOSE` on that console window: no process after 1.1 s, the TV `STOPPED`; a screenshot of the
+  tab then showed "cast-tv is not answering". Claude closed that Chrome window (Ctrl+W).
+- **3.12, an error before the window:** with `python -m http.server 8895 --bind 127.0.0.1`
+  running, `explorer.exe <exe>` showed the `cast-tv` dialog (screenshot: error icon, "Cannot
+  bind port 8895: [WinError 10048] ...", OK); after 30 s it and both processes were still there;
+  a click on OK ended both. From PowerShell the exe printed the bind error and exited 1 after
+  1.5 s, without a dialog. The HTTP server was stopped; 8895 is free.
+
+Rows 1.8, 1.13, 1.15, 2.6, 3.10, 3.11 and 3.12 are accepted at cd4dc1aa0d8250449935b1d7e3bab39df71635f9. 1.14 waits for its
+Windows sign-out part; 3.6-3.8 for the owner.
