@@ -1,4 +1,4 @@
-# Next steps (2026-11-17, PR #106: Fedora done; Windows's menu rows are next)
+# Next steps (2026-11-17, PR #106: only Windows's menu rows 4.8, 4.9 and 4.10 are left)
 
 The standing pause note; overwrite it at the next handoff. Claude ticks each step (`- [x]`) as
 soon as it is done, with the date and, for a merge or a recorded row, the PR or commit.
@@ -13,14 +13,16 @@ soon as it is done, with the date and, for a merge or a recorded row, the PR or 
     Plasma"; the owner decided Fedora's rows are accepted on Plasma): 1.9-1.16, 2.7, 2.8, 2.9 (not
     run: no Ubuntu desktop) and 3.9 accepted at 03b1b77 (commit 727351c). F3, F6 and F7 seen on
     screen: "Add to menu" below the phone panel, the "Close the window" line once, no Fontconfig
-    warnings.
+    warnings. 4.6 and 4.7 accepted at ac7aa2d (commit 5e66d2e); 4.10's Fedora part passed.
+    **Fedora is done.**
 - **The launcher-icon finding:** after **Add to menu**, Plasma's Application Dashboard (Meta key)
   once listed cast-tv with a blank document icon while KRunner, the panel and Alt+Tab showed the
   TV; it was not reproduced afterwards. The owner approved a hardening: the menu entry also sends
   KIconLoader's `iconChanged` D-Bus signal (`castlib/shortcut.py`, `_announce_icon_change`). It
-  changes `shortcut.py`, so **4.6, 4.7 and 4.10 (Fedora) and 4.8, 4.9 and 4.10's Windows part are
-  confirmed again on the binaries of the PR's next release run.** The Windows code path is
-  unchanged (the signal is Linux-only), but the rule reopens every row whose surface it touches.
+  changes `shortcut.py`, so the menu rows are confirmed again on ac7aa2d's release run 44178871505:
+  Fedora's are done; **Windows's 4.8, 4.9 and 4.10 are the only open rows of S-12.** The Windows
+  code path is unchanged (the signal is Linux-only), but the rule reopens every row whose surface
+  it touches.
 - **The TV** allows DLNA per client (Settings → General → Device Connection Manager → Device List,
   entries named only "Device N"). "No TV found" while the TV is on and
   `curl http://192.168.50.142:9197/dmr` answering 401 means that list, not cast-tv.
@@ -41,18 +43,18 @@ soon as it is done, with the date and, for a merge or a recorded row, the PR or 
    — 2026-11-17, ac7aa2d; release run 44178871505 green (Windows 26,124,328 bytes, `edgechromium
    OK`; Linux 260,590,064 bytes, `qtwebengine OK`).
 - [x] 5. **Fedora (Claude drives; the owner looks once):** — 2026-11-17, 4.6 and 4.7 accepted at
-   ac7aa2d; 4.10's Fedora part passed (`research.md`, "The menu rows on Fedora again"). on the new Linux binary, 4.6 (the
-   panel's icon), 4.7 (**Add to menu**, then Meta + `cast` in the Dashboard: the TV icon; started
-   from the launcher with no terminal) and 4.10 (**Remove from menu**; Meta + `cast` finds no app).
+   ac7aa2d; 4.10's Fedora part passed (`research.md`, "The menu rows on Fedora again").
 - [ ] 6. **Windows 11 (Claude drives, as on 2026-11-17; the owner answers the firewall prompt):**
    on the new exe, 4.8 (Add to Start menu, Start finds it, no console, pinning), 4.9 (moved file,
-   Update menu entry) and 4.10's Windows part. The exe should be 26124328 bytes. In PowerShell:
+   Update menu entry) and 4.10's Windows part. In PowerShell:
    ```powershell
    cd C:\Source\cast-tv; git fetch; git switch s12-review-fixes; git pull
    mkdir $HOME\Downloads\s12-fixes2 -Force; cd $HOME\Downloads\s12-fixes2
    gh run download 44178871505 -R Piotr-Miller/cast-tv -n cast-tv-windows-x64.exe
+   (Get-Item .\cast-tv-windows-x64.exe).Length
    ```
-   Then write "co dalej" to Claude in `C:\Source\cast-tv`.
+   The last line should be `26124328`. Then write "co dalej" to Claude in `C:\Source\cast-tv`;
+   Claude runs the rows, records them in `research.md` and asks you to accept them.
 - [ ] 7. **You:** merge PR #106 ("Rebase and merge"); afterwards Claude rewrites the SHAs from `main`.
 - [ ] 8. **You:** decide on the release tag (e.g. `v0.5.0`). This also checks ci-actions-node24's
    row 1.4 (a green `release` job; the Assets list both files at the built sizes).
