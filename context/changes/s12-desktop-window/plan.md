@@ -828,9 +828,9 @@ The Progress Manual rows, run on the Windows laptop and the Fedora desktop, each
 - [ ] 1.10 Without the extra: tab as today, with a working Quit control
 - [ ] 1.11 --no-window opens the tab
 - [ ] 1.12 A forced fallback opens the tab with window_unavailable in Diagnostics
-- [x] 1.13 X with a video playing stops the TV and ends the process — accepted at cd4dc1aa0d8250449935b1d7e3bab39df71635f9
+- [ ] 1.13 X with a video playing stops the TV and ends the process
 - [ ] 1.14 Ctrl+C and kill stop the TV and close the window
-- [x] 1.15 A second launch brings the window to the front — accepted at cd4dc1aa0d8250449935b1d7e3bab39df71635f9
+- [ ] 1.15 A second launch brings the window to the front
 - [ ] 1.16 The phone's UI is unchanged and has no Quit control
 
 ### Phase 2: The release carries the window
