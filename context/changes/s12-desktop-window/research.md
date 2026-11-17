@@ -1858,5 +1858,6 @@ started from Claude's shell inherit its "ignore Ctrl+C" flag); output went to a 
   a click on OK ended both. From PowerShell the exe printed the bind error and exited 1 after
   1.5 s, without a dialog. The HTTP server was stopped; 8895 is free.
 
-Rows 1.8, 1.13, 1.15, 2.6, 3.10, 3.11 and 3.12 are accepted at cd4dc1aa0d8250449935b1d7e3bab39df71635f9. 1.14 waits for its
-Windows sign-out part; 3.6-3.8 for the owner.
+Rows 1.8, 2.6, 3.10, 3.11 and 3.12 are accepted at cd4dc1aa0d8250449935b1d7e3bab39df71635f9. The Windows parts of 1.13 and
+1.15 passed; their Fedora parts (a4694af) predate the fixes, so both stay open for Fedora. 1.14
+waits for its Windows sign-out part and Fedora; 3.6-3.8 for the owner.
