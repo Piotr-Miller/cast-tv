@@ -331,6 +331,26 @@ class MenuEntry:
             os.utime(os.path.join(self._data_home(), "icons", "hicolor"))
         except OSError:
             pass                                       # the entry still works; the icon shows after a re-login
+        self._announce_icon_change()
+
+    def _announce_icon_change(self) -> None:
+        """Send KIconLoader's own change signal. On KDE Plasma, plasmashell keeps a miss for ``cast-tv`` from
+        the window that opened before the icon existed, and its launcher showed a blank icon (row 4.7,
+        2026-11-17); the signal makes every KDE process drop its icon caches. Elsewhere nobody listens."""
+        gdbus = self.which("gdbus")
+        if not gdbus:
+            return
+        env = dict(self.environ)
+        if "LD_LIBRARY_PATH_ORIG" in env:              # the release binary: the host's gdbus, the host's libraries
+            env["LD_LIBRARY_PATH"] = env.pop("LD_LIBRARY_PATH_ORIG")
+        elif self.frozen:
+            env.pop("LD_LIBRARY_PATH", None)
+        try:
+            self._run([gdbus, "emit", "--session", "--object-path", "/KIconLoader",
+                       "--signal", "org.kde.KIconLoader.iconChanged", "0"],
+                      capture_output=True, timeout=5, env=env)
+        except (OSError, subprocess.SubprocessError):
+            pass                                       # no session bus: a re-login shows the icon
 
     def _powershell(self, script: str, env: dict):
         full = dict(self.environ)

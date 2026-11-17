@@ -112,7 +112,7 @@ def test_shortcut_route_writes_and_removes_the_entry(app, monkeypatch, tmp_path)
     """From this machine the menu entry is written and removed; /api/status carries its state."""
     from castlib import shortcut
     entry = shortcut.MenuEntry(platform="linux", environ={}, home=str(tmp_path), frozen=True,
-                               executable="/opt/cast-tv")
+                               executable="/opt/cast-tv", run=lambda *a, **k: None)
     monkeypatch.setattr(shortcut, "menu_entry", entry)
     assert _json(app.base_url, "GET", "/api/status")[2]["shortcut"] == {
         "installed": False, "current": False, "path": entry.path()}

@@ -17,6 +17,7 @@ SPACED = "/home/a user/Apps/cast tv/cast-tv-linux-x64"
 def linux(tmp_path, **kw):
     kw.setdefault("frozen", True)
     kw.setdefault("executable", SPACED)
+    kw.setdefault("run", lambda *a, **k: None)        # no real D-Bus signal from a test
     return MenuEntry(platform="linux", environ={}, home=str(tmp_path), **kw)
 
 
@@ -111,9 +112,30 @@ def test_install_and_remove_bump_the_icon_theme_folder(tmp_path):
     assert theme.stat().st_mtime > 1
 
 
+def test_install_and_remove_send_kdes_icon_change_signal(tmp_path):
+    # plasmashell kept a miss for cast-tv and its launcher showed a blank icon (row 4.7, 2026-11-17)
+    calls = []
+    entry = linux(tmp_path, run=lambda cmd, **kw: calls.append((cmd, kw["env"])),
+                  which=lambda n: "/usr/bin/gdbus" if n == "gdbus" else None)
+    entry.environ.update(LD_LIBRARY_PATH="/tmp/_MEI1", LD_LIBRARY_PATH_ORIG="/opt/lib")
+    entry.install()
+    entry.remove()
+    signal = ["/usr/bin/gdbus", "emit", "--session", "--object-path", "/KIconLoader",
+              "--signal", "org.kde.KIconLoader.iconChanged", "0"]
+    assert [cmd for cmd, _ in calls] == [signal, signal]
+    assert all(env["LD_LIBRARY_PATH"] == "/opt/lib" and "LD_LIBRARY_PATH_ORIG" not in env for _, env in calls)
+
+
+def test_no_gdbus_or_no_session_bus_is_not_an_error(tmp_path):
+    def fails(cmd, **kw):
+        raise OSError("no bus")
+    linux(tmp_path, which=lambda n: None).install()
+    assert linux(tmp_path, run=fails, which=lambda n: "/usr/bin/gdbus").install()["installed"] is True
+
+
 def test_xdg_data_home_is_respected(tmp_path):
     entry = MenuEntry(platform="linux", environ={"XDG_DATA_HOME": str(tmp_path / "data")}, home=str(tmp_path / "h"),
-                      frozen=True, executable="/x")
+                      frozen=True, executable="/x", run=lambda *a, **k: None)
     entry.install()
     assert (tmp_path / "data" / "applications" / "cast-tv.desktop").is_file()
 
