@@ -1877,3 +1877,130 @@ waits for its Windows sign-out part and Fedora; 3.6-3.8 for the owner.
 
 Rows 3.6 and 3.7 are accepted at cd4dc1aa0d8250449935b1d7e3bab39df71635f9. The Windows parts of 1.13, 1.14 and 1.15 passed at
 cd4dc1a; those rows close with their Fedora parts.
+
+## The review fixes on Fedora, KDE Plasma (2026-11-17)
+
+Fedora 45 (kernel 7.3.4-300.fc45), now **KDE Plasma 6.8.3 on Wayland** (KWin 6.8.3, icon theme
+Tela-circle-orange-dark inheriting hicolor), not GNOME as on 2026-11-05 and 2026-11-07. The owner
+decided to accept Fedora's rows on Plasma ("Teraz na KDE"); a criterion that names "the GNOME
+overview" was checked in Plasma's launcher (Application Dashboard, `kickerdash`, on the Meta key)
+and in KRunner. The TV is the 83" OLED at 192.168.50.142 (`/dmr` 200 to 192.168.50.198, `wlo1`).
+
+**The copies.** The binary is the Linux file of PR #106's release run 43978457151 (built from
+cd4dc1a), in `~/Downloads/s12-fixes`: 260,588,936 bytes, SHA-256
+`3bbf57f855d7b9da306006277c591ac0b29cd80496c2a88498dfe31b519e6f7f`; `--version`: `cast-tv 0.4.0`,
+`Google Photos client: from ~/.config/cast-tv/google-client.json`, `GoPro window:
+/usr/bin/google-chrome`, `Window: qtwebengine`. Fedora has no pipx: pipx 1.18.19 ran from a venv in
+the session scratchpad, with `PIPX_HOME`/`PIPX_BIN_DIR` there, installing the checkout at 03b1b77
+(whose `castlib/`, `packaging/` and `pyproject.toml` equal cd4dc1a's) once from `"${PWD}[window]"`
+(Python 3.15.2, PySide6 6.12.0, pywebview 6.2.1, QtPy 2.4.3; `Window: qtwebengine`) and once from
+`"${PWD}"` (`Window: none (pywebview is not installed)`).
+
+**How Claude ran them** (the owner: "zrób to za mnie"). Claude cannot click inside a Qt window on
+Wayland, so it drove the page through Qt WebEngine's DevTools port
+(`QTWEBENGINE_REMOTE_DEBUGGING=127.0.0.1:9333`, set only on the runs after 2.7's timing), closed and
+activated windows with KWin scripts (`closeWindow()` is the X button's close request), took screen
+shots with Spectacle, read the TV's state with UPnP `GetTransportInfo`, and loaded the phone's view
+in a headless Chrome. Every copy started from `/tmp` or `~` through a wrapper that resets SIGINT
+to the default (2026-11-07's pitfall). The owner looked at the TV and at Plasma's launcher.
+
+**The release binary:**
+
+- **2.7** (21:50:45, no `QTWEBENGINE_*` variable): `/api/status` answered after 2.2 s and reported
+  `window: true` after 2.9 s (2026-11-07: 3.3 s; the threshold is 15 s); the window is 1180x820 on a
+  1920x1080 screen, the whole UI rendered, no horizontal scroll bar (DevTools). The GPU was on: the
+  app process held eleven descriptors of `/dev/dri/renderD128`. **F7:** neither `--version` nor the
+  run printed a Fontconfig line (2026-11-07: about 45). The console printed one
+  `qt.qpa.services` portal warning ("App info not found for 'cast-tv'"; no entry existed yet).
+  SIGINT at 21:52:45.4: `Stopped.` at 21:52:52.5, 7.1 s later (an idle TV; 1.14 below, with
+  playback, takes under a second); port free, no Qt helper left.
+- **F3:** "Add to menu" stands in its own panel below "Open on your phone" (screenshot).
+- **F6:** two more launches while the window ran each printed `Its window is in front.`; the
+  console's "Close the window or press Ctrl+C" line stayed at one for the whole session.
+- **3.9:** **Copy** showed "Copied." (DevTools reads the toast; Wayland gives the clipboard only to
+  a window with real input focus, so the system clipboard was not changed by this synthetic click,
+  and the row's criterion is the toast, as on 2026-11-07). **QR code**: the button became "Hide QR
+  code", a 180x180 code drew in its white square, and the code in the screenshot decodes (OpenCV
+  `QRCodeDetector`) to `http://192.168.50.198:8895/ui/`, which answers 200. The phone's camera was
+  not used.
+- **2.8:** OneDrive → Pictures → `shelf-christmas-decoration.heic`, **Cast now** at 21:54:10: the
+  status read `source: onedrive`, `mime: image/heic`, `converted: true`, 4000x3000,
+  1,442,278 bytes, TV `PLAYING`, `error: null`. The owner: the photo stood upright ("tak").
+- **4.6:** with the entry in place, the task in Plasma's panel, Alt+Tab and the window showed the
+  cast-tv TV icon (owner: "w tab i po enter sa wlasciwe ikony"; Claude's panel screenshot).
+- **Add to menu** (21:55:38): "Added: find cast-tv in the applications menu."; `cast-tv.desktop`
+  (`Exec=` the binary, `Icon=cast-tv`, `Terminal=false`, `StartupWMClass=cast-tv`,
+  `desktop-file-validate` silent) and `hicolor/256x256/apps/cast-tv.png` (identical to
+  `castlib/ui/icon.png`) were written in the same millisecond as the theme folder's time.
+- **Finding, the launcher's icon** (owner's screenshot): Meta + `cast` in the Application Dashboard
+  listed **cast-tv** with a blank white document, the theme's "unknown" icon; KRunner, the panel
+  and Alt+Tab showed the TV. A fresh GTK process found the icon (`has_icon('cast-tv')` true). After
+  Claude touched `~/.local/share/icons/hicolor` again (21:58:45) the Dashboard showed the TV.
+  **Not reproduced:** removing and adding the entry again (22:03; and 22:06-22:07 after flushing
+  every KDE process's icon caches with KIconLoader's `iconChanged` D-Bus signal while the icon was
+  absent and the window open) left the Dashboard on the TV (owner, "telewizorek"); KRunner listed
+  the entry with the TV after 8 s (its database is rebuilt a few seconds after the file appears).
+  KIconLoader re-checks a missing icon at most every 5 s and does not watch hicolor's time, so the
+  21:58 touch may have coincided with the cure rather than caused it; the likely cause is a miss
+  kept by plasmashell from the window that opened at 21:50, before the icon existed. Hardening, in
+  the next commit: the entry also sends KIconLoader's own `iconChanged` signal after writing or
+  removing the icon (`gdbus emit`, host libraries in the release binary), which makes every KDE
+  process drop its icon caches; elsewhere no one listens.
+
+**The pipx copy with `[window]`:**
+
+- **1.9** (22:09:45): a Qt window titled cast-tv (`resourceClass` cast-tv for KWin), no browser
+  tab; `window: true` after 0.8 s, four `QtWebEngineProcess` helpers.
+- **1.15:** with a Ghostty terminal made the active window by a KWin script (Spectacle's
+  active-window shot showed it), a second `cast-tv` printed `cast-tv is already running:
+  http://127.0.0.1:8895/ui/` and `Its window is in front.` and exited 0; the active-window shot
+  then showed the cast-tv window.
+- **1.16:** the UI at `http://192.168.50.198:8895/ui/` in a headless Chrome (412x915): `/api/status`
+  from that address says `host: false`; the page shows the tabs and the TV pill but no "Open on
+  your phone", no Quit cast-tv and no menu control (screenshot).
+- **1.13:** OneDrive → Dokumenty → Videos → `Przejazd - SuperCars.mp4`, **Cast now** at 22:11:41.7;
+  TV `PLAYING` at 22:11:52.7. KWin `closeWindow()` (X) at 22:12:03.7: the process was gone at
+  22:12:04.3 and printed `Stopped.`; the TV `STOPPED`; port 8895 free; no `QtWebEngineProcess` or
+  `systemd-inhibit` left.
+- **1.14**, each with the same video playing and the signal 5 s after `PLAYING`:
+
+| Signal | `PLAYING` | signal sent | process gone | TV after | console |
+|---|---|---|---|---|---|
+| SIGINT (Ctrl+C) | 22:12:39.6 | 22:12:44.6 | 22:12:45.5 | `STOPPED` | `Stopped.`, no traceback |
+| SIGTERM (`kill`) | 22:13:10.2 | 22:13:15.2 | 22:13:16.0 | `STOPPED` | `Stopped.`, no traceback |
+
+  The window closed with the process; port free and no Qt helper after each.
+- **1.11:** `--no-window`: `window: false`, no `QtWebEngineProcess`, the console ended with "Ctrl+C
+  ends it (playback stops on the TV too)"; SIGINT: `Stopped.`, port free.
+- **1.12:** `CAST_TV_WINDOW_FAIL=1`: `window: false`; the console printed "No cast-tv window
+  (CAST_TV_WINDOW_FAIL); the UI opens in the browser. Ctrl+C ends it (playback stops on the TV
+  too)"; `/api/errors` held `window_unavailable`, "No cast-tv window: CAST_TV_WINDOW_FAIL.", hint
+  "The UI opened in the browser instead; Ctrl+C here ends cast-tv."; SIGINT: `Stopped.`.
+
+**The pipx copy without the extra, 1.10:** the console ended with "Ctrl+C ends it (playback stops on
+the TV too)", `window: false`. In a headless Chrome tab on `http://127.0.0.1:8895/ui/` the header
+showed **Quit cast-tv**; the same video was cast from the tab (TV `PLAYING` 22:14:57.6), and a click
+on Quit cast-tv at 22:15:02.6 showed "cast-tv has ended; you can close this tab."; the process was
+gone at 22:15:04.2 with `Stopped.`, the TV `STOPPED`, port free.
+
+**4.7's installation variants**, each started the way Plasma's launcher does (`gio launch` on the
+`.desktop` file, from another folder):
+
+- **pipx:** from the `[window]` copy, **Add to menu** (API call of the button) replaced the
+  binary's entry: `Exec=` the pipx launcher in `PIPX_BIN_DIR`. Closed; `gio launch` at 22:15:25:
+  `window: true` at once; the process's parent is `systemd --user` and it has no terminal (`tty ?`).
+- **checkout** (the working tree at 03b1b77 plus the uncommitted hardening above), started from
+  `~` as `.venv/bin/python -m castlib`: remove, then add at 22:15:36: `Exec=<checkout>/.venv/bin/python
+  -m castlib`, `Path=<checkout>`. Closed; `gio launch` from `/tmp`: a window, cwd the checkout,
+  no terminal. The owner: Meta + `cast` in the Dashboard showed cast-tv with the TV ("telewizor").
+- **4.10, Fedora part** (the same checkout, 22:17:49): **Remove from menu** (API) answered
+  `installed: false`; `cast-tv.desktop` and the icon were gone; KRunner's `cast` listed no
+  cast-tv application, only the open window under Windows (screenshot). SIGINT: `Stopped.`.
+
+**2.9:** not run, as on 2026-11-07: there is no Ubuntu 24.04 desktop or VM at hand; the criterion
+allows "or why not".
+
+Accepted at 03b1b77fd525996c2ecf5cb7132bb449ad4343bb (code equal to cd4dc1a's): 1.9-1.16, 2.7, 2.8,
+2.9 (why not), 3.9; the Windows parts of 1.13-1.15 passed at cd4dc1a. 4.6, 4.7 and 4.10 passed
+here, but the hardening changes `castlib/shortcut.py`, inside their surfaces, so they are
+confirmed again on the next binary.
