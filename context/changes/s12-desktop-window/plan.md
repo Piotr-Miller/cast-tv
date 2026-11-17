@@ -864,7 +864,7 @@ The Progress Manual rows, run on the Windows laptop and the Fedora desktop, each
 
 - [ ] 3.6 Windows window: the phone panel's QR opens the UI on the phone
 - [ ] 3.7 The phone shows no phone panel and no Quit control
-- [ ] 3.8 Offline: the panel says there is no network address
+- [x] 3.8 Offline: the panel says there is no network address — accepted at cd4dc1aa0d8250449935b1d7e3bab39df71635f9
 - [ ] 3.9 Fedora: the phone panel and QR codes work in the Qt window
 - [x] 3.10 Windows double-click: only the window, closing it stops the TV — accepted at cd4dc1aa0d8250449935b1d7e3bab39df71635f9
 - [x] 3.11 Windows from PowerShell: output there, window opens, Ctrl+C stops both — accepted at cd4dc1aa0d8250449935b1d7e3bab39df71635f9
