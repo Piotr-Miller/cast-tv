@@ -1768,3 +1768,49 @@ were left unchanged. No manual row was newly confirmed.
 
 Full logs, build inputs, local test binaries and screenshots are under
 `.git/rune/s12-fixes/`; actionable follow-up is in `follow-ups/review-fixes.md`.
+
+## The review fixes on Windows 11 (2026-11-17)
+
+The home Windows 11 machine, PR #106 at cd4dc1aa0d8250449935b1d7e3bab39df71635f9 (Codex's
+impl-review fixes F1-F8). The exe is the Windows file of the PR's release run 43978457151:
+26,124,589 bytes (the build's smoke test printed the same size and `window-check: edgechromium OK
+(7.5 s)`), SHA-256 `FFFAA261...358ED9`; `--version`: `cast-tv 0.4.0`, `Google Photos client:
+built in`, `Window: edgechromium`. Before the run no Start-menu entry existed.
+
+Claude ran the rows at the owner's request ("zrób testy za mnie") from PowerShell: screenshots of
+the screen (`CopyFromScreen`, read by Claude), mouse clicks and keys through `user32`
+(`SetCursorPos`, `mouse_event`, `keybd_event`), and window messages. Each new exe path raised the
+Windows Firewall prompt; the owner answered it each time (Claude does not change firewall settings).
+
+- **4.5:** in File Explorer, `Downloads\s12-fixes` showed `cast-tv-windows-x64.exe` with the amber
+  TV icon (zoomed screenshot). Started with `explorer.exe <exe>`: the window's title bar and its
+  taskbar button showed the same icon.
+- **F3 on screen:** "Add to Start menu" sat in its own panel below "Open on your phone", in the
+  page flow, not floating under the TV button.
+- **4.8:** a click on **Add to Start menu** showed "Added: find cast-tv in Start." and the button
+  read **Remove from menu**; `cast-tv.lnk` existed. After `WM_CLOSE` (X) no process was left.
+  Windows key + `cast-tv`: Best match "cast-tv, App" with the TV icon. Enter: the cast-tv window
+  opened; for about 1.5 s a **minimised** Windows Terminal window titled `cast-tv` existed (at
+  -32000,-32000, i.e. only on the taskbar) and was gone by 7.5 s, the console-detach relaunch of
+  row 3.10; no console window showed on screen. Right-click on the taskbar button → **Pin to
+  taskbar**, `WM_CLOSE`, click on the pinned icon: the window opened again from
+  `Downloads\s12-fixes`; closed, no process left.
+- **4.9:** `Move-Item` to `moved\`, started from there: the button read **Update menu entry
+  (points to another file)**; a click turned it into **Remove from menu**, and the `.lnk` target
+  became `...\moved\cast-tv-windows-x64.exe`. Closed; started from Start (Best match "cast-tv,
+  App"): both processes ran from `moved\`.
+- **4.10, Windows part:** in that window a click on **Remove from menu** showed "Removed from
+  the Start menu." and the button read **Add to Start menu**; `cast-tv.lnk` was gone. After
+  closing, Windows key + `cast-tv` showed no "cast-tv" app; Windows completed the query to
+  `cast-tv-windows-x64.exe` and listed the executables it has seen run (this exe, `moved\`'s, and
+  older PyInstaller builds with the Python icon), which were also listed before the entry was
+  added (the 4.8 screenshot), so they are Windows' own search history, not cast-tv's entry. The
+  taskbar pin was removed with right-click → **Unpin from taskbar**. 4.10 stays open for Fedora.
+
+Rows 4.5, 4.8 and 4.9 are accepted at cd4dc1aa0d8250449935b1d7e3bab39df71635f9.
+
+**Reopened.** Written with the full revision of f68fd5e, the shared acceptance script reports
+1.8, 1.13-1.15, 2.6, 3.6-3.8 and 3.10-3.12 stale: the review fixes changed `castlib/app.py`,
+`api.py`, `server.py`, `platform.py`, `window.py`, `ui/index.html`, `packaging/cast-tv.spec` and
+`entry.py`, all inside those rows' surfaces. They are unticked; their 2026-11-16 observations
+above stand as history, and they are confirmed again on this PR's binaries.
