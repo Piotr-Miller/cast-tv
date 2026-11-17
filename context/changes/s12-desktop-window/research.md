@@ -1867,3 +1867,13 @@ waits for its Windows sign-out part and Fedora; 3.6-3.8 for the owner.
   Wi-Fi or Ethernet."; "No TV found" searched on "default route — 0 responses"; "Add to Start
   menu" stood in its own panel below. Afterwards Claude saw Wi-Fi and both vEthernet adapters
   `Up` and no cast-tv process. Accepted at cd4dc1aa0d8250449935b1d7e3bab39df71635f9.
+- **3.6, 3.7 and 1.14's Windows sign-out** (owner, 2026-11-17, "Poszło tak, jak powinno pójść"):
+  in the exe's window (started by Claude from `moved`), **QR code** next to 192.168.50.213,
+  scanned with the phone's camera, opened the cast-tv UI on the phone, and the phone's page showed
+  no "Open on your phone" panel, no "Quit cast-tv" and no "Add to Start menu". Then, with cast-tv
+  started from PowerShell in the checkout's venv and the video playing on the TV, the owner
+  signed out of Windows without closing cast-tv: the TV stopped. Explorer's start time shows the
+  new session at 18:25:19; at 18:32 no castlib process ran and `127.0.0.1:8895` refused.
+
+Rows 3.6 and 3.7 are accepted at cd4dc1aa0d8250449935b1d7e3bab39df71635f9. The Windows parts of 1.13, 1.14 and 1.15 passed at
+cd4dc1a; those rows close with their Fedora parts.
