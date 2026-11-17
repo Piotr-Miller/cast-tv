@@ -1,4 +1,4 @@
-# Next steps (2026-11-17, PR #106: Fedora rows done; the menu rows again on both machines)
+# Next steps (2026-11-17, PR #106: Fedora done; Windows's menu rows are next)
 
 The standing pause note; overwrite it at the next handoff. Claude ticks each step (`- [x]`) as
 soon as it is done, with the date and, for a merge or a recorded row, the PR or commit.
@@ -37,17 +37,20 @@ soon as it is done, with the date and, for a merge or a recorded row, the PR or 
 - [x] 1. The review fixes, PR #106, CI green. — 2026-11-17, cd4dc1a.
 - [x] 2. Windows rows on the PR's exe. — 2026-11-17.
 - [x] 3. Fedora rows on the PR's Linux binary and pipx. — 2026-11-17, 727351c.
-- [ ] 4. **Claude:** the hardening commit pushed to #106; wait for its release run to be green.
-- [ ] 5. **Fedora (Claude drives; the owner looks once):** on the new Linux binary, 4.6 (the
+- [x] 4. **Claude:** the hardening commit pushed to #106; wait for its release run to be green.
+   — 2026-11-17, ac7aa2d; release run 44178871505 green (Windows 26,124,328 bytes, `edgechromium
+   OK`; Linux 260,590,064 bytes, `qtwebengine OK`).
+- [x] 5. **Fedora (Claude drives; the owner looks once):** — 2026-11-17, 4.6 and 4.7 accepted at
+   ac7aa2d; 4.10's Fedora part passed (`research.md`, "The menu rows on Fedora again"). on the new Linux binary, 4.6 (the
    panel's icon), 4.7 (**Add to menu**, then Meta + `cast` in the Dashboard: the TV icon; started
    from the launcher with no terminal) and 4.10 (**Remove from menu**; Meta + `cast` finds no app).
 - [ ] 6. **Windows 11 (Claude drives, as on 2026-11-17; the owner answers the firewall prompt):**
    on the new exe, 4.8 (Add to Start menu, Start finds it, no console, pinning), 4.9 (moved file,
-   Update menu entry) and 4.10's Windows part. In PowerShell:
+   Update menu entry) and 4.10's Windows part. The exe should be 26124328 bytes. In PowerShell:
    ```powershell
    cd C:\Source\cast-tv; git fetch; git switch s12-review-fixes; git pull
    mkdir $HOME\Downloads\s12-fixes2 -Force; cd $HOME\Downloads\s12-fixes2
-   gh run download <run id from step 4> -R Piotr-Miller/cast-tv -n cast-tv-windows-x64.exe
+   gh run download 44178871505 -R Piotr-Miller/cast-tv -n cast-tv-windows-x64.exe
    ```
    Then write "co dalej" to Claude in `C:\Source\cast-tv`.
 - [ ] 7. **You:** merge PR #106 ("Rebase and merge"); afterwards Claude rewrites the SHAs from `main`.

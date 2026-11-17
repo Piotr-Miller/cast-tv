@@ -2004,3 +2004,24 @@ Accepted at 03b1b77fd525996c2ecf5cb7132bb449ad4343bb (code equal to cd4dc1a's): 
 2.9 (why not), 3.9; the Windows parts of 1.13-1.15 passed at cd4dc1a. 4.6, 4.7 and 4.10 passed
 here, but the hardening changes `castlib/shortcut.py`, inside their surfaces, so they are
 confirmed again on the next binary.
+
+### The menu rows on Fedora again, on ac7aa2d's binary (2026-11-17)
+
+The hardening (`_announce_icon_change`) reopened the menu rows. PR #106's release run 44178871505
+(built from ac7aa2d; build smoke test `qtwebengine OK (5.0 s)`): `cast-tv-linux-x64` in
+`~/Downloads/s12-fixes2`, 260,590,064 bytes, SHA-256
+`3f148b30fc1a8c815b29f656aa30bb511d138d033da6af8542aad8fca273bab4`, `Window: qtwebengine`. No
+entry existed before. Same machine and method as above.
+
+- **Add to menu**, clicked in the window through DevTools at 22:24:46: "Added: find cast-tv in
+  the applications menu."; `Exec=` this file, `Icon=cast-tv`, the icon written.
+- **4.6:** the task in Plasma's panel showed the TV icon (Claude's screenshot of the panel).
+- **4.7:** the window closed with a KWin `closeWindow()` (`Stopped.`, port free); `gio launch` on
+  the entry at 22:25:21 opened the window, the process with no terminal (`tty ?`). The owner, Meta +
+  `cast` in the Application Dashboard: the cast-tv tile showed the TV ("telewizor").
+- **4.10, Fedora part:** **Remove from menu**, clicked at 22:26:02: "Removed from the menu.", the
+  button back to **Add to menu**; `cast-tv.desktop` and the icon gone; 8 s later KRunner's `cast`
+  listed no cast-tv application, only the still-open window under Windows (screenshot). SIGINT:
+  `Stopped.`.
+
+4.10 closes with its Windows part on the same run's exe.
