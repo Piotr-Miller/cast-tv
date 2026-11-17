@@ -1861,3 +1861,9 @@ started from Claude's shell inherit its "ignore Ctrl+C" flag); output went to a 
 Rows 1.8, 2.6, 3.10, 3.11 and 3.12 are accepted at cd4dc1aa0d8250449935b1d7e3bab39df71635f9. The Windows parts of 1.13 and
 1.15 passed; their Fedora parts (a4694af) predate the fixes, so both stay open for Fedora. 1.14
 waits for its Windows sign-out part and Fedora; 3.6-3.8 for the owner.
+- **3.8** (owner, 2026-11-17, screenshot): with `vEthernet (Default Switch)` and the WSL adapter
+  disabled (`Disable-NetAdapter`, administrator Terminal) and the Wi-Fi tile off, the exe from
+  `moved`: "Open on your phone" read "This computer has no network address. Connect it to
+  Wi-Fi or Ethernet."; "No TV found" searched on "default route — 0 responses"; "Add to Start
+  menu" stood in its own panel below. Afterwards Claude saw Wi-Fi and both vEthernet adapters
+  `Up` and no cast-tv process. Accepted at cd4dc1aa0d8250449935b1d7e3bab39df71635f9.
