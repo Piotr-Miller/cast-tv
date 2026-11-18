@@ -1,4 +1,4 @@
-# Next steps (2026-11-18, S-12 archived; release v0.5.0 next)
+# Next steps (2026-11-18, S-12 archived; the owner merges the 0.5.0 PR and tags v0.5.0)
 
 The standing pause note; overwrite it at the next handoff. Claude ticks each step (`- [x]`) as
 soon as it is done, with the date and, for a merge or a recorded row, the PR or commit.
@@ -51,10 +51,12 @@ soon as it is done, with the date and, for a merge or a recorded row, the PR or 
 - [x] 8. The owner chose `v0.5.0`, archive first, then the release. — 2026-11-18.
 - [x] 9. `/rune-archive s12-desktop-window`: outcome completed, 26 of 26 manual rows current;
    S-12 `done` in the roadmap. — 2026-11-18, e3326d1 and a11a2fb on `archive-s12-desktop-window`.
-- [ ] 10. **You:** merge the archive PR ("Rebase and merge"); afterwards Claude writes the new
-   `archive_commit` from `main` (as for signal-shutdown-races).
-- [ ] 11. **Claude:** a PR setting `castlib/__init__.py` to `0.5.0` (`chore(release): cast-tv 0.5.0`).
-- [ ] 12. **You:** merge it, then tag `v0.5.0` on `main` and push the tag. The `release` job
+- [x] 10. **You:** merge the archive PR ("Rebase and merge"); afterwards Claude writes the new
+   `archive_commit` from `main` (as for signal-shutdown-races). — 2026-11-18, #108; cd53df0.
+- [x] 11. **Claude:** a PR setting `castlib/__init__.py` to `0.5.0` (`chore(release): cast-tv 0.5.0`).
+   — 2026-11-18, branch `release-0.5.0`, with the archive_commit fix.
+- [ ] 12. **You:** merge it, then tag `v0.5.0` on `main` and push the tag:
+   `git switch main; git pull; git tag v0.5.0; git push origin v0.5.0`. The `release` job
    publishes the GitHub Release; check its Assets list both files at the built sizes. This also
    checks ci-actions-node24's row 1.4.
 
