@@ -151,4 +151,4 @@ python packaging\startup_time.py <exe> --mode warm --runs 1 --hold 15 --out p1-w
 - Found: `--hold` also held the unmeasured priming start (the window stayed open after 4.17 s as
   well). It does not change any time; the priming start is never measured.
 
-Row 1.7 is accepted at 5155ad82c94acd342e5f60faf24fa9547bf47229.
+Row 1.7 is accepted at fc780beb1660330a543a6c0bf9fd41036f840f2c (the docs commit over 5155ad8; same code).
