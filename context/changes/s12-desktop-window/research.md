@@ -1771,7 +1771,7 @@ Full logs, build inputs, local test binaries and screenshots are under
 
 ## The review fixes on Windows 11 (2026-11-17)
 
-The home Windows 11 machine, PR #106 at cd4dc1aa0d8250449935b1d7e3bab39df71635f9 (Codex's
+The home Windows 11 machine, PR #106 at 0f3ef79d6b36ab1f91eb3046a42c08fc992656a7 (Codex's
 impl-review fixes F1-F8). The exe is the Windows file of the PR's release run 43978457151:
 26,124,589 bytes (the build's smoke test printed the same size and `window-check: edgechromium OK
 (7.5 s)`), SHA-256 `FFFAA261...358ED9`; `--version`: `cast-tv 0.4.0`, `Google Photos client:
@@ -1807,7 +1807,7 @@ Windows Firewall prompt; the owner answered it each time (Claude does not change
   added (the 4.8 screenshot), so they are Windows' own search history, not cast-tv's entry. The
   taskbar pin was removed with right-click → **Unpin from taskbar**. 4.10 stays open for Fedora.
 
-Rows 4.5, 4.8 and 4.9 are accepted at cd4dc1aa0d8250449935b1d7e3bab39df71635f9.
+Rows 4.5, 4.8 and 4.9 are accepted at 0f3ef79d6b36ab1f91eb3046a42c08fc992656a7.
 
 **Reopened.** Written with the full revision of f68fd5e, the shared acceptance script reports
 1.8, 1.13-1.15, 2.6, 3.6-3.8 and 3.10-3.12 stale: the review fixes changed `castlib/app.py`,
@@ -1815,10 +1815,10 @@ Rows 4.5, 4.8 and 4.9 are accepted at cd4dc1aa0d8250449935b1d7e3bab39df71635f9.
 `entry.py`, all inside those rows' surfaces. They are unticked; their 2026-11-16 observations
 above stand as history, and they are confirmed again on this PR's binaries.
 
-### The reopened Windows rows again, at cd4dc1a (2026-11-17)
+### The reopened Windows rows again, at 0f3ef79 (2026-11-17)
 
-Run by Claude at the owner's request, the same way as above: the checkout at aca98e1 (whose
-`castlib/`, `packaging/` and `pyproject.toml` equal cd4dc1a's) with its `.venv` and `[window]`,
+Run by Claude at the owner's request, the same way as above: the checkout at f5dd5a8 (whose
+`castlib/`, `packaging/` and `pyproject.toml` equal 0f3ef79's) with its `.venv` and `[window]`,
 and the exe of run 43978457151 in `Downloads\s12-fixes\moved` (the firewall already knew that
 path). Consoles that must take Ctrl+C were started by Explorer from a `.cmd` file (processes
 started from Claude's shell inherit its "ignore Ctrl+C" flag); output went to a file. Video:
@@ -1858,7 +1858,7 @@ started from Claude's shell inherit its "ignore Ctrl+C" flag); output went to a 
   a click on OK ended both. From PowerShell the exe printed the bind error and exited 1 after
   1.5 s, without a dialog. The HTTP server was stopped; 8895 is free.
 
-Rows 1.8, 2.6, 3.10, 3.11 and 3.12 are accepted at cd4dc1aa0d8250449935b1d7e3bab39df71635f9. The Windows parts of 1.13 and
+Rows 1.8, 2.6, 3.10, 3.11 and 3.12 are accepted at 0f3ef79d6b36ab1f91eb3046a42c08fc992656a7. The Windows parts of 1.13 and
 1.15 passed; their Fedora parts (a4694af) predate the fixes, so both stay open for Fedora. 1.14
 waits for its Windows sign-out part and Fedora; 3.6-3.8 for the owner.
 - **3.8** (owner, 2026-11-17, screenshot): with `vEthernet (Default Switch)` and the WSL adapter
@@ -1866,7 +1866,7 @@ waits for its Windows sign-out part and Fedora; 3.6-3.8 for the owner.
   `moved`: "Open on your phone" read "This computer has no network address. Connect it to
   Wi-Fi or Ethernet."; "No TV found" searched on "default route — 0 responses"; "Add to Start
   menu" stood in its own panel below. Afterwards Claude saw Wi-Fi and both vEthernet adapters
-  `Up` and no cast-tv process. Accepted at cd4dc1aa0d8250449935b1d7e3bab39df71635f9.
+  `Up` and no cast-tv process. Accepted at 0f3ef79d6b36ab1f91eb3046a42c08fc992656a7.
 - **3.6, 3.7 and 1.14's Windows sign-out** (owner, 2026-11-17, "Poszło tak, jak powinno pójść"):
   in the exe's window (started by Claude from `moved`), **QR code** next to 192.168.50.213,
   scanned with the phone's camera, opened the cast-tv UI on the phone, and the phone's page showed
@@ -1875,8 +1875,8 @@ waits for its Windows sign-out part and Fedora; 3.6-3.8 for the owner.
   signed out of Windows without closing cast-tv: the TV stopped. Explorer's start time shows the
   new session at 18:25:19; at 18:32 no castlib process ran and `127.0.0.1:8895` refused.
 
-Rows 3.6 and 3.7 are accepted at cd4dc1aa0d8250449935b1d7e3bab39df71635f9. The Windows parts of 1.13, 1.14 and 1.15 passed at
-cd4dc1a; those rows close with their Fedora parts.
+Rows 3.6 and 3.7 are accepted at 0f3ef79d6b36ab1f91eb3046a42c08fc992656a7. The Windows parts of 1.13, 1.14 and 1.15 passed at
+0f3ef79; those rows close with their Fedora parts.
 
 ## The review fixes on Fedora, KDE Plasma (2026-11-17)
 
@@ -1887,12 +1887,12 @@ overview" was checked in Plasma's launcher (Application Dashboard, `kickerdash`,
 and in KRunner. The TV is the 83" OLED at 192.168.50.142 (`/dmr` 200 to 192.168.50.198, `wlo1`).
 
 **The copies.** The binary is the Linux file of PR #106's release run 43978457151 (built from
-cd4dc1a), in `~/Downloads/s12-fixes`: 260,588,936 bytes, SHA-256
+0f3ef79), in `~/Downloads/s12-fixes`: 260,588,936 bytes, SHA-256
 `3bbf57f855d7b9da306006277c591ac0b29cd80496c2a88498dfe31b519e6f7f`; `--version`: `cast-tv 0.4.0`,
 `Google Photos client: from ~/.config/cast-tv/google-client.json`, `GoPro window:
 /usr/bin/google-chrome`, `Window: qtwebengine`. Fedora has no pipx: pipx 1.18.19 ran from a venv in
-the session scratchpad, with `PIPX_HOME`/`PIPX_BIN_DIR` there, installing the checkout at 03b1b77
-(whose `castlib/`, `packaging/` and `pyproject.toml` equal cd4dc1a's) once from `"${PWD}[window]"`
+the session scratchpad, with `PIPX_HOME`/`PIPX_BIN_DIR` there, installing the checkout at 21722ca
+(whose `castlib/`, `packaging/` and `pyproject.toml` equal 0f3ef79's) once from `"${PWD}[window]"`
 (Python 3.15.2, PySide6 6.12.0, pywebview 6.2.1, QtPy 2.4.3; `Window: qtwebengine`) and once from
 `"${PWD}"` (`Window: none (pywebview is not installed)`).
 
@@ -1989,7 +1989,7 @@ gone at 22:15:04.2 with `Stopped.`, the TV `STOPPED`, port free.
 - **pipx:** from the `[window]` copy, **Add to menu** (API call of the button) replaced the
   binary's entry: `Exec=` the pipx launcher in `PIPX_BIN_DIR`. Closed; `gio launch` at 22:15:25:
   `window: true` at once; the process's parent is `systemd --user` and it has no terminal (`tty ?`).
-- **checkout** (the working tree at 03b1b77 plus the uncommitted hardening above), started from
+- **checkout** (the working tree at 21722ca plus the uncommitted hardening above), started from
   `~` as `.venv/bin/python -m castlib`: remove, then add at 22:15:36: `Exec=<checkout>/.venv/bin/python
   -m castlib`, `Path=<checkout>`. Closed; `gio launch` from `/tmp`: a window, cwd the checkout,
   no terminal. The owner: Meta + `cast` in the Dashboard showed cast-tv with the TV ("telewizor").
@@ -2000,15 +2000,15 @@ gone at 22:15:04.2 with `Stopped.`, the TV `STOPPED`, port free.
 **2.9:** not run, as on 2026-11-07: there is no Ubuntu 24.04 desktop or VM at hand; the criterion
 allows "or why not".
 
-Accepted at 03b1b77fd525996c2ecf5cb7132bb449ad4343bb (code equal to cd4dc1a's): 1.9-1.16, 2.7, 2.8,
-2.9 (why not), 3.9; the Windows parts of 1.13-1.15 passed at cd4dc1a. 4.6, 4.7 and 4.10 passed
+Accepted at 21722ca2696d03743f36cedd87050ed918d9868a (code equal to 0f3ef79's): 1.9-1.16, 2.7, 2.8,
+2.9 (why not), 3.9; the Windows parts of 1.13-1.15 passed at 0f3ef79. 4.6, 4.7 and 4.10 passed
 here, but the hardening changes `castlib/shortcut.py`, inside their surfaces, so they are
 confirmed again on the next binary.
 
-### The menu rows on Fedora again, on ac7aa2d's binary (2026-11-17)
+### The menu rows on Fedora again, on 408dc79's binary (2026-11-17)
 
 The hardening (`_announce_icon_change`) reopened the menu rows. PR #106's release run 44178871505
-(built from ac7aa2d; build smoke test `qtwebengine OK (5.0 s)`): `cast-tv-linux-x64` in
+(built from 408dc79; build smoke test `qtwebengine OK (5.0 s)`): `cast-tv-linux-x64` in
 `~/Downloads/s12-fixes2`, 260,590,064 bytes, SHA-256
 `3f148b30fc1a8c815b29f656aa30bb511d138d033da6af8542aad8fca273bab4`, `Window: qtwebengine`. No
 entry existed before. Same machine and method as above.
@@ -2026,10 +2026,10 @@ entry existed before. Same machine and method as above.
 
 4.10 closes with its Windows part on the same run's exe.
 
-### The menu rows on Windows 11 again, on ac7aa2d's exe (2026-11-18)
+### The menu rows on Windows 11 again, on 408dc79's exe (2026-11-18)
 
 The hardening (`_announce_icon_change`, Linux-only) reopened 4.8 and 4.9 because it changes
-`castlib/shortcut.py`. PR #106's release run 44178871505 (built from ac7aa2d): the Windows file in
+`castlib/shortcut.py`. PR #106's release run 44178871505 (built from 408dc79): the Windows file in
 `Downloads\s12-fixes2`, 26,124,328 bytes, SHA-256
 `d61963c59487efe336b0a42f4b0800614ab394b81ce536209635b6c9bc603758`; `--version`: `cast-tv 0.4.0`,
 `Google Photos client: built in`, `Window: edgechromium`. No Start-menu entry and no taskbar pin

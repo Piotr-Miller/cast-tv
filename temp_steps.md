@@ -1,26 +1,26 @@
-# Next steps (2026-11-18, PR #106: every S-12 row accepted; the owner merges)
+# Next steps (2026-11-18, PR #106 merged; the release tag and the archive are next)
 
 The standing pause note; overwrite it at the next handoff. Claude ticks each step (`- [x]`) as
 soon as it is done, with the date and, for a merge or a recorded row, the PR or commit.
 
 ## Where it stands
 
-- **PR #106** (branch `s12-review-fixes`): Codex's impl-review fixes F1-F8 at cd4dc1a, then the
+- **PR #106** (branch `s12-review-fixes`): Codex's impl-review fixes F1-F8 at 0f3ef79, then the
   manual rows on both machines.
   - **Windows 11** (2026-11-17, `research.md`, "The review fixes on Windows 11"): 1.8, 2.6,
-    3.6-3.8, 3.10-3.12 and 4.5 accepted at cd4dc1a; the Windows parts of 1.13-1.15 and 4.10 passed.
+    3.6-3.8, 3.10-3.12 and 4.5 accepted at 0f3ef79; the Windows parts of 1.13-1.15 and 4.10 passed.
   - **Fedora, now KDE Plasma 6.8.3** (2026-11-17, `research.md`, "The review fixes on Fedora, KDE
     Plasma"; the owner decided Fedora's rows are accepted on Plasma): 1.9-1.16, 2.7, 2.8, 2.9 (not
-    run: no Ubuntu desktop) and 3.9 accepted at 03b1b77 (commit 727351c). F3, F6 and F7 seen on
+    run: no Ubuntu desktop) and 3.9 accepted at 21722ca (commit 68c5a07). F3, F6 and F7 seen on
     screen: "Add to menu" below the phone panel, the "Close the window" line once, no Fontconfig
-    warnings. 4.6 and 4.7 accepted at ac7aa2d (commit 5e66d2e); 4.10's Fedora part passed.
+    warnings. 4.6 and 4.7 accepted at 408dc79 (commit 849e904); 4.10's Fedora part passed.
     **Fedora is done.**
 - **The launcher-icon finding:** after **Add to menu**, Plasma's Application Dashboard (Meta key)
   once listed cast-tv with a blank document icon while KRunner, the panel and Alt+Tab showed the
   TV; it was not reproduced afterwards. The owner approved a hardening: the menu entry also sends
   KIconLoader's `iconChanged` D-Bus signal (`castlib/shortcut.py`, `_announce_icon_change`). It
-  changes `shortcut.py`, so the menu rows are confirmed again on ac7aa2d's release run 44178871505:
-  Fedora's are done, and Windows's 4.8, 4.9 and 4.10 were accepted at ac7aa2d on 2026-11-18
+  changes `shortcut.py`, so the menu rows are confirmed again on 408dc79's release run 44178871505:
+  Fedora's are done, and Windows's 4.8, 4.9 and 4.10 were accepted at 408dc79 on 2026-11-18
   (`research.md`, "The menu rows on Windows 11 again"). **All 26 manual rows of S-12 are current;
   none is open.**
 - **The TV** allows DLNA per client (Settings → General → Device Connection Manager → Device List,
@@ -36,22 +36,22 @@ soon as it is done, with the date and, for a merge or a recorded row, the PR or 
 
 ## Next
 
-- [x] 1. The review fixes, PR #106, CI green. — 2026-11-17, cd4dc1a.
+- [x] 1. The review fixes, PR #106, CI green. — 2026-11-17, 0f3ef79.
 - [x] 2. Windows rows on the PR's exe. — 2026-11-17.
-- [x] 3. Fedora rows on the PR's Linux binary and pipx. — 2026-11-17, 727351c.
+- [x] 3. Fedora rows on the PR's Linux binary and pipx. — 2026-11-17, 68c5a07.
 - [x] 4. **Claude:** the hardening commit pushed to #106; wait for its release run to be green.
-   — 2026-11-17, ac7aa2d; release run 44178871505 green (Windows 26,124,328 bytes, `edgechromium
+   — 2026-11-17, 408dc79; release run 44178871505 green (Windows 26,124,328 bytes, `edgechromium
    OK`; Linux 260,590,064 bytes, `qtwebengine OK`).
 - [x] 5. **Fedora (Claude drives; the owner looks once):** — 2026-11-17, 4.6 and 4.7 accepted at
-   ac7aa2d; 4.10's Fedora part passed (`research.md`, "The menu rows on Fedora again").
-- [x] 6. Windows 11, 4.8, 4.9 and 4.10's Windows part on ac7aa2d's exe. — 2026-11-18, accepted
-   at ac7aa2d; the acceptance script reports 26 current rows.
-- [ ] 7. **You:** merge PR #106 ("Rebase and merge"); afterwards Claude rewrites the SHAs from `main`.
+   408dc79; 4.10's Fedora part passed (`research.md`, "The menu rows on Fedora again").
+- [x] 6. Windows 11, 4.8, 4.9 and 4.10's Windows part on 408dc79's exe. — 2026-11-18, accepted
+   at 408dc79; the acceptance script reports 26 current rows.
+- [x] 7. PR #106 merged by rebase (main 8d99b49); SHAs rewritten from `main`. — 2026-11-18,
+   PR "s12-shas-from-main" (the owner merges it).
 - [ ] 8. **You:** decide on the release tag (e.g. `v0.5.0`). This also checks ci-actions-node24's
    row 1.4 (a green `release` job; the Assets list both files at the built sizes).
 - [ ] 9. `/rune-archive s12-desktop-window`; S-12 becomes `done` in the roadmap.
 
 ## How to resume with Claude
 
-Write "co dalej" in the cast-tv checkout. Until PR #106 is merged, work on its branch:
-`git fetch; git switch s12-review-fixes; git pull`.
+Write "co dalej" in the cast-tv checkout on an up-to-date `main` (`git switch main; git pull`).
