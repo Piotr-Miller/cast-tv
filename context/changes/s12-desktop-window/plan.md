@@ -823,15 +823,15 @@ The Progress Manual rows, run on the Windows laptop and the Fedora desktop, each
 
 #### Manual
 
-- [x] 1.8 Windows venv with [window]: cast-tv opens a window on the UI — accepted at cd4dc1aa0d8250449935b1d7e3bab39df71635f9
-- [x] 1.9 Fedora pipx with [window]: cast-tv opens a Qt window — accepted at 03b1b77fd525996c2ecf5cb7132bb449ad4343bb
-- [x] 1.10 Without the extra: tab as today, with a working Quit control — accepted at 03b1b77fd525996c2ecf5cb7132bb449ad4343bb
-- [x] 1.11 --no-window opens the tab — accepted at 03b1b77fd525996c2ecf5cb7132bb449ad4343bb
-- [x] 1.12 A forced fallback opens the tab with window_unavailable in Diagnostics — accepted at 03b1b77fd525996c2ecf5cb7132bb449ad4343bb
-- [x] 1.13 X with a video playing stops the TV and ends the process — accepted at 03b1b77fd525996c2ecf5cb7132bb449ad4343bb
-- [x] 1.14 Ctrl+C and kill stop the TV and close the window — accepted at 03b1b77fd525996c2ecf5cb7132bb449ad4343bb
-- [x] 1.15 A second launch brings the window to the front — accepted at 03b1b77fd525996c2ecf5cb7132bb449ad4343bb
-- [x] 1.16 The phone's UI is unchanged and has no Quit control — accepted at 03b1b77fd525996c2ecf5cb7132bb449ad4343bb
+- [x] 1.8 Windows venv with [window]: cast-tv opens a window on the UI — accepted at 0f3ef79d6b36ab1f91eb3046a42c08fc992656a7
+- [x] 1.9 Fedora pipx with [window]: cast-tv opens a Qt window — accepted at 21722ca2696d03743f36cedd87050ed918d9868a
+- [x] 1.10 Without the extra: tab as today, with a working Quit control — accepted at 21722ca2696d03743f36cedd87050ed918d9868a
+- [x] 1.11 --no-window opens the tab — accepted at 21722ca2696d03743f36cedd87050ed918d9868a
+- [x] 1.12 A forced fallback opens the tab with window_unavailable in Diagnostics — accepted at 21722ca2696d03743f36cedd87050ed918d9868a
+- [x] 1.13 X with a video playing stops the TV and ends the process — accepted at 21722ca2696d03743f36cedd87050ed918d9868a
+- [x] 1.14 Ctrl+C and kill stop the TV and close the window — accepted at 21722ca2696d03743f36cedd87050ed918d9868a
+- [x] 1.15 A second launch brings the window to the front — accepted at 21722ca2696d03743f36cedd87050ed918d9868a
+- [x] 1.16 The phone's UI is unchanged and has no Quit control — accepted at 21722ca2696d03743f36cedd87050ed918d9868a
 
 ### Phase 2: The release carries the window
 
@@ -845,10 +845,10 @@ The Progress Manual rows, run on the Windows laptop and the Fedora desktop, each
 
 #### Manual
 
-- [x] 2.6 Windows: the PR exe opens the window; size and start time recorded — accepted at cd4dc1aa0d8250449935b1d7e3bab39df71635f9
-- [x] 2.7 Fedora: the PR Linux binary opens a Qt window with the GPU on; size and start time recorded — accepted at 03b1b77fd525996c2ecf5cb7132bb449ad4343bb
-- [x] 2.8 Fedora: a HEIC photo cast through the window shows upright — accepted at 03b1b77fd525996c2ecf5cb7132bb449ad4343bb
-- [x] 2.9 Ubuntu 24.04 VM: the Linux binary opens its window, or why not — accepted at 03b1b77fd525996c2ecf5cb7132bb449ad4343bb
+- [x] 2.6 Windows: the PR exe opens the window; size and start time recorded — accepted at 0f3ef79d6b36ab1f91eb3046a42c08fc992656a7
+- [x] 2.7 Fedora: the PR Linux binary opens a Qt window with the GPU on; size and start time recorded — accepted at 21722ca2696d03743f36cedd87050ed918d9868a
+- [x] 2.8 Fedora: a HEIC photo cast through the window shows upright — accepted at 21722ca2696d03743f36cedd87050ed918d9868a
+- [x] 2.9 Ubuntu 24.04 VM: the Linux binary opens its window, or why not — accepted at 21722ca2696d03743f36cedd87050ed918d9868a
 
 ### Phase 3: The console's information moves into the window, and the console hides
 
@@ -862,13 +862,13 @@ The Progress Manual rows, run on the Windows laptop and the Fedora desktop, each
 
 #### Manual
 
-- [x] 3.6 Windows window: the phone panel's QR opens the UI on the phone — accepted at cd4dc1aa0d8250449935b1d7e3bab39df71635f9
-- [x] 3.7 The phone shows no phone panel and no Quit control — accepted at cd4dc1aa0d8250449935b1d7e3bab39df71635f9
-- [x] 3.8 Offline: the panel says there is no network address — accepted at cd4dc1aa0d8250449935b1d7e3bab39df71635f9
-- [x] 3.9 Fedora: the phone panel and QR codes work in the Qt window — accepted at 03b1b77fd525996c2ecf5cb7132bb449ad4343bb
-- [x] 3.10 Windows double-click: only the window, closing it stops the TV — accepted at cd4dc1aa0d8250449935b1d7e3bab39df71635f9
-- [x] 3.11 Windows from PowerShell: output there, window opens, Ctrl+C stops both — accepted at cd4dc1aa0d8250449935b1d7e3bab39df71635f9
-- [x] 3.12 A fallback with a hidden console shows the console again — accepted at cd4dc1aa0d8250449935b1d7e3bab39df71635f9
+- [x] 3.6 Windows window: the phone panel's QR opens the UI on the phone — accepted at 0f3ef79d6b36ab1f91eb3046a42c08fc992656a7
+- [x] 3.7 The phone shows no phone panel and no Quit control — accepted at 0f3ef79d6b36ab1f91eb3046a42c08fc992656a7
+- [x] 3.8 Offline: the panel says there is no network address — accepted at 0f3ef79d6b36ab1f91eb3046a42c08fc992656a7
+- [x] 3.9 Fedora: the phone panel and QR codes work in the Qt window — accepted at 21722ca2696d03743f36cedd87050ed918d9868a
+- [x] 3.10 Windows double-click: only the window, closing it stops the TV — accepted at 0f3ef79d6b36ab1f91eb3046a42c08fc992656a7
+- [x] 3.11 Windows from PowerShell: output there, window opens, Ctrl+C stops both — accepted at 0f3ef79d6b36ab1f91eb3046a42c08fc992656a7
+- [x] 3.12 A fallback with a hidden console shows the console again — accepted at 0f3ef79d6b36ab1f91eb3046a42c08fc992656a7
 
 ### Phase 4: Icon and menu entry
 
@@ -881,9 +881,9 @@ The Progress Manual rows, run on the Windows laptop and the Fedora desktop, each
 
 #### Manual
 
-- [x] 4.5 Windows: the icon on the exe, the window and the taskbar — accepted at cd4dc1aa0d8250449935b1d7e3bab39df71635f9
-- [x] 4.6 Fedora: the window's taskbar entry shows the cast-tv icon — accepted at ac7aa2d3bc3a80950234a90af93822b27a7a4bab
-- [x] 4.7 Fedora: Add to menu, found in the overview, starts with no terminal — accepted at ac7aa2d3bc3a80950234a90af93822b27a7a4bab
-- [x] 4.8 Windows: Add to Start menu, starts with no console, pinning works — accepted at ac7aa2d3bc3a80950234a90af93822b27a7a4bab
-- [x] 4.9 A moved file: Update menu entry repoints the entry — accepted at ac7aa2d3bc3a80950234a90af93822b27a7a4bab
-- [x] 4.10 Remove from menu removes the entry on both machines — accepted at ac7aa2d3bc3a80950234a90af93822b27a7a4bab
+- [x] 4.5 Windows: the icon on the exe, the window and the taskbar — accepted at 0f3ef79d6b36ab1f91eb3046a42c08fc992656a7
+- [x] 4.6 Fedora: the window's taskbar entry shows the cast-tv icon — accepted at 408dc796d0df6856b1069fd6f12e8c3979064796
+- [x] 4.7 Fedora: Add to menu, found in the overview, starts with no terminal — accepted at 408dc796d0df6856b1069fd6f12e8c3979064796
+- [x] 4.8 Windows: Add to Start menu, starts with no console, pinning works — accepted at 408dc796d0df6856b1069fd6f12e8c3979064796
+- [x] 4.9 A moved file: Update menu entry repoints the entry — accepted at 408dc796d0df6856b1069fd6f12e8c3979064796
+- [x] 4.10 Remove from menu removes the entry on both machines — accepted at 408dc796d0df6856b1069fd6f12e8c3979064796
