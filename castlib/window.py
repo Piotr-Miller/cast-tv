@@ -183,8 +183,15 @@ def run(app, url: str, on_shown=None) -> str:
     the browser tab instead. A ``destroy()`` that came while the window was
     starting wins over a failure to start: the answer is then ``"closed"``.
     """
+    def shown():
+        mark = getattr(app, "mark_shown", None)  # the start mark packaging/startup_time.py reads (s16)
+        if mark is not None:
+            mark()
+        if on_shown is not None:
+            on_shown()
+
     with termination_scope() as current:
-        result = _run(current, url, on_shown)
+        result = _run(current, url, shown)
         return "closed" if current.end_requested else result
 
 

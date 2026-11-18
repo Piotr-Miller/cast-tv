@@ -180,6 +180,13 @@ def test_on_shown_runs_once_the_window_shows(fake_webview, monkeypatch):
         raise OSError("stdout is gone")
     assert window.run(object(), "http://127.0.0.1:1/ui/", on_shown=broken) == "closed"   # the window lives on
 
+    class App:                                            # s16: the shown time for startup_time.py, before the message
+        def mark_shown(self):
+            seen.append("marked")
+    seen.clear()
+    assert window.run(App(), "http://127.0.0.1:1/ui/", on_shown=lambda: seen.append("shown")) == "closed"
+    assert seen == ["marked", "shown"]
+
 
 def test_wrong_renderer_falls_back(fake_webview):
     """pywebview's quiet fallback (MSHTML without WebView2) is refused before any window appears."""
