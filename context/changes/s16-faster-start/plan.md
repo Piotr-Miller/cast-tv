@@ -680,12 +680,12 @@ research.md. Real sign-in and TV checks stay pending until a person sees them.
 
 #### Automated
 
-- [x] 1.1 Ready mark and status fields (test_api)
-- [x] 1.2 UI Ready cases (test_ui)
-- [x] 1.3 Lister and script (test_processes, test_startup_time)
-- [x] 1.4 node --check castlib/ui/app.js
-- [x] 1.5 pyflakes
-- [x] 1.6 Full suite
+- [x] 1.1 Ready mark and status fields (test_api) — a558115
+- [x] 1.2 UI Ready cases (test_ui) — a558115
+- [x] 1.3 Lister and script (test_processes, test_startup_time) — a558115
+- [x] 1.4 node --check castlib/ui/app.js — a558115
+- [x] 1.5 pyflakes — a558115
+- [x] 1.6 Full suite — a558115
 
 #### Manual
 
