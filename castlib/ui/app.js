@@ -103,6 +103,7 @@ function castTv() {
     _retryAt: 0,
     _errorsSeq: 0,           // errors_seq of the list last fetched successfully
     _verified: {},           // sources whose stored token this page already asked to verify
+    _readyMarked: false,     // the Ready mark went out (s16): once per page, after the first status is on screen
 
     async init() {
       await this.refresh();
@@ -125,6 +126,7 @@ function castTv() {
         this.watchSources(s);
         this.status = s;
         this.offline = false;
+        this.markReady(s);
         if (s.settings && typeof s.settings.interval === 'number') this.interval = s.settings.interval;
         // errors_seq grows past the ring's size; a failed list fetch leaves _errorsSeq behind, so it is retried
         if (this.panel || (s.errors_seq || 0) !== this._errorsSeq) await this.loadErrors();
@@ -136,6 +138,19 @@ function castTv() {
       } finally {
         this._refreshing = false;
       }
+    },
+
+    // The Ready mark for packaging/startup_time.py: the first status that arrived is assigned; once Alpine
+    // has rendered it ($nextTick) and two frames have been painted, the page tells the server, once.
+    // A failed refresh never gets here, so a later success marks instead. Only the computer's own page
+    // posts (status.host); the post is not awaited, so the errors fetch after it does not delay it.
+    markReady(s) {
+      if (this._readyMarked || !s || !s.host) return;
+      this._readyMarked = true;
+      const frame = typeof requestAnimationFrame === 'function' ? requestAnimationFrame : (cb => setTimeout(cb, 16));
+      const post = () => { api('POST', '/api/ready').catch(() => {}); };
+      const after = typeof this.$nextTick === 'function' ? (cb => this.$nextTick(cb)) : (cb => setTimeout(cb, 0));
+      after(() => frame(() => frame(post)));
     },
 
     async loadErrors() {

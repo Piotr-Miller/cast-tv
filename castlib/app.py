@@ -192,6 +192,8 @@ class App:
         self.stay_awake = StayAwake()
         self.addresses: list[str] = []
         self.started_at = time.time()
+        self.ui_ready_at: float | None = None   # the page's first Ready mark (s16 startup_time.py), wall clock
+        self.shown_at: float | None = None      # when the cast-tv window came on screen, wall clock
         self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="playback")
         self._closed = threading.Event()
         self._threads: list[threading.Thread] = []
@@ -654,6 +656,19 @@ class App:
         show = self.show_now
         if show is not None:
             show.interval = float(value)
+
+    # --------------------------------------------------------- start marks
+    def mark_ui_ready(self) -> None:
+        """The page on this computer rendered its first status; only the first mark counts."""
+        with self.lock:
+            if self.ui_ready_at is None:
+                self.ui_ready_at = time.time()
+
+    def mark_shown(self) -> None:
+        """The cast-tv window is on screen; only the first time counts."""
+        with self.lock:
+            if self.shown_at is None:
+                self.shown_at = time.time()
 
     # -------------------------------------------------------------- status
     def status(self) -> dict:

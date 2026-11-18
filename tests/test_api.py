@@ -70,9 +70,33 @@ def test_window_show_is_loopback_only(app, monkeypatch):
 
 def test_instance_identity_is_loopback_only(app, monkeypatch):
     instance = _json(app.base_url, "GET", "/api/status")[2]["instance"]
-    assert instance == {"id": app.server.instance_id, "pid": os.getpid(), "parent_pid": os.getppid()}
+    assert instance == {"id": app.server.instance_id, "pid": os.getpid(), "parent_pid": os.getppid(),
+                        "ui_ready_at": None, "shown_at": None}
     _from_the_lan(monkeypatch)
     assert "instance" not in _json(app.base_url, "GET", "/api/status")[2]
+
+
+def test_ready_mark_is_loopback_only_and_keeps_the_first_time(app, monkeypatch):
+    """s16: the page's Ready mark and the window's shown time reach startup_time.py through the loopback status only."""
+    import time
+    before = time.time()
+    status, headers, d = _json(app.base_url, "GET", "/api/ready")
+    assert status == 405 and headers["Allow"] == "POST"
+    status, _, d = _json(app.base_url, "POST", "/api/ready")
+    assert status == 200 and d == {"ok": True}
+    first = _json(app.base_url, "GET", "/api/status")[2]["instance"]["ui_ready_at"]
+    assert first is not None and before <= first <= time.time()
+    assert _json(app.base_url, "POST", "/api/ready")[2] == {"ok": True}
+    assert _json(app.base_url, "GET", "/api/status")[2]["instance"]["ui_ready_at"] == first   # the first mark stays
+    app.mark_shown()
+    shown = _json(app.base_url, "GET", "/api/status")[2]["instance"]["shown_at"]
+    app.mark_shown()
+    assert shown is not None and _json(app.base_url, "GET", "/api/status")[2]["instance"]["shown_at"] == shown
+    _from_the_lan(monkeypatch)
+    status, _, d = _json(app.base_url, "POST", "/api/ready")
+    assert status == 403 and d["error"]["code"] == "forbidden_host_only"
+    s = _json(app.base_url, "GET", "/api/status")[2]
+    assert "instance" not in s and "ui_ready_at" not in s and "shown_at" not in s
 
 
 def test_conditional_quit_does_not_end_a_replacement_instance(app, monkeypatch):
@@ -92,7 +116,7 @@ def test_host_only_routes_refuse_lan(app, monkeypatch):
     monkeypatch.setattr(shortcut, "install", lambda: pytest.fail("the phone wrote the menu entry"))
     monkeypatch.setattr(shortcut, "remove", lambda: pytest.fail("the phone removed the menu entry"))
     for path, body in (("/api/window", {}), ("/api/quit", {}), ("/api/shortcut", {"action": "install"}),
-                       ("/api/shortcut", {"action": "remove"})):
+                       ("/api/shortcut", {"action": "remove"}), ("/api/ready", {})):
         status, _, d = _json(app.base_url, "POST", path, body)
         assert status == 403 and d["error"]["code"] == "forbidden_host_only", path
     _, _, s = _json(app.base_url, "GET", "/api/status")
