@@ -146,7 +146,10 @@ def fetch_status(port: int) -> dict:
 
 
 def measure_once(binary: str, *, port=None, popen=subprocess.Popen, status=fetch_status, stop=smoke.stop,
-                 owns=smoke.owns, clock=time.time, sleep=time.sleep, timeout=READY_TIMEOUT) -> float:
+                 owns=smoke.owns, clock=time.time, sleep=time.sleep, timeout=READY_TIMEOUT,
+                 hold: float = 0.0, out=print) -> float:
+    """One timed start. ``hold`` > 0 (a watched run): print the time the moment it is ready and keep
+    the window open that many seconds, so a person can check it was really usable then."""
     port = port or smoke.free_port()
     launched = clock()
     proc = popen([binary, "-p", str(port)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -165,6 +168,9 @@ def measure_once(binary: str, *, port=None, popen=subprocess.Popen, status=fetch
                 instance = candidate
                 seconds = ready_seconds(candidate, launched)
                 if seconds is not None:
+                    if hold > 0:
+                        out("ready after %.2f s: the window stays open %.0f s" % (seconds, hold))
+                        sleep(hold)
                     return seconds
             if clock() - launched > timeout:
                 raise RunFailed("no Ready mark within %.0f s" % timeout)
@@ -219,6 +225,8 @@ def main(argv=None) -> int:
     ap.add_argument("--out")
     ap.add_argument("--compare", nargs=2, metavar=("NUITKA_JSON", "PYINSTALLER_JSON"))
     ap.add_argument("--warm-ratio", type=float, default=0.5)
+    ap.add_argument("--hold", type=float, default=0.0,
+                    help="a watched run: keep the window open this many seconds after the Ready mark")
     args = ap.parse_args(argv)
     if args.compare:
         with open(args.compare[0], encoding="utf-8") as a, open(args.compare[1], encoding="utf-8") as b:
@@ -231,7 +239,8 @@ def main(argv=None) -> int:
     try:
         preflight(binary)
         version = subprocess.run([binary, "--version"], capture_output=True, text=True, timeout=180).stdout
-        times = run_series(binary, args.mode, args.runs, version_text=version)
+        measure = (lambda b: measure_once(b, hold=args.hold)) if args.hold > 0 else measure_once
+        times = run_series(binary, args.mode, args.runs, version_text=version, measure=measure)
     except Refused as e:
         print("refused: %s" % e, file=sys.stderr)
         return 2

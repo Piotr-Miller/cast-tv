@@ -135,6 +135,15 @@ def test_a_run_waits_for_both_marks(st):
     assert stopped and stopped[0]["id"] == "i"
 
 
+def test_a_watched_run_prints_at_once_and_holds_the_window(st):
+    base = {"id": "i", "pid": 500, "parent_pid": 1}
+    said = []
+    seconds, stopped = _measure(st, [{"instance": dict(base, ui_ready_at=101.0, shown_at=101.5)}],
+                                hold=10, out=said.append)
+    assert seconds == pytest.approx(1.5)                  # the hold is not part of the time
+    assert said == ["ready after 1.50 s: the window stays open 10 s"] and len(stopped) == 1
+
+
 def test_a_file_without_the_mark_says_so(st):
     with pytest.raises(st.NoReadyMark):
         _measure(st, [{"instance": {"id": "i", "pid": 500, "parent_pid": 1}}])
