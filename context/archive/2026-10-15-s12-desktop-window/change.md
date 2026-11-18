@@ -1,10 +1,11 @@
 ---
 change_id: s12-desktop-window
 title: "Run cast-tv as a desktop window on Windows and Linux"
-status: implementing
+status: archived
+outcome: completed
 created: 2026-10-15
-updated: 2026-11-17
-archived_at: null
+updated: 2026-11-18
+archived_at: 2026-11-18T18:21:12Z
 ---
 
 ## Notes
