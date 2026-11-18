@@ -130,3 +130,25 @@ same machines the warm starts were faster than PyInstaller's: `--version` 2.4–
 3.6 s on Windows and 1.6 s against 4.2 s on the Linux runner; `--window-check` 2.2 s against
 4.8 s on Linux. The Linux file was 41 % smaller (154.8 MB against 260.6 MB). The slice stays
 open. `/rune-plan` can now weigh these numbers against the open items above.
+
+## Row 1.7: the Ready mark on Windows 11 (2026-11-18)
+
+The home Windows 11 laptop (`DESKTOP-35JAM1C`). A PyInstaller exe built from a558115 (Phase 1's
+commit; the castlib code is unchanged at 5155ad8) with `pyinstaller --noconfirm packaging\cast-tv.spec`
+in the spike's venv (PyInstaller 6.22.3, Python 3.14.5): 26,225,168 bytes, SHA-256
+`AC4FC324C18FCC1AF1B310DA6E4A5B18B8DF4405A3942884288E3B90168C6AA0`. Claude ran, from the
+checkout's venv at 5155ad8:
+
+```
+python packaging\startup_time.py <exe> --mode warm --runs 5 --out p1-warm.json
+python packaging\startup_time.py <exe> --mode warm --runs 1 --hold 15 --out p1-watched.json
+```
+
+- 5 warm runs, one unmeasured start first: 4.32 / 4.24 / 4.64 / 3.86 / 3.41 s, median 4.24 s.
+- The watched run: "ready after 3.62 s: the window stays open 15 s". The owner watched the screen
+  and accepted ("akceptuję"): at the moment the time printed, the window showed the TV button and
+  the GoPro / OneDrive / Google Photos tabs, and a tab click responded.
+- Found: `--hold` also held the unmeasured priming start (the window stayed open after 4.17 s as
+  well). It does not change any time; the priming start is never measured.
+
+Row 1.7 is accepted at 5155ad82c94acd342e5f60faf24fa9547bf47229.
