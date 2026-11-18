@@ -2025,3 +2025,38 @@ entry existed before. Same machine and method as above.
   `Stopped.`.
 
 4.10 closes with its Windows part on the same run's exe.
+
+### The menu rows on Windows 11 again, on ac7aa2d's exe (2026-11-18)
+
+The hardening (`_announce_icon_change`, Linux-only) reopened 4.8 and 4.9 because it changes
+`castlib/shortcut.py`. PR #106's release run 44178871505 (built from ac7aa2d): the Windows file in
+`Downloads\s12-fixes2`, 26,124,328 bytes, SHA-256
+`d61963c59487efe336b0a42f4b0800614ab394b81ce536209635b6c9bc603758`; `--version`: `cast-tv 0.4.0`,
+`Google Photos client: built in`, `Window: edgechromium`. No Start-menu entry and no taskbar pin
+existed before. Same machine and method as on 2026-11-17 (Claude drove the desktop through
+`user32` from PowerShell, at the owner's "jedź"; the owner answered the Firewall prompt for the
+`moved\` path). The window found the TV (83" OLED, 192.168.50.142).
+
+- **4.8:** started with `explorer.exe <exe>`; "Add to Start menu" sat in its own panel below "Open on
+  your phone". A click at 17:51:14: `/api/status` reported the shortcut `installed` and `current`;
+  `cast-tv.lnk` targets this exe, icon `<exe>,0`. `WM_CLOSE`: no process left, port 8895 free.
+  Windows key + `cast-tv`: Best match "cast-tv, App" with the TV icon (screenshot). Enter: the
+  cast-tv window opened at 6.8 s. Window polling every 0.3 s saw the release's Windows Terminal tab
+  titled `cast-tv` at a normal position at 1.0 s and minimised (-32000,-32000) at 1.4 s, gone
+  afterwards: the console-detach relaunch of row 3.10, within the accepted "brief console flash"
+  (plan, "Started by double-click"); no console stayed on screen. Right-click on the taskbar button
+  → **Pin to taskbar** (the pin's `.lnk` targets this exe), `WM_CLOSE` (no process left), a click on
+  the pinned icon: the window opened again, the process running from `Downloads\s12-fixes2`.
+- **4.9:** closed, `Move-Item` to `moved\`, started from there: `current: false` and the button read
+  **Update menu entry (points to another file)** (screenshot). A click at 18:02:23: the button read
+  **Remove from menu**, "Added: find cast-tv in Start.", `current: true`, and the `.lnk` target
+  became `...\moved\cast-tv-windows-x64.exe`. Closed; Start → Best match "cast-tv, App" → Enter:
+  both processes ran from `moved\`.
+- **4.10, Windows part:** in that window a click on **Remove from menu** at 18:03:09: "Removed from
+  the Start menu.", the button back to **Add to Start menu**, `installed: false`, `cast-tv.lnk`
+  gone. Closed (no process left); Windows key + `cast-tv`: no "cast-tv, App"; Windows completed the
+  query to `cast-tv-windows-x64.exe` and listed its own history of executables seen running, as on
+  2026-11-17. The taskbar pin was removed with right-click → **Unpin from taskbar**; no pinned
+  `.lnk` left.
+
+4.10's Fedora part passed on the same run's binary ("The menu rows on Fedora again").
