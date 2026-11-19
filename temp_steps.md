@@ -1,58 +1,44 @@
-# Next steps (2026-11-18, S-16 Phase 1 done; Codex reviews it next)
+# Next steps (2026-11-19, S-16 Phase 1 review fixes left uncommitted)
 
-The standing pause note; overwrite it at the next handoff. Claude ticks each step (`- [x]`) as
-soon as it is done, with the date and, for a merge or a recorded row, the PR or commit.
+Branch: `s16-faster-start`, HEAD `0707dac`. No PR exists. The owner requested no commit; all
+review fixes and workflow records are in the worktree and recorded in the change's carry file.
+Do not discard them or overwrite them by pulling another checkout over this worktree.
 
-## Where it stands
+## Completed
 
-- **S-16, a faster-starting release file** (`context/changes/s16-faster-start/`, branch
-  `s16-faster-start`, pushed; no PR yet). It switches both release files from PyInstaller to a
-  Nuitka onefile that unpacks once into a cache folder.
-  - **The spike** is in `research.md`. Warm starts: 1.6 s against 4.2 s on a Linux CI runner, and
-    2.4-2.7 s against 3.6 s on Windows. The Linux file is 41 % smaller.
-  - **The plan** has 7 phases. It was reviewed by Codex (RETHINK, F1-F9, `reviews/plan-review.md`)
-    and revised; all nine findings are FIXED.
-  - **The owner's bars:** the warm median of 5 runs ≤ 50 % of PyInstaller's on Linux and ≤ 75 % on
-    Windows 11. The cold median must be no slower on both. If either is missed, stop and decide
-    again.
-  - **Old cache folders:** keep the current and the previous build. An older folder is deleted
-    only after 7 days unused and with nothing running from it.
-- **Phase 1 is done.** It added the Ready mark (`/api/ready`, `shown_at`), `castlib/processes.py`,
-  the start of `castlib/bundle.py`, and `packaging/startup_time.py`.
-  - Commits: a558115, then 5155ad8 (`--hold`). Row 1.7 was accepted at fc780be (commit 7d33c1b).
-  - **Windows baseline**, PyInstaller exe of a558115, warm: median 4.24 s to a usable window.
-  - Known: `--hold` also holds the unmeasured priming start. It is fixed with Phase 4, so that row
-    1.7 stays current until then.
-- **v0.5.0** is released (tag on bd84500), and S-12 is archived. ci-actions-node24's row 1.4 passed
-  on that release; it stays unticked in its read-only archive, and this line records it.
-- **CI notice:** the `ubuntu-latest` label moves to Ubuntu 26 from 2026-10-19 (the `test` and
-  `release` jobs). The Linux build is pinned to `ubuntu-22.04`.
-- **The TV** allows DLNA per client (Settings → General → Device Connection Manager → Device List,
-  entries named only "Device N"). "No TV found" while the TV is on and
-  `curl http://192.168.50.142:9197/dmr` answering 401 means that list, not cast-tv.
-- **Test material:** the video is OneDrive → Dokumenty → Videos → `Przejazd - SuperCars.mp4`;
-  `shelf-christmas-decoration.heic` is in OneDrive → Pictures; `Test_Pictures` is on Nextcloud.
-- **Home Windows:** after a Windows sign-out, `vEthernet (Default Switch)` may get a new address.
-  - Locally, `test_onedrive.py::test_token_file_mode_0600` fails intermittently: 7/10 passes on
-    a558115 and 6/10 on a85f59d, measured 2026-11-18.
-  - `test_cli.py::test_cast_replaced_from_the_ui_keeps_serving` also fails intermittently.
-  - CI passes both.
+- Phase 1 was reviewed from explicit base a85f59d through 0707dac, including a558115, 5155ad8,
+  fc780be and 7d33c1b. The owner then authorized all recommended fixes.
+- Report: `context/changes/s16-faster-start/reviews/impl-review-phase-1-0707dac.md`.
+  Findings F1-F7 are fixed; Re-review 2 records the current local verification.
+- Ready now follows complete tab setup and successful status assignment, independently of
+  `/api/errors`. Tests control the render tick and two separate frames.
+- Windows process ownership uses user SIDs rather than desktop-session inference. Unknown
+  ownership and API errors make the list incomplete. Failed version probing and failed owned
+  shutdown fail the measurement. Three existing test synchronization hazards were corrected.
+- Final local checks: 592 passed, 6 skipped; pyflakes and both JavaScript syntax checks pass.
+  Linux owner coverage and release build/smoke still need CI.
 
 ## Next
 
-- [x] 1. S-16 opened, spiked, planned and plan-reviewed; Phase 1 implemented and accepted.
-   — 2026-11-18, a558115, 5155ad8, 7d33c1b; pushed.
-- [ ] 2. **Codex:** `$rune-impl-review s16-faster-start phase 1`. Base a85f59d; the commits above.
-   The prompt with the points to check is in this session's chat.
-- [ ] 3. **Claude:** triage the review findings with the owner, then
-   `/rune-implement s16-faster-start phase 2`: `castlib/bundle.py` (kind, started_file, data_dir,
-   relaunch_env), and the `sys.frozen` callers in `platform.py`, `shortcut.py` and `window.py`.
-- [ ] 4. Phases 3-4: old-cache pruning, then Nuitka builds next to PyInstaller in CI. Phase 4 opens
-   the PR.
-- [ ] 5. Phase 5 on both machines: `startup_time.py` cold and warm on each PR file, then the bars
-   decide.
-
-## How to resume with Claude
-
-Write "co dalej" in the cast-tv checkout on the S-16 branch:
-`git fetch; git switch s16-faster-start; git pull`.
+1. In the editor/project window for `C:\Source\cast-tv`, inspect the report and `git diff`.
+   The original reviewed commits are pushed; these fixes are intentionally not committed or
+   pushed. When the owner chooses to commit, keep the fixes with the report, plan reopening,
+   change notes, research notes and this handoff. No skill files belong in that commit.
+2. Row **1.7 is reopened** because its accepted surface changed. Its original Windows observation
+   remains in research.md, but cannot confirm this source. Commit the checked changes before
+   recording a new acceptance revision, build that revision, then repeat five warm runs and the
+   watched run. In the cast-tv window, the TV button and source tabs must be visible when the
+   timing prints in PowerShell; clicking a source tab must respond at that point. Record date,
+   device, executable SHA-256, run values and the owner's actual observation in research.md.
+3. **Windows measurement limitation:** in the current unelevated PowerShell session, ownership
+   of protected processes is hidden, so the corrected tool safely refuses at PID 4. A null SID
+   must not be treated as proof of another user. If testing with elevated rights, in Windows
+   Start search **PowerShell**, choose **Run as administrator**, and approve the Windows prompt
+   for the same account. The resulting PowerShell title should show **Administrator**. Run the
+   measuring command there; expect measured runs or an explicit refusal. Elevated success was
+   not verified here. A refusal must not be accepted as row 1.7 or bypassed with a guessed list.
+4. Continue Phase 2 with the bundle facts and their callers, then Phases 3-4. Phase 3 must keep
+   its no-deletion-on-IncompleteListing behavior, including on Windows with hidden ownership.
+   The PR must run the packaging release build and smoke test; no passing PR run exists yet.
+5. Keep the known `--hold` priming-start correction deferred to Phase 4. Do not switch packagers
+   before Phase 5's measured bars and the owner's decision on both systems.

@@ -5,8 +5,8 @@ process that ends during the scan is skipped. A process that is ours but cannot 
 makes the listing incomplete (``IncompleteListing``): whoever decides from it must not
 assume that nothing uses a file. Another user's process that refuses is skipped: it
 cannot be running from this user's cache. "Ours" is the same owner on Linux
-(``/proc/<pid>`` belongs to us) and the same logon session on Windows, where no process of
-the user's own session refused the image-path query on the home machine (2026-11-18).
+(``/proc/<pid>`` belongs to us) and the same user SID on Windows. A desktop session
+also contains protected system processes, so a session ID does not establish ownership.
 """
 import os
 import sys
@@ -69,6 +69,7 @@ class _Win32:
 
     PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
     ERROR_INVALID_PARAMETER = 87              # OpenProcess's answer for a pid that no longer exists
+    ERROR_ACCESS_DENIED = 5
 
     def __init__(self):
         import ctypes
@@ -76,12 +77,24 @@ class _Win32:
         self.ctypes, self.w = ctypes, wintypes
         self.k32 = ctypes.WinDLL("kernel32", use_last_error=True)
         self.psapi = ctypes.WinDLL("psapi", use_last_error=True)
+        self.wts = ctypes.WinDLL("wtsapi32", use_last_error=True)
+        self.security = ctypes.WinDLL("advapi32", use_last_error=True)
+
+        class ProcessInfo(ctypes.Structure):
+            _fields_ = [("SessionId", wintypes.DWORD), ("ProcessId", wintypes.DWORD),
+                        ("pProcessName", wintypes.LPWSTR), ("pUserSid", ctypes.c_void_p)]
+
+        self.ProcessInfo = ProcessInfo
+        self.wts.WTSEnumerateProcessesW.argtypes = (wintypes.HANDLE, wintypes.DWORD, wintypes.DWORD,
+                                                  ctypes.POINTER(ctypes.POINTER(ProcessInfo)),
+                                                  ctypes.POINTER(wintypes.DWORD))
+        self.wts.WTSFreeMemory.argtypes = (ctypes.c_void_p,)
+        self.security.EqualSid.argtypes = (ctypes.c_void_p, ctypes.c_void_p)
         self.k32.OpenProcess.restype = wintypes.HANDLE
         self.k32.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
         self.k32.QueryFullProcessImageNameW.argtypes = (wintypes.HANDLE, wintypes.DWORD, wintypes.LPWSTR,
                                                         ctypes.POINTER(wintypes.DWORD))
         self.k32.CloseHandle.argtypes = (wintypes.HANDLE,)
-        self.k32.ProcessIdToSessionId.argtypes = (wintypes.DWORD, ctypes.POINTER(wintypes.DWORD))
 
     def pids(self) -> list[int]:
         size = 1024
@@ -94,39 +107,70 @@ class _Win32:
                 return [p for p in arr[: needed.value // 4] if p]
             size *= 2
 
-    def session(self, pid: int) -> int | None:
-        s = self.w.DWORD()
-        return s.value if self.k32.ProcessIdToSessionId(pid, self.ctypes.byref(s)) else None
+    def owners(self) -> dict[int, bool | None]:
+        """Whether each PID has our user SID; None means ownership is unknown.
+
+        WTS supplies ownership without opening each protected process. Copy only the
+        comparisons before freeing its buffer; no SID pointer escapes this method.
+        """
+        c = self.ctypes
+        info = c.POINTER(self.ProcessInfo)()
+        count = self.w.DWORD()
+        if not self.wts.WTSEnumerateProcessesW(None, 0, 1, c.byref(info), c.byref(count)):
+            raise IncompleteListing("WTSEnumerateProcessesW failed (%d)" % c.get_last_error())
+        try:
+            mine = next((info[i].pUserSid for i in range(count.value)
+                         if info[i].ProcessId == os.getpid()), None)
+            if not mine:
+                raise IncompleteListing("this process's owner is unknown")
+            return {info[i].ProcessId: (bool(self.security.EqualSid(mine, info[i].pUserSid))
+                                       if info[i].pUserSid else None) for i in range(count.value)}
+        finally:
+            self.wts.WTSFreeMemory(info)
 
     def image(self, pid: int) -> str:
         h = self.k32.OpenProcess(self.PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
         if not h:
             err = self.ctypes.get_last_error()
-            raise Gone() if err == self.ERROR_INVALID_PARAMETER else Denied(err)
+            if err == self.ERROR_INVALID_PARAMETER:
+                raise Gone()
+            if err == self.ERROR_ACCESS_DENIED:
+                raise Denied(err)
+            raise IncompleteListing("OpenProcess failed for %d (%d)" % (pid, err))
         try:
             buf = self.ctypes.create_unicode_buffer(32768)
             size = self.w.DWORD(32768)
             if not self.k32.QueryFullProcessImageNameW(h, 0, buf, self.ctypes.byref(size)):
-                raise Denied(self.ctypes.get_last_error())
+                err = self.ctypes.get_last_error()
+                if err == self.ERROR_ACCESS_DENIED:
+                    raise Denied(err)
+                raise IncompleteListing("QueryFullProcessImageNameW failed for %d (%d)" % (pid, err))
             return buf.value
         finally:
             self.k32.CloseHandle(h)
 
 
 def _windows(api) -> list[tuple[int, str]]:
-    mine = api.session(os.getpid())
-    if mine is None:
-        raise IncompleteListing("this process's session is unknown")
     found = []
+    refused = []
     for pid in api.pids():
         try:
             found.append((pid, api.image(pid)))
         except Gone:
             continue
-        except Denied as e:
-            session = api.session(pid)
-            if session is None:
-                continue                               # ended between the two calls
-            if session == mine:
-                raise IncompleteListing("process %d in this session refused its image path (%s)" % (pid, e))
+        except Denied:
+            refused.append(pid)
+    if refused:
+        owners = api.owners()
+        for pid in refused:
+            if owners.get(pid) is False:
+                continue                        # positively identified as another user's process
+            # The owner snapshot may omit a process that ended during the scan.
+            try:
+                api.image(pid)
+            except Gone:
+                continue
+            except Denied:
+                pass
+            raise IncompleteListing("process %d refused its image path and is ours or its owner is unknown" % pid)
     return found

@@ -579,13 +579,15 @@ def test_thumb_route_serves_the_graph_thumbnail(app, upstream, fake):
 def test_token_file_mode_0600(fake):
     src = OneDriveSource()
     _sign_in(src, fake)
+    # The account writer replaces the file after sign-in. Wait through the store's lock,
+    # rather than opening that file while Windows is trying to replace it.
+    wait_for(lambda: src.status()["detail"].get("account"))
     path = _token_file()
     assert os.name != "posix" or oct(os.stat(path).st_mode & 0o777) == "0o600"
     with open(path, encoding="utf-8") as fh:
         stored = json.load(fh)
     assert stored["access_token"] == "at1" and stored["refresh_token"] == "rt1"
     assert stored["scope"] == onedrive.SCOPES and stored["expires_at"] > time.time() + 3000
-    wait_for(lambda: json.load(open(path, encoding="utf-8")).get("account"))
     with open(path, encoding="utf-8") as fh:
         assert json.load(fh)["account"] == {"displayName": "Piotr Miller",
                                             "userPrincipalName": "piotr@example.com"}

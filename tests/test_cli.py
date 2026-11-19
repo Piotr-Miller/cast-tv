@@ -122,7 +122,7 @@ def test_cast_replaced_from_the_ui_keeps_serving(cli_env, tmp_path, capsys):
     result = []
     t = threading.Thread(target=lambda: result.append(cli.cast(str(clip), tv="127.0.0.1", port=_free_port())))
     t.start()
-    wait_for(lambda: servers and servers[0].app is not None and servers[0].app.current is not None
+    wait_for(lambda: servers and getattr(servers[0].app, "current", None) is not None
              and servers[0].app.current.sent.is_set())
     app = servers[0].app
     first = app.current

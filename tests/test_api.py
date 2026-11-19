@@ -106,7 +106,7 @@ def test_conditional_quit_does_not_end_a_replacement_instance(app, monkeypatch):
     assert status == 409 and body["error"]["code"] == "instance_changed"
     assert quit_calls == []
     assert _json(app.base_url, "POST", "/api/quit", {"instance": app.server.instance_id})[0] == 200
-    assert quit_calls == [True]
+    wait_for(lambda: quit_calls == [True])       # the handler invokes quit after writing the response
 
 
 def test_host_only_routes_refuse_lan(app, monkeypatch):
