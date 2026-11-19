@@ -3,7 +3,7 @@ change_id: s16-faster-start
 title: "A faster-starting release file (Nuitka, cached onefile)"
 status: implementing
 created: 2026-11-18
-updated: 2026-11-19
+updated: 2026-11-20
 archived_at: null
 ---
 
@@ -19,3 +19,5 @@ archived_at: null
 
 2026-11-19: Phase 3 implementation review saved in reviews/impl-review-phase-3-ed90da9.md. F1–F2 fixed using the owner's authorized recommended approaches: fail closed on unreadable cache metadata and refresh retention/process evidence before each deletion. Full suite: 648 passed, 7 skipped; pyflakes clean. Manual acceptance remains pending; phase review leaves status implementing. Review records and fixes are carried, uncommitted; the existing plan SHA write-back is preserved.
 2026-11-19: Phase 4 implemented: 9dfd306 (build_nuitka.py, Cache: line, smoke --nuitka, four-file release.yml) and 7a7eb32 (fix: Windows gave the Nuitka cache folder as an 8.3 short path, C:\Users\RUNNER~1\...\050-GH~1.1, so smoke and pruning failed; bundle.data_dir now expands it with GetLongPathNameW). PR #111 (draft): release run 44628255344 failed on that; run 44630376210 at 7a7eb32 built and smoke-tested all four files green (Nuitka: Linux 154,814,680 B, Windows 18,300,416 B; cache folders 0.5.0-gh44630376210.1), test run 44630376203 green. Phase 5 measures that run's files.
+
+2026-11-20: Phase 4 implementation review APPROVED at 7a7eb32, no findings; report reviews/impl-review-phase-4-7a7eb32.md. Focused phase checks and pyflakes passed in a detached checkout. Existing four-file CI build/smoke results, artifacts and both Nuitka provenance sidecars verified without running a paid build. Phase review leaves status implementing and Manual acceptance pending.
