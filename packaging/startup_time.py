@@ -176,7 +176,15 @@ def measure_once(binary: str, *, port=None, popen=subprocess.Popen, status=fetch
                 raise RunFailed("no Ready mark within %.0f s" % timeout)
             sleep(0.05)
     finally:
-        stop(proc, port, instance)
+        failed = sys.exc_info()[0] is not None
+        try:
+            ended = stop(proc, port, instance)
+        except Exception as e:
+            if not failed:
+                raise RunFailed("could not stop the measured instance: %s" % e) from e
+        else:
+            if not ended and not failed:
+                raise RunFailed("the measured instance did not stop cleanly or free its port")
 
 
 def run_series(binary: str, mode: str, runs: int, *, version_text: str, measure=measure_once,
@@ -238,7 +246,13 @@ def main(argv=None) -> int:
     binary = os.path.abspath(args.binary)
     try:
         preflight(binary)
-        version = subprocess.run([binary, "--version"], capture_output=True, text=True, timeout=180).stdout
+        try:
+            probe = subprocess.run([binary, "--version"], capture_output=True, text=True, timeout=180)
+        except (OSError, subprocess.TimeoutExpired) as e:
+            raise RunFailed("could not read --version: %s" % e) from e
+        if probe.returncode != 0:
+            raise RunFailed("--version exited with code %d" % probe.returncode)
+        version = probe.stdout
         measure = (lambda b: measure_once(b, hold=args.hold)) if args.hold > 0 else measure_once
         times = run_series(binary, args.mode, args.runs, version_text=version, measure=measure)
     except Refused as e:

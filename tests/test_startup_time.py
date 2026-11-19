@@ -121,7 +121,7 @@ def _measure(st, statuses, **kw):
         return value
 
     seconds = st.measure_once(BINARY, port=4000, popen=lambda *a, **k: proc, status=status,
-                              stop=lambda p, port, inst: stopped.append(inst), owns=lambda p, inst: inst["pid"] == 500,
+                              stop=lambda p, port, inst: stopped.append(inst) or True, owns=lambda p, inst: inst["pid"] == 500,
                               clock=lambda: now[0], sleep=lambda s: now.__setitem__(0, now[0] + s), **kw)
     return seconds, stopped
 
@@ -158,6 +158,64 @@ def test_a_run_that_never_gets_ready_fails(st):
 def test_another_process_on_the_port_is_refused(st):
     with pytest.raises(st.Refused):
         _measure(st, [{"instance": {"id": "x", "pid": 9, "parent_pid": 1, "ui_ready_at": 1.0, "shown_at": 1.0}}])
+
+
+@pytest.mark.parametrize("cleanup", [False, OSError("stop failed")])
+@pytest.mark.parametrize("missing_mark", [False, True])
+def test_cleanup_failure_rejects_success_but_preserves_an_earlier_error(st, cleanup, missing_mark):
+    proc = Proc()
+    instance = {"id": "i", "pid": 500}
+    if not missing_mark:
+        instance.update(ui_ready_at=102., shown_at=101.)
+    stopped = []
+
+    def stop(*args):
+        stopped.append(args)
+        if isinstance(cleanup, Exception):
+            raise cleanup
+        return cleanup
+
+    with pytest.raises(st.NoReadyMark if missing_mark else st.RunFailed):
+        st.measure_once(BINARY, port=4000, popen=lambda *a, **k: proc,
+                        status=lambda p: {"instance": instance}, owns=lambda *a: True,
+                        stop=stop, clock=lambda: 100.)
+    assert len(stopped) == 1
+
+
+@pytest.mark.parametrize("failure", ["nonzero", "oserror", "timeout"])
+def test_failed_version_probe_never_measures_or_writes_results(st, monkeypatch, tmp_path, failure):
+    import subprocess
+    from types import SimpleNamespace
+
+    def run(*args, **kw):
+        if failure == "oserror":
+            raise OSError("cannot launch")
+        if failure == "timeout":
+            raise subprocess.TimeoutExpired([BINARY, "--version"], 180)
+        return SimpleNamespace(returncode=7, stdout="", stderr="version failed")
+
+    monkeypatch.setattr(st, "preflight", lambda b: None)
+    monkeypatch.setattr(st.subprocess, "run", run)
+    monkeypatch.setattr(st, "run_series", lambda *a, **k: pytest.fail("measured after failed version"))
+    out = tmp_path / "result.json"
+    assert st.main([BINARY, "--mode", "cold", "--out", str(out)]) == 1
+    assert not out.exists()
+
+
+def test_successful_legacy_version_probe_can_reach_missing_mark_detection(st, monkeypatch, tmp_path):
+    from types import SimpleNamespace
+    monkeypatch.setattr(st, "preflight", lambda b: None)
+    monkeypatch.setattr(st.subprocess, "run", lambda *a, **k:
+                        SimpleNamespace(returncode=0, stdout="cast-tv 0.5.0\n", stderr=""))
+
+    def series(*args, version_text, **kw):
+        assert st.cache_from_version(version_text) is None
+        raise st.NoReadyMark("this build has no Ready mark (built before s16-faster-start)")
+
+    monkeypatch.setattr(st, "run_series", series)
+    out = tmp_path / "result.json"
+    assert st.main([BINARY, "--mode", "cold", "--out", str(out)]) == 3
+    assert not out.exists()
 
 
 def test_warm_primes_once_and_cold_clears_before_every_run(st):

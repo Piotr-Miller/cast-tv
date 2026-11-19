@@ -152,3 +152,36 @@ python packaging\startup_time.py <exe> --mode warm --runs 1 --hold 15 --out p1-w
   well). It does not change any time; the priming start is never measured.
 
 Row 1.7 is accepted at fc780beb1660330a543a6c0bf9fd41036f840f2c (the docs commit over 5155ad8; same code).
+
+## Phase 1 implementation review and fixes (2026-11-19)
+
+Report: `reviews/impl-review-phase-1-0707dac.md`. The owner authorized all recommended fixes;
+the changes remain uncommitted as requested. This section is automated review evidence, not a
+new observation accepting row 1.7.
+
+- A held `/api/errors` reproduced Ready before the tab watcher was installed. The fixed UI
+  installs its handlers first and starts initial source setup after a successful status,
+  independently of errors fetching. The test driver now controls the render tick and distinct
+  frames, exercises watcher callbacks, and reports started asynchronous failures.
+- Deliberately replacing the Ready barrier with an immediate post, a single frame, or two frames
+  without the render tick makes the new regression test fail. The initial-setup regression test
+  also rejects the original committed component. These experiments used temporary source copies.
+- Native Windows probes showed why desktop-session inference was unsafe: ProcessIdToSessionId
+  returned access denied for image-denied processes; a WTS snapshot found protected processes
+  in both session 0 and our desktop session 1. The lister now uses explicit user-SID ownership,
+  and treats unknown ownership as incomplete rather than treating it as an exited process.
+- **Windows limitation observed:** in this unelevated session WTS returned no owner SID for the
+  inaccessible other-account processes. The fixed lister therefore raises IncompleteListing at
+  PID 4. This is an intentional safe refusal, not a successful complete scan. Elevated rights may
+  provide more ownership information, but that outcome has not been observed or accepted here.
+  The future Phase 3 pruner must retain its no-deletion-on-IncompleteListing rule.
+- Failed version probing and failed owned shutdown now reject a measurement. The known `--hold`
+  behavior on priming remains deferred to Phase 4.
+- The first full review run failed three existing test-synchronization hazards. The OneDrive
+  failure also reproduced in a temporary checkout of base a85f59d. The tests now wait for the
+  post-response Quit effect, tolerate App initialization in the CLI predicate, and wait for the
+  account write through its lock before reading the fake credential file on Windows.
+- Row 1.7 was reopened after the acceptance-state script reported its surface stale through
+  `castlib/processes.py`, `castlib/ui/app.js` and `packaging/startup_time.py`. The original human
+  observation above is preserved; only a new human observation at a committed revision can
+  restore acceptance. Packaging PR build/smoke validation is also still required.
