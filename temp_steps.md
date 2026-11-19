@@ -1,4 +1,4 @@
-# Next steps (2026-11-19, S-16 Phase 1 reviewed and accepted; Phase 2 next)
+# Next steps (2026-11-19, S-16 Phases 1-4 implemented, draft PR #111; Phase 5 next)
 
 The standing pause note; overwrite it at the next handoff. Claude ticks each step (`- [x]`) as
 soon as it is done, with the date and, for a merge or a recorded row, the PR or commit.
@@ -42,10 +42,15 @@ soon as it is done, with the date and, for a merge or a recorded row, the PR or 
    - `castlib/bundle.py`: kind, started_file, data_dir, cache_dir, relaunch_env.
    - The `sys.frozen` callers in `platform.py`, `shortcut.py` and `window.py`.
    - Row 1.7 reopened (its surface `castlib/` changed); it needs a new watched run.
-- [ ] 4. Phases 3-4: old-cache pruning, then Nuitka builds next to PyInstaller in CI. Phase 4 opens
-   the PR.
+- [x] 4. Phases 3-4: old-cache pruning, then Nuitka builds next to PyInstaller in CI. — 2026-11-19,
+   ed90da9 (p3), 9dfd306 + 7a7eb32 (p4), draft PR #111. Release run 44630376210 built and
+   smoke-tested all four files green; 7a7eb32 fixed the Windows 8.3 short cache path the first run
+   (44628255344) caught.
 - [ ] 5. Phase 5 on both machines (Windows here, then Fedora): `startup_time.py` cold and warm on
-   each PR file, then the bars decide.
+   each file of run 44630376210, then the bars decide. Download one file at a time, e.g. in
+   PowerShell in the checkout: `gh run download 44630376210 -n cast-tv-windows-x64-nuitka.exe -D dl`
+   and `gh run download 44630376210 -n cast-tv-windows-x64.exe -D dl`.
+- [ ] 6. Optional, before Phase 5: `/rune-impl-review s16-faster-start phase 4` in a fresh session.
 
 ## How to resume with Claude
 
