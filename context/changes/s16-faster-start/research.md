@@ -225,3 +225,4 @@ python packaging\startup_time.py <exe> --mode warm --runs 1 --hold 15 --out p1b-
 - The watched run: "ready after 4.17 s: the window stays open 15 s"; the priming start was no
   longer held. The owner watched and accepted ("akceptuję"): the TV button and the GoPro / OneDrive
   / Google Photos tabs were on screen when the time printed, and a tab click responded.
+Row 1.7 is accepted at 185f2062837a293ab9b02b5dfbd00ed4d1cd21d6 (the docs commit over a32a0ea; same code).
