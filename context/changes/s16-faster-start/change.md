@@ -13,3 +13,4 @@ archived_at: null
 
 <!-- Free-form notes for this change: links, ad-hoc context, decisions that don't belong in research/frame/plan. -->
 2026-11-19: owner decision — Windows: an access-denied image query counts as not ours unless WTS names our SID (unelevated, 176 of 451 owners unknown made every listing incomplete); verified with a normal and an elevated cast-tv; plan.md Phase 1, The process lister
+2026-11-19: reopened 1.7 — was accepted at 185f2062837a293ab9b02b5dfbd00ed4d1cd21d6; changed: castlib/bundle.py, castlib/platform.py, castlib/shortcut.py, castlib/window.py (Phase 2: code that runs under either packager).

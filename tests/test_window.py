@@ -782,6 +782,10 @@ def test_identity_icon_per_platform():
     from castlib.server import ICON_ICO, ICON_PNG
     assert window.identity("win32", frozen=True) is None        # the release's window takes the exe's icon
     assert window.identity("win32", frozen=False) == ICON_ICO   # pipx and a checkout: not python.exe's
+    assert window.identity("win32", kind="nuitka") is None      # Nuitka embeds the icon in the exe too
+    assert window.identity("win32", kind="pyinstaller") is None
+    assert window.identity("win32") == ICON_ICO                  # this test run: not a release
+    assert window.identity("linux", kind="nuitka") == ICON_PNG
     assert window.identity("linux") == ICON_PNG
 
 

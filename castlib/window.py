@@ -71,13 +71,14 @@ def _backend_module() -> str:
     return "webview.platforms.winforms" if sys.platform == "win32" else "webview.platforms.qt"
 
 
-def identity(platform=None, frozen=None) -> str | None:
+def identity(platform=None, frozen=None, kind=None) -> str | None:
     """The icon file the window is given: none for the Windows release, whose window takes the exe's own."""
+    from castlib import bundle
     from castlib.server import ICON_ICO, ICON_PNG
     platform = platform or sys.platform
     if platform == "win32":
-        frozen = getattr(sys, "frozen", False) if frozen is None else frozen
-        return None if frozen else ICON_ICO      # pipx and a checkout would show python.exe's icon
+        release = bundle.resolve_kind(kind, frozen) is not None    # either packager embeds the icon
+        return None if release else ICON_ICO      # pipx and a checkout would show python.exe's icon
     return ICON_PNG
 
 

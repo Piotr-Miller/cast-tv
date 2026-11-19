@@ -27,6 +27,7 @@ import threading
 import time
 from dataclasses import dataclass
 
+from castlib import bundle
 from castlib.errors import ConfigError
 from castlib.server import ICON_ICO, ICON_PNG
 
@@ -157,13 +158,16 @@ class MenuEntry:
     """The menu entry of this machine and this running file; every outside dependency can be injected."""
 
     def __init__(self, platform=None, environ=None, home=None, run=subprocess.run, frozen=None,
-                 executable=None, which=shutil.which, root=None, config=None, argv0=None, clock=time.monotonic):
+                 executable=None, which=shutil.which, root=None, config=None, argv0=None, clock=time.monotonic,
+                 kind=None):
         self.platform = platform or sys.platform
         self.environ = os.environ if environ is None else environ
         self.home = home or os.path.expanduser("~")
         self._run = run
-        self.frozen = getattr(sys, "frozen", False) if frozen is None else frozen
-        self.executable = executable or sys.executable
+        self.kind = bundle.resolve_kind(kind, frozen)       # "pyinstaller", "nuitka" or None
+        self.frozen = self.kind is not None                  # a release file, of either packager
+        # a release: the file the user started (not a Nuitka build's unpacked copy), None when not found
+        self.executable = executable or (bundle.started_file(self.kind) if self.frozen else sys.executable)
         self.which = which
         self.argv0 = argv0
         self.root = root
@@ -183,6 +187,9 @@ class MenuEntry:
     def target(self) -> Command:
         """The command line of this file: the release, a checkout, or the pipx launcher."""
         if self.frozen:
+            if not self.executable:
+                raise ConfigError("menu_no_file", "cast-tv cannot tell which file it was started from; "
+                                  "start cast-tv from its file once, then add the menu entry again.")
             return Command((self.executable,))
         root = self.root if self.root is not None else checkout_root()
         if root:
@@ -341,7 +348,9 @@ class MenuEntry:
         if not gdbus:
             return
         env = dict(self.environ)
-        if "LD_LIBRARY_PATH_ORIG" in env:              # the release binary: the host's gdbus, the host's libraries
+        if self.kind == bundle.NUITKA:
+            pass                                       # Nuitka leaves LD_LIBRARY_PATH alone: it is the host's
+        elif "LD_LIBRARY_PATH_ORIG" in env:            # the PyInstaller binary: the host's gdbus, the host's libraries
             env["LD_LIBRARY_PATH"] = env.pop("LD_LIBRARY_PATH_ORIG")
         elif self.frozen:
             env.pop("LD_LIBRARY_PATH", None)
