@@ -188,11 +188,12 @@ def measure_once(binary: str, *, port=None, popen=subprocess.Popen, status=fetch
 
 
 def run_series(binary: str, mode: str, runs: int, *, version_text: str, measure=measure_once,
-               check=preflight, clear=clear_cache, out=print) -> list[float]:
+               check=preflight, clear=clear_cache, out=print, prime=None) -> list[float]:
+    """``prime`` is the unmeasured warm-up start; it defaults to ``measure_once`` without ``--hold``."""
     folder = cache_from_version(version_text)
     if mode == "warm":
         check(binary, wait=CLEAR_TIMEOUT)
-        measure(binary)                                # the priming start: unpacks, not measured
+        (prime or measure_once)(binary)                # the priming start: unpacks, not measured, never held
     times = []
     for i in range(runs):
         check(binary, wait=CLEAR_TIMEOUT)

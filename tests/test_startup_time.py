@@ -220,11 +220,13 @@ def test_successful_legacy_version_probe_can_reach_missing_mark_detection(st, mo
 
 def test_warm_primes_once_and_cold_clears_before_every_run(st):
     calls = []
-    measured = iter([9.0, 3.0, 2.0, 4.0])
+    measured = iter([3.0, 2.0, 4.0])
     common = dict(measure=lambda b: calls.append("run") or next(measured),
-                  check=lambda b, wait: calls.append("check"), out=lambda s: None)
+                  check=lambda b, wait: calls.append("check"), out=lambda s: None,
+                  prime=lambda b: calls.append("prime") or 9.0)
     warm = st.run_series(BINARY, "warm", 3, version_text="Cache: none", clear=lambda f: calls.append("clear"), **common)
-    assert warm == [3.0, 2.0, 4.0] and calls.count("clear") == 0 and calls.count("run") == 4
+    assert warm == [3.0, 2.0, 4.0] and calls.count("clear") == 0
+    assert calls[:2] == ["check", "prime"] and calls.count("run") == 3   # the held (watched) measure never primes
     calls.clear()
     measured = iter([5.0, 6.0])
     common["measure"] = lambda b: calls.append("run") or next(measured)
