@@ -15,13 +15,14 @@ import json
 import os
 import signal
 import sys
+import threading
 import traceback
 import urllib.parse
 import urllib.request
 import webbrowser
 
 import castlib
-from castlib import net, platform, window, window_probe
+from castlib import bundle, net, platform, window, window_probe
 from castlib.auth import browser, loopback
 from castlib.app import ENDS_HINT, AlreadyRunning, App, end_on_sigterm, main_wait
 from castlib.diagnostics import check_codecs
@@ -340,7 +341,7 @@ def _in_window(app):
             platform.console_close_ends(window.destroy)
             session = platform.end_on_session_end(session_end)
             result = window.run(app, "http://127.0.0.1:%d/ui/" % app.server.port,   # not localhost: it may be ::1 first
-                                on_shown=lambda: print("  %s" % WINDOW_ENDS, flush=True))
+                                on_shown=_on_shown)
         finally:
             if session is not None:
                 session.release()
@@ -358,6 +359,33 @@ def _in_window(app):
     print("  No cast-tv window (%s); the UI opens in the browser. %s" % (reason, ENDS_HINT), flush=True)
     app.open_tab()
     return result
+
+
+def _on_shown():
+    print("  %s" % WINDOW_ENDS, flush=True)
+    prune_old_caches()
+
+
+def prune_old_caches(kind_=None, cache_dir=None, thread=threading.Thread):
+    """A Nuitka release removes its old build folders, in the background so it never delays the UI.
+
+    Returns the started thread, or None when this is not a Nuitka release (nothing to prune).
+    """
+    kind_ = bundle.kind() if kind_ is None else kind_
+    if kind_ != bundle.NUITKA:
+        return None
+    cache_dir = cache_dir or bundle.cache_dir(kind_)
+    if not cache_dir:
+        return None
+
+    def prune():
+        try:
+            bundle.prune_caches(cache_dir)
+        except Exception:
+            pass                                 # disk housekeeping must never end cast-tv
+    worker = thread(target=prune, name="cast-tv-prune", daemon=True)
+    worker.start()
+    return worker
 
 
 def _bring_forward(port):

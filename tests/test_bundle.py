@@ -1,6 +1,7 @@
 """The packager facts: which packager, which file was started, where the data is, how to start again."""
 import importlib.util
 import os
+import shutil
 import sys
 import types
 
@@ -209,3 +210,216 @@ def test_relaunch_env_per_kind():
     assert pyi == {"PATH": "/usr/bin", "PYINSTALLER_RESET_ENVIRONMENT": "1"}
     assert bundle.relaunch_env({"PATH": "/usr/bin", "NUITKA_ONEFILE_PARENT": "1"}, None) == \
         {"PATH": "/usr/bin", "NUITKA_ONEFILE_PARENT": "1"}                          # not a release: unchanged
+
+
+# ----------------------------------------------------------------- pruning
+DAY = 86400
+NOW = 1_800_000_000.0
+
+
+def build(parent, name, marker_days=None, mtime_days=None):
+    """A build folder ``name``: a start marker ``marker_days`` old (None: no marker), its mtime ``mtime_days`` old."""
+    folder = parent / name
+    (folder / "sub").mkdir(parents=True, exist_ok=True)
+    (folder / "sub" / "cast-tv.bin").write_text("x")
+    if marker_days is not None:
+        marker = folder / bundle.START_MARKER
+        marker.write_text("")
+        os.utime(marker, (NOW - marker_days * DAY,) * 2)
+    if mtime_days is not None:
+        os.utime(folder, (NOW - mtime_days * DAY,) * 2)
+    return str(folder)
+
+
+def prune(current, images=(), **kw):
+    kw.setdefault("processes", lambda: [(100 + i, image) for i, image in enumerate(images)])
+    kw.setdefault("now", lambda: NOW)
+    return bundle.prune_caches(current, **kw)
+
+
+def names(parent):
+    return sorted(os.listdir(parent))
+
+
+@pytest.fixture
+def parent(tmp_path):
+    p = tmp_path / "cache" / "cast-tv"
+    p.mkdir(parents=True)
+    return p
+
+
+def test_prune_removes_the_oldest_of_three_builds(parent):
+    oldest = build(parent, "0.6.0-gh1.1", marker_days=8)
+    build(parent, "0.6.0-gh2.1", marker_days=3)
+    current = build(parent, "0.6.0-gh3.1")
+    assert prune(current) == [oldest]
+    assert names(parent) == ["0.6.0-gh2.1", "0.6.0-gh3.1"]
+    assert os.stat(os.path.join(current, bundle.START_MARKER)).st_mtime == NOW     # this start is marked
+
+
+def test_prune_keeps_a_folder_started_six_days_ago(parent):
+    build(parent, "0.6.0-gh1.1", marker_days=6)
+    build(parent, "0.6.0-gh2.1", marker_days=1)
+    current = build(parent, "0.6.0-gh3.1")
+    assert prune(current) == []
+    assert len(names(parent)) == 3
+
+
+def test_prune_the_age_guard_is_inclusive(parent):
+    seven = build(parent, "0.6.0-gh1.1", marker_days=7)            # exactly 7 days: removable
+    build(parent, "0.6.0-gh2.1", marker_days=1)
+    current = build(parent, "0.6.0-gh3.1")
+    assert prune(current) == [seven]
+
+
+def test_prune_keeps_an_old_folder_in_use(parent):
+    oldest = build(parent, "0.6.0-gh1.1", marker_days=30)
+    build(parent, "0.6.0-gh2.1", marker_days=1)
+    current = build(parent, "0.6.0-gh3.1")
+    assert prune(current, images=[os.path.join(oldest, "sub", "cast-tv.bin")]) == []
+    assert "0.6.0-gh1.1" in names(parent)
+
+
+def test_prune_a_sibling_with_a_longer_name_is_not_in_use(parent):
+    oldest = build(parent, "0.6.0-gh1.1", marker_days=30)
+    build(parent, "0.6.0-gh2.1", marker_days=1)
+    current = build(parent, "0.6.0-gh3.1")
+    assert prune(current, images=[oldest + "0" + os.sep + "cast-tv.bin"]) == [oldest]
+
+
+@pytest.mark.skipif(os.path.normcase("A") != "a", reason="paths are case-sensitive here")
+def test_prune_in_use_ignores_case_on_windows(parent):
+    oldest = build(parent, "0.6.0-gh1.1", marker_days=30)
+    build(parent, "0.6.0-gh2.1", marker_days=1)
+    current = build(parent, "0.6.0-gh3.1")
+    assert prune(current, images=[os.path.join(oldest, "sub", "cast-tv.bin").upper()]) == []
+    assert os.path.isdir(oldest)
+
+
+def test_prune_an_incomplete_listing_removes_nothing(parent):
+    build(parent, "0.6.0-gh1.1", marker_days=30)
+    build(parent, "0.6.0-gh2.1", marker_days=1)
+    (parent / "0.6.0-gh0.1.removing-9").mkdir()
+    current = build(parent, "0.6.0-gh3.1")
+
+    def incomplete():
+        raise bundle.IncompleteListing("process 5 is ours but refused")
+    assert prune(current, processes=incomplete) == []
+    assert len(names(parent)) == 4
+
+
+def test_prune_without_markers_uses_the_modification_time(parent):
+    oldest = build(parent, "0.6.0-gh1.1", mtime_days=20)
+    build(parent, "0.6.0-gh2.1", mtime_days=10)                # previous: the newest mtime, though old
+    current = build(parent, "0.6.0-gh3.1")
+    assert prune(current) == [oldest]
+    assert names(parent) == ["0.6.0-gh2.1", "0.6.0-gh3.1"]
+
+
+def test_prune_marked_folders_win_over_unmarked_ones(parent):
+    marked = build(parent, "0.6.0-gh1.1", marker_days=9, mtime_days=9)
+    unmarked = build(parent, "0.6.0-gh2.1", mtime_days=8)       # newer mtime, but no marker
+    current = build(parent, "0.6.0-gh3.1")
+    assert prune(current) == [unmarked]
+    assert os.path.isdir(marked)                                 # the previous build
+
+
+def test_prune_a_tie_in_the_marker_goes_to_the_greater_name(parent):
+    lower = build(parent, "0.6.0-gh1.1", marker_days=10)
+    build(parent, "0.6.0-gh1.2", marker_days=10)
+    current = build(parent, "0.6.0-gh3.1")
+    assert prune(current) == [lower]
+
+
+def test_prune_a_tie_in_the_mtime_goes_to_the_greater_name(parent):
+    lower = build(parent, "0.6.0-gh1.1", mtime_days=10)
+    build(parent, "0.6.0-local20261101120000", mtime_days=10)
+    current = build(parent, "0.6.0-gh3.1")
+    assert prune(current) == [lower]
+
+
+def test_prune_a_single_build(parent):
+    current = build(parent, "0.6.0-gh3.1")
+    listed = []
+    assert prune(current, processes=lambda: listed.append(1) or []) == []
+    assert listed == []                                          # nothing old: no listing needed
+    assert names(parent) == ["0.6.0-gh3.1"]
+
+
+def test_prune_never_touches_foreign_names(parent):
+    for name in ("Cache", "0.5.0", "0.6.0-gh1", "0.6.0-local2026", "notes.removing-1",
+                 "0.6.0-gh1.1.removing-x"):
+        build(parent, name, marker_days=40, mtime_days=40)
+    (parent / "0.6.0-gh9.9").write_text("a file, not a folder")
+    build(parent, "0.6.0-gh2.1", marker_days=1)
+    current = build(parent, "0.6.0-gh3.1")
+    assert prune(current) == []
+    assert len(names(parent)) == 9
+
+
+def test_prune_does_nothing_from_a_folder_outside_the_grammar(parent):
+    build(parent, "0.6.0-gh1.1", marker_days=30)
+    build(parent, "0.6.0-gh2.1", marker_days=20)
+    spike = build(parent, "0.5.0")
+    assert prune(spike) == []
+    assert len(names(parent)) == 3
+    assert not os.path.exists(os.path.join(spike, bundle.START_MARKER))
+
+
+def test_prune_a_rename_failure_keeps_the_folder(parent):
+    oldest = build(parent, "0.6.0-gh1.1", marker_days=30)
+    build(parent, "0.6.0-gh2.1", marker_days=1)
+    current = build(parent, "0.6.0-gh3.1")
+    removed = []
+
+    def locked(src, dst):
+        raise PermissionError(32, "a file inside is in use")
+    assert prune(current, rename=locked, remove=removed.append) == []
+    assert removed == []                                         # never deleted in place
+    assert os.path.isdir(oldest)
+
+
+def test_prune_deletes_only_the_renamed_copy(parent):
+    oldest = build(parent, "0.6.0-gh1.1", marker_days=30)
+    build(parent, "0.6.0-gh2.1", marker_days=1)
+    current = build(parent, "0.6.0-gh3.1")
+    removed = []
+
+    def remove(path):
+        removed.append(path)
+        shutil.rmtree(path)
+    assert prune(current, remove=remove) == [oldest]
+    assert removed == ["%s.removing-%d" % (oldest, os.getpid())]
+
+
+def test_prune_a_removal_error_is_ignored_and_finished_later(parent):
+    oldest = build(parent, "0.6.0-gh1.1", marker_days=30)
+    build(parent, "0.6.0-gh2.1", marker_days=1)
+    current = build(parent, "0.6.0-gh3.1")
+
+    def fails(path):
+        raise OSError(13, "denied")
+    assert prune(current, remove=fails) == []
+    leftover = "0.6.0-gh1.1.removing-%d" % os.getpid()
+    assert names(parent) == [leftover, "0.6.0-gh2.1", "0.6.0-gh3.1"]
+    assert not os.path.exists(oldest)
+    assert prune(current) == [str(parent / leftover)]            # the next start finishes it
+    assert names(parent) == ["0.6.0-gh2.1", "0.6.0-gh3.1"]
+
+
+def test_prune_finishes_a_leftover_from_an_earlier_run(parent):
+    leftover = parent / "0.6.0-gh0.1.removing-4242"
+    (leftover / "deep").mkdir(parents=True)
+    (leftover / "deep" / "half.bin").write_text("x")
+    build(parent, "0.6.0-gh2.1", marker_days=1)
+    current = build(parent, "0.6.0-gh3.1")
+    assert prune(current) == [str(leftover)]
+    assert names(parent) == ["0.6.0-gh2.1", "0.6.0-gh3.1"]
+
+
+def test_prune_keeps_a_leftover_still_in_use(parent):
+    leftover = parent / "0.6.0-gh0.1.removing-4242"
+    leftover.mkdir()
+    current = build(parent, "0.6.0-gh3.1")
+    assert prune(current, images=[str(leftover / "cast-tv.bin")]) == []
+    assert leftover.is_dir()

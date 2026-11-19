@@ -698,3 +698,44 @@ def test_window_check_flag_runs_the_probe_only(monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "--window-check" not in out and "--self-check" not in out
     assert "which engine the cast-tv window would use" in out
+
+
+# ------------------------------------------------------- old cache folders
+class _Thread:
+    started = []
+
+    def __init__(self, target, name, daemon):
+        self.target, self.name, self.daemon = target, name, daemon
+
+    def start(self):
+        _Thread.started.append(self)
+
+
+def test_pruning_runs_in_the_background_only_for_nuitka(monkeypatch):
+    pruned = []
+    monkeypatch.setattr(cli.bundle, "prune_caches", lambda folder: pruned.append(folder))
+    _Thread.started = []
+    assert cli.prune_old_caches("pyinstaller", "/c", thread=_Thread) is None
+    assert cli.prune_old_caches(None, "/c", thread=_Thread) is None          # this test run: no release
+    assert pruned == [] and _Thread.started == []
+    worker = cli.prune_old_caches("nuitka", "/cache/cast-tv/0.6.0-gh1.1", thread=_Thread)
+    assert worker.daemon and worker.name == "cast-tv-prune"
+    assert pruned == []                                                      # not on the caller's thread
+    worker.target()
+    assert pruned == ["/cache/cast-tv/0.6.0-gh1.1"]
+
+
+def test_a_pruning_failure_never_ends_cast_tv(monkeypatch):
+    def boom(folder):
+        raise RuntimeError("disk gone")
+    monkeypatch.setattr(cli.bundle, "prune_caches", boom)
+    worker = cli.prune_old_caches("nuitka", "/cache/cast-tv/0.6.0-gh1.1", thread=_Thread)
+    worker.target()                                                          # swallowed
+
+
+def test_pruning_starts_once_the_window_shows(monkeypatch, capsys):
+    calls = []
+    monkeypatch.setattr(cli, "prune_old_caches", lambda: calls.append(1))
+    cli._on_shown()
+    assert calls == [1]
+    assert cli.WINDOW_ENDS in capsys.readouterr().out
