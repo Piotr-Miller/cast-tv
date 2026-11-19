@@ -7,6 +7,13 @@ assume that nothing uses a file. Another user's process that refuses is skipped:
 cannot be running from this user's cache. "Ours" is the same owner on Linux
 (``/proc/<pid>`` belongs to us) and the same user SID on Windows. A desktop session
 also contains protected system processes, so a session ID does not establish ownership.
+
+Windows, unelevated, reports no owner for the protected and service processes (176 of 451 on
+the home laptop, 2026-11-19), and they refuse the image query. A refusal (access denied) counts
+as "not ours" unless WTS names our SID (owner decision 2026-11-19): Windows lets a user query its
+own processes. Checked on that laptop: a cast-tv started normally and one started as
+administrator were both readable from an unelevated process, with our SID, and no process with
+our SID refused (s16-faster-start research.md). Any other API error is still incomplete.
 """
 import os
 import sys
@@ -161,16 +168,10 @@ def _windows(api) -> list[tuple[int, str]]:
         except Denied:
             refused.append(pid)
     if refused:
-        owners = api.owners()
+        owners = api.owners()                   # a failed snapshot is incomplete: it cannot rule out "ours"
         for pid in refused:
-            if owners.get(pid) is False:
-                continue                        # positively identified as another user's process
-            # The owner snapshot may omit a process that ended during the scan.
-            try:
-                api.image(pid)
-            except Gone:
-                continue
-            except Denied:
-                pass
-            raise IncompleteListing("process %d refused its image path and is ours or its owner is unknown" % pid)
+            if owners.get(pid) is True:         # ours, yet refused: contrary to what was measured; do not guess
+                raise IncompleteListing("process %d is ours but refused its image path" % pid)
+            # False (another user) or None (unknown: protected or service processes, unelevated):
+            # a refusal means not ours - Windows lets a user query its own processes (see above).
     return found

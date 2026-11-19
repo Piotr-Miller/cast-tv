@@ -30,13 +30,9 @@ Do not discard them or overwrite them by pulling another checkout over this work
    watched run. In the cast-tv window, the TV button and source tabs must be visible when the
    timing prints in PowerShell; clicking a source tab must respond at that point. Record date,
    device, executable SHA-256, run values and the owner's actual observation in research.md.
-3. **Windows measurement limitation:** in the current unelevated PowerShell session, ownership
-   of protected processes is hidden, so the corrected tool safely refuses at PID 4. A null SID
-   must not be treated as proof of another user. If testing with elevated rights, in Windows
-   Start search **PowerShell**, choose **Run as administrator**, and approve the Windows prompt
-   for the same account. The resulting PowerShell title should show **Administrator**. Run the
-   measuring command there; expect measured runs or an explicit refusal. Elevated success was
-   not verified here. A refusal must not be accepted as row 1.7 or bypassed with a guessed list.
+3. **Windows measurement limitation, resolved 2026-11-19:** an access-denied process counts as
+   not ours unless WTS names our SID (owner decision; research.md, "Windows ownership without
+   elevation"). `startup_time.py` now measures from an ordinary PowerShell.
 4. Continue Phase 2 with the bundle facts and their callers, then Phases 3-4. Phase 3 must keep
    its no-deletion-on-IncompleteListing behavior, including on Windows with hidden ownership.
    The PR must run the packaging release build and smoke test; no passing PR run exists yet.
