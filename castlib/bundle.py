@@ -165,8 +165,30 @@ def started_file(kind_: str | None = None, **inputs) -> str | None:
     return _resolve_started_file(kind_, **inputs)
 
 
-def data_dir(kind_: str | None = None, *, sys_module=None, main=None) -> str | None:
-    """The folder the bundled files are in: ``sys._MEIPASS``, or the Nuitka main module's folder."""
+def long_path(path: str) -> str | None:
+    """Windows: ``path`` with every 8.3 short component expanded (``RUNNER~1`` -> ``runneradmin``);
+    None when it cannot be expanded. Elsewhere: ``path`` unchanged."""
+    if sys.platform != "win32":
+        return path
+    import ctypes
+    from ctypes import wintypes
+    get = ctypes.WinDLL("kernel32", use_last_error=True).GetLongPathNameW
+    get.argtypes = [wintypes.LPCWSTR, wintypes.LPWSTR, wintypes.DWORD]
+    get.restype = wintypes.DWORD
+    size = get(path, None, 0)
+    if not size:
+        return None
+    buf = ctypes.create_unicode_buffer(size)
+    written = get(path, buf, size)
+    return buf.value if 0 < written < size else None
+
+
+def data_dir(kind_: str | None = None, *, sys_module=None, main=None, long_path=long_path) -> str | None:
+    """The folder the bundled files are in: ``sys._MEIPASS``, or the Nuitka main module's folder.
+
+    Under Nuitka on Windows ``__file__`` can hold 8.3 short names (``...\\cast-tv\\050-GH~1.1``, PR #111),
+    which the build identity grammar never matches; the folder is given under its long name.
+    """
     sys_module = sys if sys_module is None else sys_module
     kind_ = kind(sys_module, main) if kind_ is None else kind_
     if kind_ == PYINSTALLER:
@@ -176,13 +198,16 @@ def data_dir(kind_: str | None = None, *, sys_module=None, main=None) -> str | N
     if main is None:
         main = (getattr(sys_module, "modules", None) or {}).get("__main__")
     # containing_dir is beside the outer launcher, not inside the unpacked cache.
-    return os.path.dirname(os.path.abspath(main.__file__)) if getattr(main, "__file__", None) else None
+    if not getattr(main, "__file__", None):
+        return None
+    folder = os.path.dirname(os.path.abspath(main.__file__))
+    return long_path(folder) or folder
 
 
-def cache_dir(kind_: str | None = None, *, sys_module=None, main=None) -> str | None:
+def cache_dir(kind_: str | None = None, *, sys_module=None, main=None, long_path=long_path) -> str | None:
     """The Nuitka build's cache folder (its data dir), kept between starts; None otherwise."""
     kind_ = kind(sys_module, main) if kind_ is None else kind_
-    return data_dir(kind_, sys_module=sys_module, main=main) if kind_ == NUITKA else None
+    return data_dir(kind_, sys_module=sys_module, main=main, long_path=long_path) if kind_ == NUITKA else None
 
 
 def relaunch_env(environ=None, kind_: str | None = None) -> dict:

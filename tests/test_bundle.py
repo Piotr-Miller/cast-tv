@@ -193,6 +193,35 @@ def test_data_dir_and_cache_dir_per_kind(tmp_path):
     assert bundle.data_dir("nuitka", main=missing_main_file) is None
 
 
+def test_nuitka_data_dir_is_the_long_path():
+    """Windows hands the Nuitka child an 8.3 path (``C:\\Users\\RUNNER~1\\...\\050-GH~1.1``, PR #111's
+    run 44628255344); the build folder is only recognised, and pruned, under its long name."""
+    short = os.path.join("C:\\Users\\RUNNER~1\\AppData\\Local\\cast-tv\\050-GH~1.1", "entry.py")
+    long_ = "C:\\Users\\runneradmin\\AppData\\Local\\cast-tv\\0.5.0-gh44628255344.1"
+    main = types.SimpleNamespace(__compiled__=types.SimpleNamespace(onefile=True), __file__=short)
+    seen = []
+    expand = lambda p: seen.append(p) or long_                                    # noqa: E731
+    assert bundle.data_dir("nuitka", main=main, long_path=expand) == long_
+    assert bundle.cache_dir("nuitka", main=main, long_path=expand) == long_
+    assert seen == [os.path.dirname(os.path.abspath(short))] * 2
+    pyi = fake_sys(frozen=True, _MEIPASS="C:\\Users\\RUNNER~1\\Temp\\_MEI1")
+    assert bundle.data_dir(sys_module=pyi, long_path=expand) == "C:\\Users\\RUNNER~1\\Temp\\_MEI1"   # as before
+    assert bundle.data_dir("nuitka", main=main, long_path=lambda p: None) == os.path.dirname(os.path.abspath(short))
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="8.3 names are a Windows file-system feature")
+def test_long_path_expands_a_real_short_name(tmp_path):
+    import ctypes
+    folder = tmp_path / "0.5.0-gh44628255344.1"
+    folder.mkdir()
+    buf = ctypes.create_unicode_buffer(1024)
+    if not ctypes.windll.kernel32.GetShortPathNameW(str(folder), buf, 1024) or buf.value == str(folder):
+        pytest.skip("this volume makes no 8.3 names")
+    assert os.path.basename(buf.value) != folder.name
+    assert os.path.normcase(bundle.long_path(buf.value)) == os.path.normcase(str(folder))
+    assert bundle.long_path(str(tmp_path / "missing")) is None
+
+
 # ------------------------------------------------------------- relaunch_env
 NUITKA_CHILD = {
     "PATH": "/usr/bin", "CAST_TV_DETACHED": "1",
