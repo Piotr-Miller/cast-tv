@@ -423,3 +423,86 @@ def test_prune_keeps_a_leftover_still_in_use(parent):
     current = build(parent, "0.6.0-gh3.1")
     assert prune(current, images=[str(leftover / "cast-tv.bin")]) == []
     assert leftover.is_dir()
+
+
+@pytest.mark.parametrize("failure", [PermissionError, OSError])
+def test_prune_an_unreadable_marker_does_not_fall_back_to_directory_age(parent, monkeypatch, failure):
+    recent = build(parent, "0.6.0-gh1.1", marker_days=1, mtime_days=30)
+    build(parent, "0.6.0-gh2.1", marker_days=0)
+    current = build(parent, "0.6.0-gh3.1")
+    stat = os.stat
+
+    def unreadable(path, *args, **kwargs):
+        if os.fspath(path) == os.path.join(recent, bundle.START_MARKER):
+            raise failure("cannot read start marker")
+        return stat(path, *args, **kwargs)
+
+    monkeypatch.setattr(bundle.os, "stat", unreadable)
+    assert prune(current) == []
+    assert os.path.isdir(recent)
+
+
+def test_prune_cannot_choose_previous_when_a_marker_is_unreadable(parent, monkeypatch):
+    oldest = build(parent, "0.6.0-gh1.1", marker_days=30)
+    previous = build(parent, "0.6.0-gh2.1", marker_days=1)
+    current = build(parent, "0.6.0-gh3.1")
+    stat = os.stat
+
+    def unreadable(path, *args, **kwargs):
+        if os.fspath(path) == os.path.join(previous, bundle.START_MARKER):
+            raise PermissionError("cannot read previous marker")
+        return stat(path, *args, **kwargs)
+
+    monkeypatch.setattr(bundle.os, "stat", unreadable)
+    assert prune(current) == []
+    assert os.path.isdir(oldest) and os.path.isdir(previous)
+
+
+def test_prune_requires_a_successfully_recorded_start(parent, monkeypatch):
+    oldest = build(parent, "0.6.0-gh1.1", marker_days=30)
+    build(parent, "0.6.0-gh2.1", marker_days=1)
+    current = build(parent, "0.6.0-gh3.1")
+
+    def unwritable(*args, **kwargs):
+        raise PermissionError("cannot record this start")
+
+    monkeypatch.setattr(bundle.os, "utime", unwritable)
+    assert prune(current) == []
+    assert os.path.isdir(oldest)
+
+
+@pytest.mark.parametrize("leftover,change", [(False, "running"), (False, "started"),
+                                          (False, "incomplete"), (True, "running"),
+                                          (True, "incomplete")])
+def test_prune_refreshes_safety_evidence_after_each_removal(parent, change, leftover):
+    first = build(parent, "0.6.0-gh1.1", marker_days=30)
+    second_name = "0.6.0-gh2.1" + (".removing-99" if leftover else "")
+    second = build(parent, second_name, marker_days=29)
+    build(parent, "0.6.0-gh3.1", marker_days=1)
+    current = build(parent, "0.6.0-gh4.1")
+    images = []
+    incomplete = False
+    protected = None
+
+    def processes():
+        if incomplete:
+            raise bundle.IncompleteListing("a process became unreadable")
+        return list(images)
+
+    def remove(path):
+        nonlocal incomplete, protected
+        shutil.rmtree(path)
+        if protected is not None:
+            return
+        # Either normal build may be visited first; directory iteration has no ordering contract.
+        protected = second if path.startswith(first + ".removing-") else first
+        if change == "running":
+            images.append((77, os.path.join(protected, "sub", "cast-tv.bin")))
+        elif change == "started":
+            os.utime(os.path.join(protected, bundle.START_MARKER), (NOW, NOW))
+        else:
+            incomplete = True
+
+    removed = prune(current, processes=processes, remove=remove)
+    assert len(removed) == 1
+    assert protected is not None and os.path.isdir(protected)
