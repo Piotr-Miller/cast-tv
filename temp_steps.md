@@ -1,40 +1,52 @@
-# Next steps (2026-11-19, S-16 Phase 1 review fixes left uncommitted)
+# Next steps (2026-11-19, S-16 Phase 1 reviewed and accepted; Phase 2 next)
 
-Branch: `s16-faster-start`, HEAD `0707dac`. No PR exists. The owner requested no commit; all
-review fixes and workflow records are in the worktree and recorded in the change's carry file.
-Do not discard them or overwrite them by pulling another checkout over this worktree.
+The standing pause note; overwrite it at the next handoff. Claude ticks each step (`- [x]`) as
+soon as it is done, with the date and, for a merge or a recorded row, the PR or commit.
 
-## Completed
+## Where it stands
 
-- Phase 1 was reviewed from explicit base a85f59d through 0707dac, including a558115, 5155ad8,
-  fc780be and 7d33c1b. The owner then authorized all recommended fixes.
-- Report: `context/changes/s16-faster-start/reviews/impl-review-phase-1-0707dac.md`.
-  Findings F1-F7 are fixed; Re-review 2 records the current local verification.
-- Ready now follows complete tab setup and successful status assignment, independently of
-  `/api/errors`. Tests control the render tick and two separate frames.
-- Windows process ownership uses user SIDs rather than desktop-session inference. Unknown
-  ownership and API errors make the list incomplete. Failed version probing and failed owned
-  shutdown fail the measurement. Three existing test synchronization hazards were corrected.
-- Final local checks: 592 passed, 6 skipped; pyflakes and both JavaScript syntax checks pass.
-  Linux owner coverage and release build/smoke still need CI.
+- **S-16, a faster-starting release file** (`context/changes/s16-faster-start/`, branch
+  `s16-faster-start`, pushed; no PR yet). It switches both release files from PyInstaller to a
+  Nuitka onefile that unpacks once into a cache folder.
+  - **The owner's bars:** the warm median of 5 runs ≤ 50 % of PyInstaller's on Linux and ≤ 75 % on
+    Windows 11. The cold median must be no slower. If either is missed, stop and decide again.
+  - **Old cache folders:** keep the current and previous build. An older one is deleted after
+    7 days unused and with nothing running from it.
+- **Phase 1 is done and reviewed.**
+  - a558115 and 5155ad8 are the implementation.
+  - Codex's review is `reviews/impl-review-phase-1-0707dac.md`: REJECTED, then F1-F7 fixed in
+    99287e6, then APPROVED.
+  - 3e67ec8: Windows counts an access-denied process as not ours unless WTS names our SID (owner
+    decision, verified with a normal and an elevated cast-tv). Without it the measurement refused
+    and pruning would never run. Phase 3 keeps "nothing removed on an incomplete listing".
+  - a32a0ea: the priming start is never held.
+  - **Row 1.7 is accepted at 185f206** (5982c46). PyInstaller warm median 4.28 s on this laptop.
+  - Linux owner coverage (`tests/test_processes.py`) and the release build/smoke still need CI;
+    no PR run exists yet.
+- **v0.5.0** is released, and S-12 is archived. ci-actions-node24's row 1.4 passed on that release;
+  it stays unticked in its read-only archive.
+- **CI notice:** `ubuntu-latest` moves to Ubuntu 26 (the `test` and `release` jobs); the Linux build
+  is pinned to `ubuntu-22.04`.
+- **The TV** allows DLNA per client (Settings → General → Device Connection Manager → Device List).
+  "No TV found" while `curl http://192.168.50.142:9197/dmr` answers 401 means that list.
+- **Test material:** OneDrive → Dokumenty → Videos → `Przejazd - SuperCars.mp4`;
+  `shelf-christmas-decoration.heic` in OneDrive → Pictures; `Test_Pictures` on Nextcloud.
+- **Home Windows:** after a sign-out, `vEthernet (Default Switch)` may get a new address. The full
+  suite passed 592/6 skipped twice on 2026-11-19 after Codex's test-synchronization fixes (F6).
 
 ## Next
 
-1. In the editor/project window for `C:\Source\cast-tv`, inspect the report and `git diff`.
-   The original reviewed commits are pushed; these fixes are intentionally not committed or
-   pushed. When the owner chooses to commit, keep the fixes with the report, plan reopening,
-   change notes, research notes and this handoff. No skill files belong in that commit.
-2. Row **1.7 is reopened** because its accepted surface changed. Its original Windows observation
-   remains in research.md, but cannot confirm this source. Commit the checked changes before
-   recording a new acceptance revision, build that revision, then repeat five warm runs and the
-   watched run. In the cast-tv window, the TV button and source tabs must be visible when the
-   timing prints in PowerShell; clicking a source tab must respond at that point. Record date,
-   device, executable SHA-256, run values and the owner's actual observation in research.md.
-3. **Windows measurement limitation, resolved 2026-11-19:** an access-denied process counts as
-   not ours unless WTS names our SID (owner decision; research.md, "Windows ownership without
-   elevation"). `startup_time.py` now measures from an ordinary PowerShell.
-4. Continue Phase 2 with the bundle facts and their callers, then Phases 3-4. Phase 3 must keep
-   its no-deletion-on-IncompleteListing behavior, including on Windows with hidden ownership.
-   The PR must run the packaging release build and smoke test; no passing PR run exists yet.
-5. Keep the known `--hold` priming-start correction deferred to Phase 4. Do not switch packagers
-   before Phase 5's measured bars and the owner's decision on both systems.
+- [x] 1. S-16 opened, spiked, planned and plan-reviewed; Phase 1 implemented. — 2026-11-18.
+- [x] 2. Codex's review of Phase 1; fixes; 1.7 accepted again. — 2026-11-19, 99287e6-5982c46.
+- [ ] 3. `/rune-implement s16-faster-start phase 2`:
+   - `castlib/bundle.py`: kind, started_file, data_dir, cache_dir, relaunch_env.
+   - The `sys.frozen` callers in `platform.py`, `shortcut.py` and `window.py`.
+- [ ] 4. Phases 3-4: old-cache pruning, then Nuitka builds next to PyInstaller in CI. Phase 4 opens
+   the PR.
+- [ ] 5. Phase 5 on both machines (Windows here, then Fedora): `startup_time.py` cold and warm on
+   each PR file, then the bars decide.
+
+## How to resume with Claude
+
+Write "co dalej" in the cast-tv checkout on the S-16 branch:
+`git fetch; git switch s16-faster-start; git pull`.
