@@ -2,6 +2,10 @@
 and the cast-tv window opens on the expected engine.
 
     python packaging/smoke.py dist/cast-tv-linux-x64
+    python packaging/smoke.py --nuitka dist/cast-tv-linux-x64-nuitka
+
+``--version`` must end with a ``Cache:`` line: for a Nuitka file (``--nuitka``) a build folder
+under the cast-tv cache whose name matches the build identity grammar, otherwise ``none``.
 
 Exits non-zero on the first failure. Starts the binary with ``--no-browser`` on a
 spare port, waits up to 60 s for ``/ui/``, reads ``/api/status``, then ends it with
@@ -18,6 +22,12 @@ import subprocess
 import sys
 import time
 import urllib.request
+
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _ROOT not in sys.path:
+    sys.path.insert(0, _ROOT)                            # castlib from the checkout
+
+from castlib import bundle                                # noqa: E402
 
 WINDOW = "Window: edgechromium" if sys.platform == "win32" else "Window: qtwebengine"
 
@@ -107,10 +117,28 @@ def stop(proc, port, instance=None) -> bool:
     return True
 
 
-def main(binary) -> int:
+def cache_problem(version: str, nuitka: bool, is_build_folder=bundle.is_build_folder) -> str | None:
+    """Why ``--version``'s ``Cache:`` line is wrong for this packager, or None when it is right."""
+    lines = [line[len("Cache:"):].strip() for line in version.splitlines() if line.startswith("Cache:")]
+    if len(lines) != 1:
+        return "--version has %d Cache: lines, expected one" % len(lines)
+    folder = lines[0]
+    if not nuitka:
+        return None if folder == "none" else "a PyInstaller file names a cache folder: %s" % folder
+    if folder == "none":
+        return "the Nuitka file does not know its cache folder (Cache: none)"
+    if not is_build_folder(folder):
+        return "the Nuitka cache folder %s is not a build folder under %s" % (folder, bundle.cache_parent())
+    return None
+
+
+def main(binary, nuitka=False) -> int:
     print("size: %d bytes" % os.path.getsize(binary))
     version = run(binary, "--version")
     print(version.strip())
+    problem = cache_problem(version, nuitka)
+    if problem:
+        sys.exit(problem)
     # pywebview falls back to another engine quietly: the line names the one that would load
     if WINDOW not in version.splitlines():
         sys.exit("the cast-tv window would not use the expected engine (%s)" % WINDOW)
@@ -160,4 +188,9 @@ def main(binary) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main(os.path.abspath(sys.argv[1])))   # Python 3.14 on Windows will not start "dist/x.exe"
+    args = sys.argv[1:]
+    nuitka = "--nuitka" in args
+    paths = [a for a in args if a != "--nuitka"]
+    if len(paths) != 1:
+        sys.exit("usage: python packaging/smoke.py [--nuitka] <binary>")
+    sys.exit(main(os.path.abspath(paths[0]), nuitka))   # Python 3.14 on Windows will not start "dist/x.exe"

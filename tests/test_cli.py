@@ -633,7 +633,7 @@ def test_version_names_the_client(monkeypatch, tmp_path, capsys):
     assert cli.main_tv(["--version"]) == 0
     assert capsys.readouterr().out.splitlines() == ["cast-tv " + castlib.__version__, "Google Photos client: none",
                                                     "GoPro window: CAST_TV_BROWSER=" + str(exe),
-                                                    "Window: edgechromium"]
+                                                    "Window: edgechromium", "Cache: none"]
     monkeypatch.setattr(_builtin_client, "CLIENT_ID", "id")
     monkeypatch.setattr(_builtin_client, "CLIENT_SECRET", "secret")
     cli.main_tv(["--version"])
@@ -641,6 +641,19 @@ def test_version_names_the_client(monkeypatch, tmp_path, capsys):
     monkeypatch.setenv("GOOGLE_CLIENT_JSON", str(tmp_path / "mine.json"))
     cli.main_tv(["--version"])
     assert capsys.readouterr().out.splitlines()[1] == "Google Photos client: from " + str(tmp_path / "mine.json")
+
+
+def test_version_names_the_cache_folder(monkeypatch, capsys):
+    """A Nuitka release names its build folder on the last line; anything else says ``Cache: none``."""
+    from castlib import bundle, window
+    monkeypatch.setattr(window, "describe", lambda: "Window: edgechromium")
+    folder = os.path.join("cache-root", "cast-tv", "0.6.0-gh12.1")
+    monkeypatch.setattr(bundle, "cache_dir", lambda *a, **kw: folder)
+    assert cli.main_tv(["--version"]) == 0
+    assert capsys.readouterr().out.splitlines()[-1] == "Cache: " + folder
+    monkeypatch.setattr(bundle, "cache_dir", lambda *a, **kw: None)
+    cli.main_tv(["--version"])
+    assert capsys.readouterr().out.splitlines()[-1] == "Cache: none"
 
 
 def test_version_names_the_gopro_window(monkeypatch, tmp_path, capsys):
