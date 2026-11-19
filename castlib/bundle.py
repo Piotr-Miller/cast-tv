@@ -207,7 +207,7 @@ def relaunch_env(environ=None, kind_: str | None = None) -> dict:
 def _mtime(path: str) -> float | None:
     try:
         return os.stat(path).st_mtime
-    except OSError:
+    except FileNotFoundError:
         return None
 
 
@@ -217,30 +217,10 @@ def _inside(image: str, folder: str) -> bool:
     return image == folder or image.startswith(folder.rstrip(os.sep) + os.sep)
 
 
-def prune_caches(cache_dir: str, processes=running_images, now=time.time, rename=os.rename,
-                 remove=shutil.rmtree, min_age_days=7) -> list[str]:
-    """Remove this release's old build folders beside ``cache_dir``; returns the folders removed.
-
-    Kept: ``cache_dir`` (current), the previous build (the newest start marker among the
-    others; without any marker, the newest modification time; a tie goes to the greater name),
-    and every folder whose marker (or, without one, its modification time) is younger than
-    ``min_age_days`` or that a running process's executable lies inside. An incomplete process
-    listing removes nothing. Names outside the build identity grammar are never touched.
-    """
-    current = os.path.abspath(cache_dir)
-    if not BUILD_ID.match(os.path.basename(current)):
-        return []                                   # not a build folder of ours: touch nothing
-    try:
-        with open(os.path.join(current, START_MARKER), "ab"):
-            pass
-        os.utime(os.path.join(current, START_MARKER), (now(), now()))
-    except OSError:
-        pass                                        # an unwritable marker only weakens the age guard
+def _prune_targets(current: str, limit: float) -> tuple[list[str], list[str]]:
+    """A fresh retention decision. Unreadable metadata must propagate, never mean 'old'."""
     parent = os.path.dirname(current)
-    try:
-        names = os.listdir(parent)
-    except OSError:
-        return []
+    names = os.listdir(parent)
     builds, leftovers = [], []
     for name in names:
         path = os.path.join(parent, name)
@@ -257,31 +237,55 @@ def prune_caches(cache_dir: str, processes=running_images, now=time.time, rename
     pool = marked or [b for b in builds if b[3] is not None]
     if pool:
         previous = max(pool, key=lambda b: (b[2] if marked else b[3], b[0]))[1]
-    limit = now() - min_age_days * 86400
     old = [b[1] for b in builds if b[1] != previous and b[3] is not None and b[3] <= limit]
+    return old, leftovers
+
+
+def prune_caches(cache_dir: str, processes=running_images, now=time.time, rename=os.rename,
+                 remove=shutil.rmtree, min_age_days=7) -> list[str]:
+    """Remove this release's old build folders beside ``cache_dir``; returns the folders removed.
+
+    Kept: ``cache_dir`` (current), the previous build (the newest start marker among the
+    others; without any marker, the newest modification time; a tie goes to the greater name),
+    and every folder whose marker (or, without one, its modification time) is younger than
+    ``min_age_days`` or that a running process's executable lies inside. Unreadable metadata
+    or an incomplete process listing stops cleanup. Names outside the build identity grammar
+    are never touched. Each deletion refreshes the evidence: a previous removal can be slow.
+    """
+    current = os.path.abspath(cache_dir)
+    if not BUILD_ID.match(os.path.basename(current)):
+        return []                                   # not a build folder of ours: touch nothing
+    try:
+        with open(os.path.join(current, START_MARKER), "ab"):
+            pass
+        started = now()
+        os.utime(os.path.join(current, START_MARKER), (started, started))
+        limit = started - min_age_days * 86400
+        old, leftovers = _prune_targets(current, limit)
+    except OSError:
+        return []                                   # cannot prove age or record this start
     if not old and not leftovers:
         return []
-    try:
-        images = [image for _pid, image in processes()]
-    except IncompleteListing:
-        return []                                   # a running copy may be missing from the list
-
-    def in_use(folder):
-        return any(_inside(image, folder) for image in images)
 
     removed = []
-    for path in old:
-        if in_use(path):
-            continue
-        doomed = "%s.removing-%d" % (path, os.getpid())
+    for path in old + leftovers:
         try:
-            rename(path, doomed)                    # Windows refuses while a file inside is locked
-        except OSError:
+            images = [image for _pid, image in processes()]
+            eligible, unfinished = _prune_targets(current, limit)
+        except (IncompleteListing, OSError):
+            break                                   # stop if a later safety check becomes unreadable
+        if path not in eligible and path not in unfinished:
             continue
+        if any(_inside(image, path) for image in images):
+            continue
+        doomed = path
+        if path in eligible:
+            doomed = "%s.removing-%d" % (path, os.getpid())
+            try:
+                rename(path, doomed)                # Windows refuses while a file inside is locked
+            except OSError:
+                continue
         if _remove(doomed, remove):
-            removed.append(path)
-    for path in leftovers:                          # an earlier start renamed it, then stopped short
-        if not in_use(path) and _remove(path, remove):
             removed.append(path)
     return removed
 
