@@ -23,7 +23,8 @@ yyyymmddHHMMSS>`` for a local one: one grammar shared by the builder
 ``Cache`` folder on Windows) ever matches it.
 
 Every function takes its inputs as parameters, so tests can stand in for
-either packager; the defaults read the running process at call time.
+either packager. The default started file is resolved once at import;
+other defaults read the running process at call time.
 """
 from __future__ import annotations
 
@@ -102,9 +103,9 @@ def resolve_kind(kind_: str | None = None, frozen: bool | None = None) -> str | 
     return kind()
 
 
-def started_file(kind_: str | None = None, *, sys_module=None, main=None, argv0: str | None = None,
-                 cwd: str | None = None, path: str | None = None, which=shutil.which,
-                 exists=os.path.exists) -> str | None:
+def _resolve_started_file(kind_: str | None = None, *, sys_module=None, main=None, argv0: str | None = None,
+                          cwd: str | None = None, path: str | None = None, which=shutil.which,
+                          exists=os.path.exists) -> str | None:
     """The file the user started, as they named it (symlinks kept), or None when it cannot be found.
 
     PyInstaller: ``sys.executable``. Nuitka: ``original_argv0``, absolute as it is,
@@ -122,15 +123,34 @@ def started_file(kind_: str | None = None, *, sys_module=None, main=None, argv0:
         argv0 = getattr(compiled, "original_argv0", None) if compiled is not None else None
     if not argv0:
         return None
+    cwd = _START_CWD if cwd is None else cwd
     if os.path.isabs(argv0):
         found = argv0
     elif os.sep in argv0 or (os.altsep and os.altsep in argv0):
-        found = os.path.normpath(os.path.join(_START_CWD if cwd is None else cwd, argv0))
+        found = os.path.normpath(os.path.join(cwd, argv0))
     else:
-        found = which(argv0, path=_START_PATH if path is None else path)
+        search_path = _START_PATH if path is None else path
+        search_path = os.pathsep.join(entry if os.path.isabs(entry) else os.path.normpath(os.path.join(cwd, entry))
+                                      for entry in search_path.split(os.pathsep))
+        found = which(argv0, path=search_path)
         if found and not os.path.isabs(found):          # a relative PATH entry
-            found = os.path.normpath(os.path.join(_START_CWD if cwd is None else cwd, found))
+            found = os.path.normpath(os.path.join(cwd, found))
     return found if found and exists(found) else None
+
+
+_START_KIND = kind()
+_STARTED_FILE = _resolve_started_file(_START_KIND)
+
+
+def started_file(kind_: str | None = None, **inputs) -> str | None:
+    """The launch path resolved at import, with symlinks kept; None if it could not be found.
+
+    Explicit resolver inputs (sys_module, main, argv0, cwd, path, which, exists)
+    run an independent lookup for tests; live callers use the captured result.
+    """
+    if not inputs and (kind_ is None or kind_ == _START_KIND):
+        return _STARTED_FILE
+    return _resolve_started_file(kind_, **inputs)
 
 
 def data_dir(kind_: str | None = None, *, sys_module=None, main=None) -> str | None:
@@ -143,11 +163,8 @@ def data_dir(kind_: str | None = None, *, sys_module=None, main=None) -> str | N
         return None
     if main is None:
         main = (getattr(sys_module, "modules", None) or {}).get("__main__")
-    compiled = getattr(main, "__compiled__", None)
-    folder = getattr(compiled, "containing_dir", None)
-    if not folder and getattr(main, "__file__", None):
-        folder = os.path.dirname(os.path.abspath(main.__file__))
-    return folder or None
+    # containing_dir is beside the outer launcher, not inside the unpacked cache.
+    return os.path.dirname(os.path.abspath(main.__file__)) if getattr(main, "__file__", None) else None
 
 
 def cache_dir(kind_: str | None = None, *, sys_module=None, main=None) -> str | None:
