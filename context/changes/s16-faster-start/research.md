@@ -226,3 +226,71 @@ python packaging\startup_time.py <exe> --mode warm --runs 1 --hold 15 --out p1b-
   longer held. The owner watched and accepted ("akceptuję"): the TV button and the GoPro / OneDrive
   / Google Photos tabs were on screen when the time printed, and a tab click responded.
 Row 1.7 is accepted at 185f2062837a293ab9b02b5dfbd00ed4d1cd21d6 (the docs commit over a32a0ea; same code).
+
+## Phase 5 on Windows 11: rows 5.2, 5.4 and 5.6 (2026-11-20)
+
+The home laptop (Windows 11, the same one as row 1.7). The files are the two Windows artifacts of
+PR #111's release run 44630376210 at 7a7eb32 (Phase 4 review APPROVED), downloaded with
+`gh run download 44630376210 -n <artifact> -D <dir>` into `%USERPROFILE%\Downloads\s16-run-44630376210`:
+
+- Nuitka `cast-tv-windows-x64-nuitka.exe`: 18,300,416 B, SHA-256
+  `7d044dfdffda52e52d3912c2f4f581f909ce47d0a1662366e6a20cdefaeeda99` (the review's value).
+  Its build-info: identity `0.5.0-gh44630376210.1`, Nuitka 4.3.5, Python 3.12.10, pip-freeze hash
+  `4e2a97f748eafcf0b5ca79f300a445f382cd6979859adf52c3ba113ebb6165a6`. Cache: `C:\Users\pmill\AppData\Local\cast-tv\0.5.0-gh44630376210.1`.
+- PyInstaller `cast-tv-windows-x64.exe`: 26,143,942 B, SHA-256
+  `1a622aec330dd4647dff906c6779037552669da871864877f60e985eedd9f8bf`. Cache: none.
+
+At the owner's request, Claude ran the four series one after another from an unelevated Git Bash
+in the checkout, while the owner left the laptop alone; then the comparisons:
+
+```
+.venv/Scripts/python packaging/startup_time.py <nuitka exe> --mode cold --out win-nuitka-cold.json
+.venv/Scripts/python packaging/startup_time.py <nuitka exe> --mode warm --out win-nuitka-warm.json
+.venv/Scripts/python packaging/startup_time.py <pyinstaller exe> --mode cold --out win-pyi-cold.json
+.venv/Scripts/python packaging/startup_time.py <pyinstaller exe> --mode warm --out win-pyi-warm.json
+.venv/Scripts/python packaging/startup_time.py --compare win-nuitka-cold.json win-pyi-cold.json --warm-ratio 0.75
+.venv/Scripts/python packaging/startup_time.py --compare win-nuitka-warm.json win-pyi-warm.json --warm-ratio 0.75
+```
+
+| Windows 11 | runs (s) | median |
+| --- | --- | --- |
+| Nuitka cold | 4.41 / 4.00 / 3.90 / 3.84 / 4.02 | 4.00 s |
+| Nuitka warm | 2.77 / 3.08 / 2.85 / 2.87 / 2.88 | 2.87 s |
+| PyInstaller cold | 4.34 / 4.20 / 4.01 / 3.74 / 4.05 | 4.05 s |
+| PyInstaller warm | 3.83 / 3.95 / 4.14 / 3.78 / 4.20 | 3.95 s |
+
+```
+cold: Nuitka median 4.00 s, PyInstaller median 4.05 s, ratio 0.988 (limit 1.00): PASS
+warm: Nuitka median 2.87 s, PyInstaller median 3.95 s, ratio 0.727 (limit 0.75): PASS
+```
+
+Every run finished; all six commands exited 0. **The Windows bar is met (row 5.6)**, with a small
+margin: warm 0.727 against 0.75, cold practically equal. PyInstaller's warm median was 4.28 s at
+row 1.7 (2026-11-19) and 3.95 s here; a session-to-session spread of that size moves the warm
+ratio by about 0.05.
+
+The watched run (row 5.4), started by Claude at the owner's request while the owner watched:
+
+```
+.venv/Scripts/python packaging/startup_time.py <nuitka exe> --mode warm --runs 1 --hold 30 --out win-nuitka-watched.json
+```
+
+It printed "ready after 2.98 s: the window stays open 30 s". The owner confirmed ("Potwierdzam",
+2026-11-20) what the row asks: the window showed the TV button and the source tabs when the time
+printed, and a tab click responded. The owner also confirmed rows 5.2 and 5.6 from the results
+above.
+
+The result files, without the local `binary` path:
+
+```
+win-nuitka-cold.json:
+{"size": 18300416, "sha256": "7d044dfdffda52e52d3912c2f4f581f909ce47d0a1662366e6a20cdefaeeda99", "version": ["cast-tv 0.5.0", "Google Photos client: built in", "GoPro window: C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe", "Window: edgechromium", "Cache: C:\\Users\\pmill\\AppData\\Local\\cast-tv\\0.5.0-gh44630376210.1"], "system": "Windows 11", "mode": "cold", "runs": [4.406747102737427, 4.001554012298584, 3.8981690406799316, 3.840561866760254, 4.01525092124939], "median": 4.001554012298584}
+win-nuitka-warm.json:
+{"size": 18300416, "sha256": "7d044dfdffda52e52d3912c2f4f581f909ce47d0a1662366e6a20cdefaeeda99", "version": ["cast-tv 0.5.0", "Google Photos client: built in", "GoPro window: C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe", "Window: edgechromium", "Cache: C:\\Users\\pmill\\AppData\\Local\\cast-tv\\0.5.0-gh44630376210.1"], "system": "Windows 11", "mode": "warm", "runs": [2.7672276496887207, 3.0761852264404297, 2.851867198944092, 2.871990203857422, 2.875440835952759], "median": 2.871990203857422}
+win-pyi-cold.json:
+{"size": 26143942, "sha256": "1a622aec330dd4647dff906c6779037552669da871864877f60e985eedd9f8bf", "version": ["cast-tv 0.5.0", "Google Photos client: built in", "GoPro window: C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe", "Window: edgechromium", "Cache: none"], "system": "Windows 11", "mode": "cold", "runs": [4.341491222381592, 4.200770378112793, 4.007715702056885, 3.7367427349090576, 4.0519304275512695], "median": 4.0519304275512695}
+win-pyi-warm.json:
+{"size": 26143942, "sha256": "1a622aec330dd4647dff906c6779037552669da871864877f60e985eedd9f8bf", "version": ["cast-tv 0.5.0", "Google Photos client: built in", "GoPro window: C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe", "Window: edgechromium", "Cache: none"], "system": "Windows 11", "mode": "warm", "runs": [3.8308188915252686, 3.9477617740631104, 4.13898491859436, 3.7803218364715576, 4.197201251983643], "median": 3.9477617740631104}
+win-nuitka-watched.json:
+{"size": 18300416, "sha256": "7d044dfdffda52e52d3912c2f4f581f909ce47d0a1662366e6a20cdefaeeda99", "version": ["cast-tv 0.5.0", "Google Photos client: built in", "GoPro window: C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe", "Window: edgechromium", "Cache: C:\\Users\\pmill\\AppData\\Local\\cast-tv\\0.5.0-gh44630376210.1"], "system": "Windows 11", "mode": "warm", "runs": [2.97684907913208], "median": 2.97684907913208}
+```
