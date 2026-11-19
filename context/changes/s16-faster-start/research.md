@@ -185,3 +185,25 @@ new observation accepting row 1.7.
   `castlib/processes.py`, `castlib/ui/app.js` and `packaging/startup_time.py`. The original human
   observation above is preserved; only a new human observation at a committed revision can
   restore acceptance. Packaging PR build/smoke validation is also still required.
+
+## Windows ownership without elevation (2026-11-19)
+
+After the Phase 1 review (F7), `castlib/processes.py` decided ownership by the user SID from
+`WTSEnumerateProcessesW`. On the home Windows 11 laptop, unelevated, that snapshot had no owner for
+176 of 451 processes (PID 0, 4 and the protected and service processes), and those refuse
+`OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION)`. Every listing was therefore incomplete:
+`startup_time.py` refused at PID 4, and Phase 3 would never prune on Windows.
+
+Experiment (Claude, unelevated Python 3.14.5 probe; the exe is the PyInstaller build of a558115,
+SHA-256 `AC4FC324…6AA0`):
+
+- cast-tv started normally (`--no-browser -p 8897`): both processes (bootloader 32188, child 29764)
+  were readable from the probe, WTS owner = our SID.
+- cast-tv started with `Start-Process -Verb RunAs` (the owner approved the UAC prompt) on port
+  8898: both processes (17844, 23244) were readable, WTS owner = our SID; a token check confirmed
+  both elevated while the probe was not.
+- In both runs, no process whose WTS owner is our SID refused the image query.
+
+Owner decision (2026-11-19): a refusal counts as "not ours" unless WTS names our SID, which stays
+incomplete. Other API errors stay incomplete. With this rule the unelevated listing returns
+273 processes.

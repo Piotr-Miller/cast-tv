@@ -231,6 +231,7 @@ process the current user can see.
   ctypes.
 - A process that vanished during the scan is skipped.
 - Access denied for a process of the current user, or an API error, raises `IncompleteListing`.
+- (owner decision 2026-11-19) Windows: an image query refused with access denied counts as not ours unless WTS names our SID; unelevated Windows reports no owner for its protected and service processes (176 of 451), so requiring an owner would make every listing incomplete. Verified on the home laptop (research.md, "Windows ownership without elevation").
 - Other users' processes that deny access are skipped.
 
 #### 3. The measuring script

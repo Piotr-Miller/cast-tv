@@ -50,16 +50,11 @@ def test_windows_refusal_of_a_process_that_then_ended_is_skipped():
     assert processes.running_images(platform="win32", win=api) == []
 
 
-def test_windows_unknown_owner_does_not_prove_a_process_ended():
-    api = FakeWin({20: Denied(5)}, {})
-    with pytest.raises(IncompleteListing, match="owner is unknown"):
-        processes.running_images(platform="win32", win=api)
-
-
-def test_windows_unknown_owner_is_incomplete_even_if_the_image_retry_succeeds():
-    api = FakeWin({20: [Denied(5), r"C:\a\cast-tv.exe"]}, {})
-    with pytest.raises(IncompleteListing):
-        processes.running_images(platform="win32", win=api)
+def test_windows_refusal_with_an_unknown_owner_is_not_ours():
+    """Owner decision 2026-11-19: unelevated, protected and service processes have no owner and refuse;
+    a refusal means not ours, because Windows lets a user query its own processes (measured)."""
+    api = FakeWin({4: Denied(5), 20: Denied(5), 10: r"C:\a\cast-tv.exe"}, {4: None})
+    assert processes.running_images(platform="win32", win=api) == [(10, r"C:\a\cast-tv.exe")]
 
 
 def _native_win(*, error, handle=0):
@@ -92,11 +87,18 @@ def test_windows_image_query_classifies_errors_and_closes_handle(error, expected
     assert closed == [123]
 
 
-def test_windows_unknown_native_owner_cannot_hide_a_live_process():
+def test_windows_native_refusal_with_an_unknown_owner_is_skipped():
     api, _ = _native_win(error=5)
     api.owners = lambda: {}
     api.pids = lambda: [20]
-    with pytest.raises(IncompleteListing, match="owner is unknown"):
+    assert processes.running_images(platform="win32", win=api) == []
+
+
+def test_windows_native_refusal_of_our_own_sid_is_incomplete():
+    api, _ = _native_win(error=5)
+    api.owners = lambda: {20: True}
+    api.pids = lambda: [20]
+    with pytest.raises(IncompleteListing, match="ours but refused"):
         processes.running_images(platform="win32", win=api)
 
 
