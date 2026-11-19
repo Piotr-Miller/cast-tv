@@ -690,16 +690,16 @@ research.md. Real sign-in and TV checks stay pending until a person sees them.
 
 #### Manual
 
-- [x] 1.7 Windows: startup_time.py on a PyInstaller exe of this phase's commit, 5 warm runs, one watched — accepted at 185f2062837a293ab9b02b5dfbd00ed4d1cd21d6
+- [ ] 1.7 Windows: startup_time.py on a PyInstaller exe of this phase's commit, 5 warm runs, one watched
 
 ### Phase 2: Code that runs under either packager
 
 #### Automated
 
-- [ ] 2.1 test_bundle
-- [ ] 2.2 Callers under all three kinds (test_platform, test_shortcut, test_window)
-- [ ] 2.3 pyflakes
-- [ ] 2.4 Full suite
+- [x] 2.1 test_bundle
+- [x] 2.2 Callers under all three kinds (test_platform, test_shortcut, test_window)
+- [x] 2.3 pyflakes
+- [x] 2.4 Full suite
 
 ### Phase 3: Old cache folders
 
