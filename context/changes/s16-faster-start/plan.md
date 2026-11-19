@@ -713,8 +713,8 @@ research.md. Real sign-in and TV checks stay pending until a person sees them.
 
 #### Automated
 
-- [ ] 4.1 test_smoke, test_build_nuitka, test_cli
-- [ ] 4.2 pyflakes
+- [x] 4.1 test_smoke, test_build_nuitka, test_cli
+- [x] 4.2 pyflakes
 - [ ] 4.3 The PR's release workflow builds and smoke-tests four files
 
 ### Phase 5: Measure on the owner's machines and decide

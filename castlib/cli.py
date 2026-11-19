@@ -400,21 +400,23 @@ def _bring_forward(port):
 
 
 def version_text() -> str:
-    """``cast-tv <version>``, the Google Photos client's origin, the GoPro window's browser, the cast-tv window's engine.
+    """``cast-tv <version>``, the Google Photos client's origin, the GoPro window's browser, the cast-tv window's engine,
+    and where the release keeps its unpacked files.
 
-    Four lines, so a support question is answered from one command. Nothing
+    Five lines, so a support question is answered from one command. Nothing
     is launched: the third line is the first candidate ``browser.candidates()``
     would try, or ``CAST_TV_BROWSER`` when set (with ``(not found)`` when the
     file is missing), or ``none found (token paste only)``; the fourth is
-    ``window.describe()``, which loads the backend but opens no window.
+    ``window.describe()``, which loads the backend but opens no window; the
+    fifth is ``Cache: <folder>``, a Nuitka release's build folder, or ``Cache: none``.
     """
     source = loopback.client_source()
     where = {"built-in": "built in", None: "none"}.get(source, "from " + str(source))
     gopro_window = browser.describe()
     if gopro_window == "none found":
         gopro_window += " (token paste only)"
-    return "cast-tv %s\nGoogle Photos client: %s\nGoPro window: %s\n%s" % (
-        castlib.__version__, where, gopro_window, window.describe())
+    return "cast-tv %s\nGoogle Photos client: %s\nGoPro window: %s\n%s\nCache: %s" % (
+        castlib.__version__, where, gopro_window, window.describe(), bundle.cache_dir() or "none")
 
 
 def window_check() -> int:
@@ -482,7 +484,8 @@ def main_tv(argv=None):
     ap.add_argument("--version", action="store_true",
                     help="print the version, where the Google Photos client comes from, "
                          "which browser would open the gopro.com window, "
-                         "and which engine the cast-tv window would use")
+                         "which engine the cast-tv window would use, "
+                         "and the folder a release unpacks into")
     ap.add_argument("--self-check", action="store_true", help=argparse.SUPPRESS)   # the release smoke test
     ap.add_argument("--window-check", action="store_true", help=argparse.SUPPRESS)  # the release smoke test
     args = ap.parse_args(argv)
