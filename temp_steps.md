@@ -1,4 +1,4 @@
-# Next steps (2026-11-19, S-16 Phases 1-4 implemented, draft PR #111; Phase 5 next)
+# Next steps (2026-11-20, S-16 Phase 5: Windows bar met; Fedora next, draft PR #111)
 
 The standing pause note; overwrite it at the next handoff. Claude ticks each step (`- [x]`) as
 soon as it is done, with the date and, for a merge or a recorded row, the PR or commit.
@@ -46,11 +46,19 @@ soon as it is done, with the date and, for a merge or a recorded row, the PR or 
    ed90da9 (p3), 9dfd306 + 7a7eb32 (p4), draft PR #111. Release run 44630376210 built and
    smoke-tested all four files green; 7a7eb32 fixed the Windows 8.3 short cache path the first run
    (44628255344) caught.
-- [ ] 5. Phase 5 on both machines (Windows here, then Fedora): `startup_time.py` cold and warm on
-   each file of run 44630376210, then the bars decide. Download one file at a time, e.g. in
-   PowerShell in the checkout: `gh run download 44630376210 -n cast-tv-windows-x64-nuitka.exe -D dl`
-   and `gh run download 44630376210 -n cast-tv-windows-x64.exe -D dl`.
-- [ ] 6. Optional, before Phase 5: `/rune-impl-review s16-faster-start phase 4` in a fresh session.
+- [x] 5a. Phase 5 on Windows 11 — 2026-11-20, 67084d1 + 9217ad9: cold 4.00 vs 4.05 s (0.988),
+   warm 2.87 vs 3.95 s (0.727, limit 0.75), watched run ready after 2.98 s; rows 5.2, 5.4, 5.6
+   accepted at 67084d1. research.md, "Phase 5 on Windows 11".
+- [ ] 5b. Phase 5 on Fedora (rows 5.1, 5.3, 5.5), on the Linux files of run 44630376210, bar
+   `--warm-ratio 0.5`. In a terminal in the Fedora checkout: `git fetch && git switch
+   s16-faster-start && git pull`, a venv with `pip install -e ".[test]"`, every cast-tv closed;
+   then start Claude there and write "co dalej". By hand:
+   `gh run download 44630376210 -n cast-tv-linux-x64-nuitka -D ~/Downloads/s16-run-44630376210/nuitka`,
+   the same with `-n cast-tv-linux-x64 -D .../pyi`, `chmod +x` both, then the Windows commands.
+- [x] 6. `/rune-impl-review s16-faster-start phase 4` (Codex) — 2026-11-20, APPROVED, no
+   findings; b3bd7f4.
+- [ ] 7. If Linux passes too: Phase 6, switch the release to Nuitka. Row 1.7 still needs a new
+   watched run.
 
 ## How to resume with Claude
 
