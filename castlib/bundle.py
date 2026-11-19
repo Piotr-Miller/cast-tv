@@ -22,6 +22,13 @@ yyyymmddHHMMSS>`` for a local one: one grammar shared by the builder
 ``packaging/startup_time.py``. Nothing else under ``cast-tv`` (the GoPro browser's
 ``Cache`` folder on Windows) ever matches it.
 
+Old build folders are pruned at start (``prune_caches``): the current folder and the previous
+one stay, and any other stays while it was started within the last 7 days or a running process's
+executable lies inside it. A start touches ``.cast-tv-started`` in its folder, the marker the
+age and the "previous" pick read. A removable folder is first renamed to
+``<name>.removing-<pid>`` (on Windows that fails while a file inside is locked, and the folder
+stays), and only that copy is deleted.
+
 Every function takes its inputs as parameters, so tests can stand in for
 either packager. The default started file is resolved once at import;
 other defaults read the running process at call time.
@@ -32,6 +39,9 @@ import os
 import re
 import shutil
 import sys
+import time
+
+from castlib.processes import IncompleteListing, running_images
 
 PYINSTALLER = "pyinstaller"
 NUITKA = "nuitka"
@@ -49,6 +59,8 @@ PYINSTALLER_RESET = "PYINSTALLER_RESET_ENVIRONMENT"
 
 APP_DIR = "cast-tv"
 BUILD_ID = re.compile(r"^\d+\.\d+\.\d+-(gh\d+\.\d+|local\d{14})$")
+START_MARKER = ".cast-tv-started"
+REMOVING = re.compile(r"^(\d+\.\d+\.\d+-(gh\d+\.\d+|local\d{14}))\.removing-\d+$")
 
 
 def cache_root(platform=None, environ=None, home=None) -> str:
@@ -189,3 +201,94 @@ def relaunch_env(environ=None, kind_: str | None = None) -> dict:
             if upper.startswith(NUITKA_ONEFILE_PREFIX) or upper == NUITKA_ORIGINAL_ARGV0:
                 del env[key]
     return env
+
+
+# ------------------------------------------------------------------ pruning
+def _mtime(path: str) -> float | None:
+    try:
+        return os.stat(path).st_mtime
+    except OSError:
+        return None
+
+
+def _inside(image: str, folder: str) -> bool:
+    folder = os.path.normcase(os.path.realpath(folder))
+    image = os.path.normcase(os.path.realpath(image))
+    return image == folder or image.startswith(folder.rstrip(os.sep) + os.sep)
+
+
+def prune_caches(cache_dir: str, processes=running_images, now=time.time, rename=os.rename,
+                 remove=shutil.rmtree, min_age_days=7) -> list[str]:
+    """Remove this release's old build folders beside ``cache_dir``; returns the folders removed.
+
+    Kept: ``cache_dir`` (current), the previous build (the newest start marker among the
+    others; without any marker, the newest modification time; a tie goes to the greater name),
+    and every folder whose marker (or, without one, its modification time) is younger than
+    ``min_age_days`` or that a running process's executable lies inside. An incomplete process
+    listing removes nothing. Names outside the build identity grammar are never touched.
+    """
+    current = os.path.abspath(cache_dir)
+    if not BUILD_ID.match(os.path.basename(current)):
+        return []                                   # not a build folder of ours: touch nothing
+    try:
+        with open(os.path.join(current, START_MARKER), "ab"):
+            pass
+        os.utime(os.path.join(current, START_MARKER), (now(), now()))
+    except OSError:
+        pass                                        # an unwritable marker only weakens the age guard
+    parent = os.path.dirname(current)
+    try:
+        names = os.listdir(parent)
+    except OSError:
+        return []
+    builds, leftovers = [], []
+    for name in names:
+        path = os.path.join(parent, name)
+        if os.path.normcase(path) == os.path.normcase(current) or not os.path.isdir(path):
+            continue
+        if BUILD_ID.match(name):
+            marker = _mtime(os.path.join(path, START_MARKER))
+            builds.append((name, path, marker, marker if marker is not None else _mtime(path)))
+        elif REMOVING.match(name):
+            leftovers.append(path)
+
+    previous = None
+    marked = [b for b in builds if b[2] is not None]
+    pool = marked or [b for b in builds if b[3] is not None]
+    if pool:
+        previous = max(pool, key=lambda b: (b[2] if marked else b[3], b[0]))[1]
+    limit = now() - min_age_days * 86400
+    old = [b[1] for b in builds if b[1] != previous and b[3] is not None and b[3] <= limit]
+    if not old and not leftovers:
+        return []
+    try:
+        images = [image for _pid, image in processes()]
+    except IncompleteListing:
+        return []                                   # a running copy may be missing from the list
+
+    def in_use(folder):
+        return any(_inside(image, folder) for image in images)
+
+    removed = []
+    for path in old:
+        if in_use(path):
+            continue
+        doomed = "%s.removing-%d" % (path, os.getpid())
+        try:
+            rename(path, doomed)                    # Windows refuses while a file inside is locked
+        except OSError:
+            continue
+        if _remove(doomed, remove):
+            removed.append(path)
+    for path in leftovers:                          # an earlier start renamed it, then stopped short
+        if not in_use(path) and _remove(path, remove):
+            removed.append(path)
+    return removed
+
+
+def _remove(path: str, remove) -> bool:
+    try:
+        remove(path)
+    except OSError:
+        return False                                # what is left is finished on a later start
+    return not os.path.exists(path)

@@ -705,9 +705,9 @@ research.md. Real sign-in and TV checks stay pending until a person sees them.
 
 #### Automated
 
-- [ ] 3.1 Pruning cases (test_bundle)
-- [ ] 3.2 pyflakes
-- [ ] 3.3 Full suite
+- [x] 3.1 Pruning cases (test_bundle)
+- [x] 3.2 pyflakes
+- [x] 3.3 Full suite
 
 ### Phase 4: Nuitka builds next to PyInstaller
 
