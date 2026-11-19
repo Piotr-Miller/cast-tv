@@ -207,3 +207,21 @@ SHA-256 `AC4FC324…6AA0`):
 Owner decision (2026-11-19): a refusal counts as "not ours" unless WTS names our SID, which stays
 incomplete. Other API errors stay incomplete. With this rule the unelevated listing returns
 273 processes.
+
+## Row 1.7 again, after the Phase 1 review fixes (2026-11-19)
+
+Row 1.7 was reopened by the review fixes (99287e6). Same laptop. A PyInstaller exe built from
+a32a0ea (the fixes, the Windows ownership rule 3e67ec8 and the unheld priming start), same venv
+and command as before: 26,226,959 bytes, SHA-256
+`5AD64532F501123EC122C6A670735531262C12F9D7BE01DD5143417DF2E44D26`. Claude ran from an ordinary,
+unelevated PowerShell (no refusal: the ownership rule works without elevation):
+
+```
+python packaging\startup_time.py <exe> --mode warm --runs 5 --out p1b-warm.json
+python packaging\startup_time.py <exe> --mode warm --runs 1 --hold 15 --out p1b-watched.json
+```
+
+- 5 warm runs: 4.28 / 4.00 / 4.08 / 4.82 / 5.10 s, median 4.28 s (2026-11-18: 4.24 s).
+- The watched run: "ready after 4.17 s: the window stays open 15 s"; the priming start was no
+  longer held. The owner watched and accepted ("akceptuję"): the TV button and the GoPro / OneDrive
+  / Google Photos tabs were on screen when the time printed, and a tab click responded.
