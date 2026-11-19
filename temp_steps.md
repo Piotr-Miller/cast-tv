@@ -38,9 +38,10 @@ soon as it is done, with the date and, for a merge or a recorded row, the PR or 
 
 - [x] 1. S-16 opened, spiked, planned and plan-reviewed; Phase 1 implemented. — 2026-11-18.
 - [x] 2. Codex's review of Phase 1; fixes; 1.7 accepted again. — 2026-11-19, 99287e6-5982c46.
-- [ ] 3. `/rune-implement s16-faster-start phase 2`:
+- [x] 3. `/rune-implement s16-faster-start phase 2` — 2026-11-19, 8278f85:
    - `castlib/bundle.py`: kind, started_file, data_dir, cache_dir, relaunch_env.
    - The `sys.frozen` callers in `platform.py`, `shortcut.py` and `window.py`.
+   - Row 1.7 reopened (its surface `castlib/` changed); it needs a new watched run.
 - [ ] 4. Phases 3-4: old-cache pruning, then Nuitka builds next to PyInstaller in CI. Phase 4 opens
    the PR.
 - [ ] 5. Phase 5 on both machines (Windows here, then Fedora): `startup_time.py` cold and warm on

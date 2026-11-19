@@ -701,7 +701,7 @@ def test_missing_bundled_font_config_keeps_the_environment(monkeypatch):
 # ------------------------------------------------------------ under Nuitka
 def _nuitka_sys(plat, data):
     """The ``sys`` a Nuitka onefile child sees: no ``frozen``, no ``_MEIPASS``, ``__compiled__`` on main."""
-    compiled = types.SimpleNamespace(onefile=True, containing_dir=data, original_argv0="/opt/cast-tv-linux-x64")
+    compiled = types.SimpleNamespace(onefile=True, containing_dir="/opt", original_argv0="/opt/cast-tv-linux-x64")
     main = types.SimpleNamespace(__compiled__=compiled, __file__=data + "/entry.py")
     return types.SimpleNamespace(platform=plat, modules={"__main__": main})
 

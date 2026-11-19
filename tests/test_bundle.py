@@ -1,4 +1,5 @@
 """The packager facts: which packager, which file was started, where the data is, how to start again."""
+import importlib.util
 import os
 import sys
 import types
@@ -11,7 +12,8 @@ from castlib import bundle
 def nuitka_main(tmp_path, argv0="/opt/cast-tv/cast-tv-linux-x64", onefile=True):
     """A main module as a Nuitka onefile child sees it: ``__compiled__`` and a ``__file__`` in the cache."""
     data = str(tmp_path / "cache" / "cast-tv" / "0.6.0-gh1.1")
-    compiled = types.SimpleNamespace(onefile=onefile, containing_dir=data, original_argv0=argv0)
+    compiled = types.SimpleNamespace(onefile=onefile, containing_dir=str(tmp_path / "Downloads"),
+                                     original_argv0=argv0)
     return types.SimpleNamespace(__compiled__=compiled, __file__=os.path.join(data, "entry.py"))
 
 
@@ -80,11 +82,11 @@ def test_started_file_bare_name_on_the_start_path(tmp_path, monkeypatch):
     exe = _file(str(tmp_path / "opt bin" / "cast-tv-linux-x64"))
     os.chmod(exe, 0o755)
     seen = []
+    path = str(tmp_path / "system bin") + os.pathsep + str(tmp_path / "opt bin")
 
     def which(name, path=None):
         seen.append((name, path))
-        return exe if path == "/usr/bin" + os.pathsep + str(tmp_path / "opt bin") else None
-    path = "/usr/bin" + os.pathsep + str(tmp_path / "opt bin")
+        return exe if path == str(tmp_path / "system bin") + os.pathsep + str(tmp_path / "opt bin") else None
     assert bundle.started_file("nuitka", argv0="cast-tv-linux-x64", path=path, which=which) == exe
     assert seen == [("cast-tv-linux-x64", path)]
     monkeypatch.setattr(bundle, "_START_PATH", path)               # the PATH at import, not today's
@@ -105,6 +107,51 @@ def test_started_file_bare_name_on_a_relative_path_entry(tmp_path):
     which = lambda name, path=None: os.path.join("bin", name)       # noqa: E731 - PATH held "bin"
     assert bundle.started_file("nuitka", argv0="cast-tv-linux-x64", cwd=str(tmp_path), path="bin",
                                which=which) == exe
+
+
+@pytest.mark.parametrize("path_entry", ["bin", ".", ""])
+def test_started_file_real_which_anchors_relative_path_to_start_cwd(tmp_path, monkeypatch, path_entry):
+    start = tmp_path / "start"
+    name = "cast-tv-test-binary" + (".exe" if sys.platform == "win32" else "")
+    exe = _file(str(start / path_entry / name))
+    os.chmod(exe, 0o755)
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.chdir(elsewhere)
+    found = bundle.started_file("nuitka", argv0=name, cwd=str(start), path=path_entry)
+    assert found is not None
+    assert os.path.normcase(found) == os.path.normcase(exe)
+
+
+@pytest.mark.parametrize("present", [True, False])
+def test_started_file_default_is_fixed_at_import(tmp_path, monkeypatch, present):
+    start = tmp_path / "start"
+    start.mkdir()
+    name = "cast-tv-test-binary" + (".exe" if sys.platform == "win32" else "")
+    exe = str(start / name)
+    if present:
+        _file(exe)
+        os.chmod(exe, 0o755)
+    monkeypatch.chdir(start)
+    monkeypatch.setenv("PATH", ".")
+    main = nuitka_main(tmp_path, argv0=name)
+    monkeypatch.setitem(sys.modules, "__main__", main)
+    spec = importlib.util.spec_from_file_location("startup_bundle", bundle.__file__)
+    startup = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(startup)
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    if present:
+        os.remove(exe)
+    else:
+        _file(exe)
+        os.chmod(exe, 0o755)
+    monkeypatch.chdir(elsewhere)
+    monkeypatch.setenv("PATH", str(elsewhere))
+    main.__compiled__.original_argv0 = exe
+    expected = exe if present else None
+    assert startup.started_file() == expected
+    assert startup.started_file("nuitka") == expected
 
 
 def test_started_file_keeps_a_symlink(tmp_path):
@@ -130,7 +177,8 @@ def test_started_file_missing(tmp_path):
 # ------------------------------------------------------- data and cache dirs
 def test_data_dir_and_cache_dir_per_kind(tmp_path):
     main = nuitka_main(tmp_path)
-    data = main.__compiled__.containing_dir
+    data = os.path.dirname(main.__file__)
+    assert main.__compiled__.containing_dir != data       # the outer launcher's folder is not bundled data
     assert bundle.data_dir(sys_module=fake_sys(main)) == data
     assert bundle.cache_dir(sys_module=fake_sys(main)) == data
     no_dir = types.SimpleNamespace(__compiled__=types.SimpleNamespace(onefile=True), __file__=main.__file__)
@@ -140,6 +188,8 @@ def test_data_dir_and_cache_dir_per_kind(tmp_path):
     assert bundle.cache_dir(sys_module=pyi) is None                                 # unpacked anew every start
     assert bundle.data_dir(sys_module=fake_sys()) is None
     assert bundle.cache_dir(sys_module=fake_sys()) is None
+    missing_main_file = types.SimpleNamespace(__compiled__=main.__compiled__)
+    assert bundle.data_dir("nuitka", main=missing_main_file) is None
 
 
 # ------------------------------------------------------------- relaunch_env

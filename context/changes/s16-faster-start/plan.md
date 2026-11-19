@@ -696,10 +696,10 @@ research.md. Real sign-in and TV checks stay pending until a person sees them.
 
 #### Automated
 
-- [x] 2.1 test_bundle
-- [x] 2.2 Callers under all three kinds (test_platform, test_shortcut, test_window)
-- [x] 2.3 pyflakes
-- [x] 2.4 Full suite
+- [x] 2.1 test_bundle — 8278f85
+- [x] 2.2 Callers under all three kinds (test_platform, test_shortcut, test_window) — 8278f85
+- [x] 2.3 pyflakes — 8278f85
+- [x] 2.4 Full suite — 8278f85
 
 ### Phase 3: Old cache folders
 
