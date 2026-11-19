@@ -690,7 +690,7 @@ research.md. Real sign-in and TV checks stay pending until a person sees them.
 
 #### Manual
 
-- [ ] 1.7 Windows: startup_time.py on a PyInstaller exe of this phase's commit, 5 warm runs, one watched
+- [x] 1.7 Windows: startup_time.py on a PyInstaller exe of this phase's commit, 5 warm runs, one watched — accepted at 185f2062837a293ab9b02b5dfbd00ed4d1cd21d6
 
 ### Phase 2: Code that runs under either packager
 
