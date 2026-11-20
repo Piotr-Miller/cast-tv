@@ -444,3 +444,6 @@ is run 44812632302's two Windows files at eed2a5b: its Nuitka exe is to this run
 `cast-tv-windows-x64.exe` what the Linux file above is to this one (the same diff), and the
 build-info comparison is written down with the measurement.
 
+
+The owner re-confirmed rows 5.1 and 5.5 for the published Linux file from this equivalence
+("potwierdzam 5.1 5.5", 2026-11-20); 5.3 stayed current.
