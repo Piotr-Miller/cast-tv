@@ -492,7 +492,6 @@ PASS/FAIL, with the run ID, the SHA-256 of the files and their build-info.
   1. Download the PR run's two Linux files.
   2. Run `startup_time.py` cold then warm on each.
   3. Run `--compare … --warm-ratio 0.75` (0.5 until the owner's decision of 2026-11-20).
-
   The terminal prints PASS/FAIL per mode; the results and both JSON files go to research.md.
   — surface: castlib/, packaging/, pyproject.toml, .github/workflows/release.yml
 - Windows 11, in PowerShell in the checkout: the same with the Windows files and `--warm-ratio 0.75`. — surface: castlib/, packaging/, pyproject.toml, .github/workflows/release.yml
@@ -554,7 +553,7 @@ ones.
 - Equivalence. Compare the published files' `build-info.json` with the measured files' from Phase 5: the Nuitka version, the option list, the Python version, the pip-freeze hash, and the `castlib/` and `packaging/build_nuitka.py` contents at both commits (`git diff --stat <measured>..<published> -- castlib packaging/build_nuitka.py packaging/entry.py packaging/fonts.conf`).
   - Equal apart from names: record it in research.md and re-confirm rows 5.1-5.6 at this revision.
   - Otherwise: measure Phase 5 again on the published files.
-  - surface: castlib/, packaging/, pyproject.toml, .github/workflows/release.yml
+  — surface: castlib/, packaging/, pyproject.toml, .github/workflows/release.yml
 
 ---
 
@@ -572,7 +571,6 @@ surface covers `castlib/`, `packaging/` and the workflow, so any change in this 
 - Windows, Explorer:
   1. Double-click the PR exe in its download folder. A console flashes at most briefly; then only the cast-tv window shows, with no Windows Terminal tab left.
   2. Cast `Przejazd - SuperCars.mp4` and close the window with X. The TV stops, and no cast-tv process is left in Task Manager.
-
   — surface: castlib/, packaging/, .github/workflows/release.yml
 - Windows, PowerShell: `& .\cast-tv-windows-x64.exe`. The addresses print there and the window opens. Press Ctrl+C in that PowerShell window: `Stopped.` prints, the window closes, and the prompt returns. — surface: castlib/, packaging/, .github/workflows/release.yml
 - Windows, PowerShell: `$env:CAST_TV_WINDOW_FAIL='1'; Start-Process .\cast-tv-windows-x64.exe`. The new process's console window reappears next to a browser tab with the UI. Closing that console window stops the TV. Then `Remove-Item Env:CAST_TV_WINDOW_FAIL`. — surface: castlib/, packaging/, .github/workflows/release.yml
@@ -580,7 +578,6 @@ surface covers `castlib/`, `packaging/` and the workflow, so any change in this 
   - X stops the TV and ends the process.
   - Windows: Start → account → Sign out, then sign in again: the TV has stopped.
   - Fedora: `kill <pid>` of the started file stops the TV and closes the window.
-
   — surface: castlib/, packaging/, .github/workflows/release.yml
 - Both: start the file a second time while the window is open. The existing window comes to the front, and the second process exits. — surface: castlib/, packaging/, .github/workflows/release.yml
 - Windows:
@@ -589,35 +586,31 @@ surface covers `castlib/`, `packaging/` and the workflow, so any change in this 
   3. Right-click the taskbar button → Pin to taskbar; close the window; the pin opens it again.
   4. Move the file to `moved\` and start it there: **Update menu entry (points to another file)**; clicking it turns the button into **Remove from menu**.
   5. **Remove from menu**: "Removed from the Start menu.". Unpin.
-
   — surface: castlib/, packaging/, .github/workflows/release.yml
 - Fedora:
   1. **Add to menu**: "Added: find cast-tv in the applications menu.".
   2. Meta key, `cast`: the cast-tv tile with the TV icon starts the window with no terminal.
   3. Move the file and start it: **Update menu entry**.
   4. **Remove from menu**: "Removed from the menu.".
-
   — surface: castlib/, packaging/, .github/workflows/release.yml
 - Fedora:
   1. Cast `shelf-christmas-decoration.heic` from OneDrive → Pictures: it shows upright on the TV.
   2. The OneDrive and Google Photos lists load (HTTPS through Fedora's CA bundle).
   3. The terminal that started the file shows no `Fontconfig error` or `Fontconfig warning` line.
-
   — surface: castlib/, packaging/, .github/workflows/release.yml
 - Both: in the window's **Open on your phone** panel, scan the QR code with the phone. The UI opens on the phone, with no phone panel and no Quit control. — surface: castlib/, packaging/, .github/workflows/release.yml
 - Both, retention:
   1. Download the Nuitka file from three runs or run attempts of the Phase 6 PR. Each has a distinct identity; `gh run rerun <id>` makes a new attempt.
+     (owner decision 2026-11-20) Instead: the PR's three Nuitka builds of runs 44630376210, 44812632302 and 44821655658, without paid reruns. The newest, Phase 6's file, is the one started in step 4 and the one whose pruning is judged.
   2. Start each once, so three folders exist under the cache.
   3. Set the oldest folder's marker back 8 days: `touch -d '8 days ago' <dir>/.cast-tv-started` on Fedora, or `(Get-Item <dir>\.cast-tv-started).LastWriteTime = (Get-Date).AddDays(-8)` on Windows.
   4. Start the newest. Within a minute the oldest folder is gone and the other two remain.
   5. Repeat with the oldest build running: its folder stays.
-
   — surface: castlib/, packaging/, .github/workflows/release.yml
 - Both, an interrupted first start:
   1. Delete this build's cache folder (the path from `--version`).
   2. Start the file, and after 1 s end the process you started: `kill -9 <pid>` on Fedora, or `Stop-Process -Id <pid> -Force` on Windows.
   3. Start it again: the window opens normally.
-
   — surface: castlib/, packaging/, .github/workflows/release.yml
 - Windows: start a new identity's file for the first time. Whether the firewall prompt appears is recorded in research.md. The owner answers it. — surface: castlib/, packaging/, .github/workflows/release.yml
 - Both: the cache folder's size per build is recorded and matches README. — surface: README.md, castlib/, packaging/
@@ -723,7 +716,7 @@ research.md. Real sign-in and TV checks stay pending until a person sees them.
 
 #### Manual
 
-- [x] 5.1 Fedora: 5 cold + 5 warm runs of each file, medians recorded — accepted at eff390b8c7e9660f25b740cec714c40443dbf8ea
+- [ ] 5.1 Fedora: 5 cold + 5 warm runs of each file, medians recorded
 - [ ] 5.2 Windows 11: 5 cold + 5 warm runs of each file, medians recorded
 - [x] 5.3 Fedora: one run watched, the window visibly ready at the mark — accepted at 30cc68882c642047335a29eba9bed0a1863d56e1
 - [x] 5.4 Windows 11: one run watched, the window visibly ready at the mark — accepted at 67084d10952c3d4e7f3902d6ececac8e367d1488

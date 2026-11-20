@@ -32,3 +32,6 @@ archived_at: null
 2026-11-20: owner decision — Phase 6 starts before Windows's 5.2 and 5.6 are measured again; Windows is measured once on Phase 6's PR files (dual boot); plan.md Phase 5, Implementation Note.
 2026-11-20: reopened 5.5 — was accepted at 30cc68882c642047335a29eba9bed0a1863d56e1; changed: .github/workflows/release.yml, packaging/build_nuitka.py, packaging/cast-tv.spec, packaging/smoke.py (Phase 6: the release switched to Nuitka).
 2026-11-20: rows 5.1 and 5.5 accepted at eff390b8c7e9660f25b740cec714c40443dbf8ea (owner: "potwierdzam 5.1 5.5"): Phase 6's Linux file is equal to the measured one apart from names; research.md, "Phase 6: the published files against the measured ones".
+2026-11-20: owner decision — a manual row's "— surface:" line is joined to its bullet (no blank line before it; 6.4's written "— surface:"), so 5.1, 6.4, 7.1, 7.4, 7.6-7.8, 7.10 and 7.11 check their declared surface instead of the phase's File lines (5.1 had fallen back to research.md and went stale on every note); plan.md Phases 5-7, Manual Verification.
+2026-11-20: owner decision — row 7.10 uses the PR's three existing Nuitka builds (runs 44630376210, 44812632302, 44821655658) instead of paid reruns; plan.md Phase 7, Manual Verification.
+2026-11-20: reopened 5.1 — was accepted at eff390b8c7e9660f25b740cec714c40443dbf8ea; changed: surface declaration.
