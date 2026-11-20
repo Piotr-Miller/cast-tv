@@ -2,8 +2,8 @@
 
 ``running_images()`` lists (pid, image path) for every process this user can see. A
 process that ends during the scan is skipped. A process that is ours but cannot be read
-makes the listing incomplete (``IncompleteListing``): whoever decides from it must not
-assume that nothing uses a file. Another user's process that refuses is skipped: it
+makes the listing incomplete (``IncompleteListing``), apart from the refusals described below:
+whoever decides from it must not assume that nothing uses a file. Another user's process that refuses is skipped: it
 cannot be running from this user's cache. "Ours" is the same owner on Linux
 (``/proc/<pid>`` belongs to us) and the same user SID on Windows. A desktop session
 also contains protected system processes, so a session ID does not establish ownership.
@@ -14,6 +14,12 @@ as "not ours" unless WTS names our SID (owner decision 2026-11-19): Windows lets
 own processes. Checked on that laptop: a cast-tv started normally and one started as
 administrator were both readable from an unelevated process, with our SID, and no process with
 our SID refused (s16-faster-start research.md). Any other API error is still incomplete.
+
+Linux refuses ``/proc/<pid>/exe`` for a process of ours that is not dumpable: on the Fedora KDE
+desktop (2026-11-20) ``systemd --user``, ``(sd-pam)``, ``kwin_wayland``, the polkit agent, both
+``ssh-agent`` and a zombie. A refusal counts as "not ours" (owner decision 2026-11-20, the same rule
+as Windows): cast-tv never makes itself undumpable, and every process of a running Nuitka build,
+its ``QtWebEngineProcess`` children too, was readable. Any other error is still incomplete.
 """
 import os
 import sys
@@ -38,7 +44,6 @@ def _linux(root: str) -> list[tuple[int, str]]:
         names = os.listdir(root)
     except OSError as e:
         raise IncompleteListing("cannot read %s: %s" % (root, e))
-    me = os.getuid() if hasattr(os, "getuid") else None
     found = []
     for name in names:
         if not name.isdigit():
@@ -49,14 +54,7 @@ def _linux(root: str) -> list[tuple[int, str]]:
         except (FileNotFoundError, ProcessLookupError):
             continue                                   # gone, or a kernel thread with no executable
         except PermissionError:
-            try:
-                owner = os.stat(path).st_uid
-            except FileNotFoundError:
-                continue                               # it ended meanwhile
-            except OSError as e:
-                raise IncompleteListing("cannot read process %s: %s" % (name, e))
-            if owner == me:
-                raise IncompleteListing("process %s is ours but its executable cannot be read" % name)
+            continue                                   # another user's, or ours but not dumpable: not cast-tv
         except OSError as e:
             raise IncompleteListing("cannot read process %s: %s" % (name, e))
     return found

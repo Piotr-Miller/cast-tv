@@ -294,3 +294,30 @@ win-pyi-warm.json:
 win-nuitka-watched.json:
 {"size": 18300416, "sha256": "7d044dfdffda52e52d3912c2f4f581f909ce47d0a1662366e6a20cdefaeeda99", "version": ["cast-tv 0.5.0", "Google Photos client: built in", "GoPro window: C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe", "Window: edgechromium", "Cache: C:\\Users\\pmill\\AppData\\Local\\cast-tv\\0.5.0-gh44630376210.1"], "system": "Windows 11", "mode": "warm", "runs": [2.97684907913208], "median": 2.97684907913208}
 ```
+
+## Linux: our undumpable processes (2026-11-20)
+
+The Fedora desktop (Fedora 45, KDE Plasma, systemd 262). The first Phase 5 command on the Linux
+files of run 44630376210 refused before any start, and so did the other three:
+
+```
+refused: the process list is incomplete (process 3535 is ours but its executable cannot be read); close cast-tv and try again
+```
+
+Process 3535 is `systemd --user` (UID 1000, `CapEff 0000000800000000`). Linux refuses
+`readlink /proc/<pid>/exe` for a process that is not dumpable, even to its owner. Seven of ours
+refused: `systemd --user`, `(sd-pam)`, `kwin_wayland` (`CapEff 0000000000800000`),
+`polkit-kde-authentication-agent-1`, two `ssh-agent` (capabilities zero; they make themselves
+undumpable) and a zombie `zypak-sandbox` of the Bitwarden Flatpak. So every Linux listing on this
+desktop was incomplete: `startup_time.py` could not measure, and Phase 3's pruning would never
+have removed anything.
+
+Claude started the Nuitka file of run 44630376210 for 8 s and listed the processes. All six of
+cast-tv's processes had a readable `exe`: the onefile starter in `~/Downloads/...`, and
+`cast-tv-linux-x64-nuitka.bin` and four `QtWebEngineProcess` in
+`~/.cache/cast-tv/0.5.0-gh44630376210.1/`. Only the seven listed above refused.
+
+The owner decided (2026-11-20, "tak") to use the same rule as on Windows: a refused `exe` counts as
+not ours. cast-tv never makes itself undumpable. Any other read error is still incomplete. After
+the change, `running_images()` on this desktop listed 120 processes.
+

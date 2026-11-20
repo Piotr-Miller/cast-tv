@@ -169,12 +169,11 @@ def test_windows_owner_enumeration_failure_propagates_from_the_listing():
         processes.running_images(platform="win32", win=api)
 
 
-@pytest.mark.skipif(not hasattr(os, "getuid"), reason="Linux owners")
-def test_linux_reads_exe_links_and_judges_refusals_by_owner(tmp_path, monkeypatch):
+def test_linux_reads_exe_links_and_skips_refusals(tmp_path, monkeypatch):
     for pid in ("10", "11", "12", "self"):
         (tmp_path / pid).mkdir()
     links = {str(tmp_path / "10" / "exe"): "/opt/cast-tv-linux-x64"}
-    refused = {str(tmp_path / "12" / "exe")}
+    refused = {str(tmp_path / "12" / "exe")}             # another user's, or ours but not dumpable (systemd --user)
 
     def readlink(path):
         if path in links:
@@ -183,14 +182,18 @@ def test_linux_reads_exe_links_and_judges_refusals_by_owner(tmp_path, monkeypatc
             raise PermissionError(path)
         raise FileNotFoundError(path)                     # 11: a kernel thread
 
-    owners = {str(tmp_path / "12"): os.getuid() + 1}
-    real_stat = os.stat
     monkeypatch.setattr(processes.os, "readlink", readlink)
-    monkeypatch.setattr(processes.os, "stat",
-                        lambda p: types.SimpleNamespace(st_uid=owners[p]) if p in owners else real_stat(p))
     assert processes.running_images(platform="linux", proc_root=str(tmp_path)) == [(10, "/opt/cast-tv-linux-x64")]
-    owners[str(tmp_path / "12")] = os.getuid()               # ours, yet unreadable
-    with pytest.raises(IncompleteListing):
+
+
+def test_linux_other_read_errors_are_incomplete(tmp_path, monkeypatch):
+    (tmp_path / "10").mkdir()
+
+    def readlink(path):
+        raise OSError(5, "Input/output error", path)
+
+    monkeypatch.setattr(processes.os, "readlink", readlink)
+    with pytest.raises(IncompleteListing, match="cannot read process 10"):
         processes.running_images(platform="linux", proc_root=str(tmp_path))
 
 
