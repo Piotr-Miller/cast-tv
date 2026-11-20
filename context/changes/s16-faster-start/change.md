@@ -29,3 +29,5 @@ archived_at: null
 2026-11-20: owner decision — the Linux warm bar is 75 % of PyInstaller's, as on Windows (was 50 %; Fedora measured 0.706 on run 44812632302). Chosen from 0.72 / 0.75 / 0.80 for a margin like Windows's; plan.md, Decisions, The bar.
 
 2026-11-20: rows 5.1, 5.3 and 5.5 accepted at 30cc68882c642047335a29eba9bed0a1863d56e1 (owner: "potwierdzam"): Fedora cold 2.05 vs 3.24 s (0.633), warm 2.16 vs 3.05 s (0.706, limit 0.75 by the owner's decision after the 0.5 miss), watched run ready after 1.85 s; research.md, "Phase 5 on Fedora".
+2026-11-20: owner decision — Phase 6 starts before Windows's 5.2 and 5.6 are measured again; Windows is measured once on Phase 6's PR files (dual boot); plan.md Phase 5, Implementation Note.
+2026-11-20: reopened 5.5 — was accepted at 30cc68882c642047335a29eba9bed0a1863d56e1; changed: .github/workflows/release.yml, packaging/build_nuitka.py, packaging/cast-tv.spec, packaging/smoke.py (Phase 6: the release switched to Nuitka).

@@ -2,7 +2,7 @@
 and the cast-tv window opens on the expected engine.
 
     python packaging/smoke.py dist/cast-tv-linux-x64
-    python packaging/smoke.py --nuitka dist/cast-tv-linux-x64-nuitka
+    python packaging/smoke.py --nuitka dist/cast-tv-linux-x64
 
 ``--version`` must end with a ``Cache:`` line: for a Nuitka file (``--nuitka``) a build folder
 under the cast-tv cache whose name matches the build identity grammar, otherwise ``none``.
