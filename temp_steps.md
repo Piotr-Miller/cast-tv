@@ -59,7 +59,16 @@ soon as it is done, with the date and, for a merge or a recorded row, the PR or 
    0.706 passes it (plan.md, The bar; research.md).
 - [x] 8. Fedora: the watched run, ready after 1.85 s; 5.1, 5.3 and 5.5 accepted at 30cc688.
    — 2026-11-20.
-- [ ] 9. Windows 11: 5.2 and 5.6 again on the Windows files of run 44812632302 (reopened by eed2a5b).
+- [ ] 9. Windows 11: 5.2 and 5.6 again on the Windows files of run 44812632302 (reopened by eed2a5b;
+   5.4 stays accepted). In PowerShell, with every cast-tv closed:
+   ```powershell
+   cd C:\Source\cast-tv; git fetch; git switch s16-faster-start; git pull
+   $d = "$HOME\Downloads\s16-run-44812632302"
+   gh run download 44812632302 -R Piotr-Miller/cast-tv -n cast-tv-windows-x64-nuitka.exe -D "$d\nuitka"
+   gh run download 44812632302 -R Piotr-Miller/cast-tv -n cast-tv-windows-x64.exe -D "$d\pyi"
+   ```
+   Then start Claude in `C:\Source\cast-tv` and write "co dalej"; Claude runs the four series and
+   the comparisons at `--warm-ratio 0.75` while you leave the laptop alone.
 - [ ] 10. Phase 6, switch the release to Nuitka. Row 1.7 still needs a new watched run.
 
 ## How to resume with Claude
