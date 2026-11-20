@@ -1,4 +1,4 @@
-# Next steps (2026-11-20, S-16 Phase 5: Fedora done; Windows 5.2 and 5.6 again next, draft PR #111)
+# Next steps (2026-11-20, S-16: Fedora is done; one Windows visit for every Windows row, draft PR #111)
 
 The standing pause note; overwrite it at the next handoff. Claude ticks each step (`- [x]`) as
 soon as it is done, with the date and, for a merge or a recorded row, the PR or commit.
@@ -59,19 +59,35 @@ soon as it is done, with the date and, for a merge or a recorded row, the PR or 
    0.706 passes it (plan.md, The bar; research.md).
 - [x] 8. Fedora: the watched run, ready after 1.85 s; 5.1, 5.3 and 5.5 accepted at 30cc688.
    — 2026-11-20.
-- [ ] 9. Windows 11: 5.2 and 5.6 again on the Windows files of run 44812632302 (reopened by eed2a5b;
-   5.4 stays accepted). In PowerShell, with every cast-tv closed:
+- [x] 9. Phase 6 (fe88a52): the release builds, smoke-tests and publishes only Nuitka under the
+   old names; run 44821655658 green. Its Linux file equals the measured one apart from names; 5.1
+   and 5.5 re-confirmed (eff390b). Rows' surface lines fixed, 5.1 reopened once more (2d55047).
+- [x] 10. Phase 7 on Fedora — 2026-11-20, 78184a5: 7.4, 7.5, 7.7-7.11 and 7.13 observed
+   (research.md, "Phase 7 on Fedora"). Waiting for the owner's acceptance: 5.1, 7.7, 7.8, and the
+   Fedora parts of the "Both" rows.
+- [ ] 11. **One Windows 11 visit (reboot into Windows; Claude drives, you watch the TV and answer
+   the firewall):** rows 1.7, 5.2, 5.6, 6.4 (Windows part), 7.1-7.6 and 7.9-7.13 (Windows parts).
+   In PowerShell, with every cast-tv closed:
    ```powershell
    cd C:\Source\cast-tv; git fetch; git switch s16-faster-start; git pull
-   $d = "$HOME\Downloads\s16-run-44812632302"
-   gh run download 44812632302 -R Piotr-Miller/cast-tv -n cast-tv-windows-x64-nuitka.exe -D "$d\nuitka"
-   gh run download 44812632302 -R Piotr-Miller/cast-tv -n cast-tv-windows-x64.exe -D "$d\pyi"
+   $d = "$HOME\Downloads"
+   gh run download 44812632302 -R Piotr-Miller/cast-tv -n cast-tv-windows-x64-nuitka.exe -D "$d\s16-run-44812632302\nuitka"
+   gh run download 44812632302 -R Piotr-Miller/cast-tv -n cast-tv-windows-x64.exe -D "$d\s16-run-44812632302\pyi"
+   gh run download 44821655658 -R Piotr-Miller/cast-tv -n cast-tv-windows-x64.exe -D "$d\s16-run-44821655658"
    ```
-   Then start Claude in `C:\Source\cast-tv` and write "co dalej"; Claude runs the four series and
-   the comparisons at `--warm-ratio 0.75` while you leave the laptop alone.
-- [ ] 10. Phase 6, switch the release to Nuitka. Row 1.7 still needs a new watched run.
+   Then start Claude in `C:\Source\cast-tv` and write "co dalej". What Claude does there:
+   - 5.2/5.6: the four series on run 44812632302's pair, `--compare … --warm-ratio 0.75`; you
+     leave the laptop alone for about 5 minutes.
+   - 6.4: run 44821655658's exe against that Nuitka exe by build-info (as on Linux).
+   - 1.7: its plan text asks for a PyInstaller exe built with the spec, which Phase 6 deleted; the
+     proposal is run 44812632302's PyInstaller exe (eed2a5b, every castlib change of Phases 1-5).
+     Your decision there.
+   - Phase 7 on run 44821655658's exe; 7.10 uses the three Windows builds of runs 44630376210
+     (already in `%USERPROFILE%\Downloads\s16-run-44630376210`), 44812632302 and 44821655658.
+- [ ] 12. After the visit: `/rune-impl-review s16-faster-start phase 6` (Codex), PR #111 ready for
+   review, you merge, then the release tag.
 
 ## How to resume with Claude
 
-Write "co dalej" in the cast-tv checkout on the S-16 branch:
+Write "co dalej" in the cast-tv checkout on the S-16 branch (on Windows: `C:\Source\cast-tv`):
 `git fetch; git switch s16-faster-start; git pull`.
