@@ -1,4 +1,4 @@
-# Next steps (2026-11-20, S-16 Phase 5: the Linux bar is missed; the owner decides, draft PR #111)
+# Next steps (2026-11-20, S-16 Phase 5: Linux passes the 0.75 bar; the watched run next, draft PR #111)
 
 The standing pause note; overwrite it at the next handoff. Claude ticks each step (`- [x]`) as
 soon as it is done, with the date and, for a merge or a recorded row, the PR or commit.
@@ -55,10 +55,11 @@ soon as it is done, with the date and, for a merge or a recorded row, the PR or 
    **FAIL**). research.md, "Phase 5 on Fedora".
 - [x] 6. `/rune-impl-review s16-faster-start phase 4` (Codex) — 2026-11-20, APPROVED, no
    findings; b3bd7f4.
-- [ ] 7. **You:** decide after the Linux miss: keep PyInstaller (close S-16 as measured, not
-   switched), switch anyway with a recorded decision, or lower the Linux bar. Phases 6-7 wait for it.
-- [ ] 8. Then, if switching: the watched run on Fedora (5.3), Windows 5.2 and 5.6 again on run
-   44812632302, Phase 6. Row 1.7 still needs a new watched run.
+- [x] 7. The owner's decision after the miss — 2026-11-20: the Linux bar is 0.75 like Windows;
+   0.706 passes it (plan.md, The bar; research.md).
+- [ ] 8. Fedora: the watched Nuitka warm run (5.3); then the owner accepts 5.1, 5.3 and 5.5.
+- [ ] 9. Windows 11: 5.2 and 5.6 again on the Windows files of run 44812632302 (reopened by eed2a5b).
+- [ ] 10. Phase 6, switch the release to Nuitka. Row 1.7 still needs a new watched run.
 
 ## How to resume with Claude
 
