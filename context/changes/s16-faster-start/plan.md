@@ -231,6 +231,7 @@ process the current user can see.
   ctypes.
 - A process that vanished during the scan is skipped.
 - Access denied for a process of the current user, or an API error, raises `IncompleteListing`.
+- (owner decision 2026-11-20) Linux: a `/proc/<pid>/exe` refused with access denied counts as not ours. Linux refuses it for our own undumpable processes, and the Fedora KDE desktop has seven (`systemd --user`, `kwin_wayland`, both `ssh-agent`…), so every listing was incomplete. cast-tv never makes itself undumpable; a running Nuitka build's processes were all readable (research.md, "Linux: our undumpable processes").
 - (owner decision 2026-11-19) Windows: an image query refused with access denied counts as not ours unless WTS names our SID; unelevated Windows reports no owner for its protected and service processes (176 of 451), so requiring an owner would make every listing incomplete. Verified on the home laptop (research.md, "Windows ownership without elevation").
 - Other users' processes that deny access are skipped.
 
@@ -722,11 +723,11 @@ research.md. Real sign-in and TV checks stay pending until a person sees them.
 #### Manual
 
 - [ ] 5.1 Fedora: 5 cold + 5 warm runs of each file, medians recorded
-- [x] 5.2 Windows 11: 5 cold + 5 warm runs of each file, medians recorded — accepted at 67084d10952c3d4e7f3902d6ececac8e367d1488
+- [ ] 5.2 Windows 11: 5 cold + 5 warm runs of each file, medians recorded
 - [ ] 5.3 Fedora: one run watched, the window visibly ready at the mark
 - [x] 5.4 Windows 11: one run watched, the window visibly ready at the mark — accepted at 67084d10952c3d4e7f3902d6ececac8e367d1488
 - [ ] 5.5 Linux bar met, or the owner's decision after a miss recorded
-- [x] 5.6 Windows bar met, or the owner's decision after a miss recorded — accepted at 67084d10952c3d4e7f3902d6ececac8e367d1488
+- [ ] 5.6 Windows bar met, or the owner's decision after a miss recorded
 
 ### Phase 6: Switch the release to Nuitka
 
