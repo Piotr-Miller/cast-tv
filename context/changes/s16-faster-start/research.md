@@ -389,3 +389,22 @@ linux-pyi-warm.json:
 warm: Nuitka median 2.16 s, PyInstaller median 3.05 s, ratio 0.706 (limit 0.75): PASS
 ```
 
+
+### The watched run on Fedora (row 5.3) and the owner's confirmation (2026-11-20)
+
+After a reboot of the Fedora desktop, the cache folder `0.5.0-gh44812632302.1` was still there, so
+Claude started one warm run of the same Nuitka file while the owner watched:
+
+```
+.venv/bin/python packaging/startup_time.py ~/Downloads/s16-run-44812632302/nuitka/cast-tv-linux-x64-nuitka --mode warm --runs 1 --hold 30 --out linux-nuitka-watched.json
+ready after 1.85 s: the window stays open 30 s
+```
+
+It exited 0. The owner confirmed ("potwierdzam", 2026-11-20) what the row asks: when the time
+printed, the window showed the TV button and the source tabs, and a click on a source tab
+responded. The owner also confirmed rows 5.1 and 5.5 from the results and the decision above.
+
+```
+linux-nuitka-watched.json:
+{"size": 154884312, "sha256": "40e2900a4e884626da072ef4b70aee6d9dd6dda17e8d6e3c066369ed5776a022", "version": ["cast-tv 0.5.0", "Google Photos client: from /home/piotrmiller/.config/cast-tv/google-client.json", "GoPro window: /usr/bin/google-chrome", "Window: qtwebengine", "Cache: /home/piotrmiller/.cache/cast-tv/0.5.0-gh44812632302.1"], "system": "Linux 7.3.4-300.fc45.x86_64", "mode": "warm", "runs": [1.8493890762329102], "median": 1.8493890762329102}
+```
