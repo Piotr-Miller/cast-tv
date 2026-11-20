@@ -63,8 +63,8 @@ soon as it is done, with the date and, for a merge or a recorded row, the PR or 
    old names; run 44821655658 green. Its Linux file equals the measured one apart from names; 5.1
    and 5.5 re-confirmed (eff390b). Rows' surface lines fixed, 5.1 reopened once more (2d55047).
 - [x] 10. Phase 7 on Fedora — 2026-11-20, 78184a5: 7.4, 7.5, 7.7-7.11 and 7.13 observed
-   (research.md, "Phase 7 on Fedora"). Waiting for the owner's acceptance: 5.1, 7.7, 7.8, and the
-   Fedora parts of the "Both" rows.
+   (research.md, "Phase 7 on Fedora"). 5.1, 7.7 and 7.8 accepted at b863e34; the "Both"
+   rows wait for their Windows parts.
 - [ ] 11. **One Windows 11 visit (reboot into Windows; Claude drives, you watch the TV and answer
    the firewall):** rows 1.7, 5.2, 5.6, 6.4 (Windows part), 7.1-7.6 and 7.9-7.13 (Windows parts).
    In PowerShell, with every cast-tv closed:

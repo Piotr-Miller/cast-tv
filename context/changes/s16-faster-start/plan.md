@@ -716,7 +716,7 @@ research.md. Real sign-in and TV checks stay pending until a person sees them.
 
 #### Manual
 
-- [ ] 5.1 Fedora: 5 cold + 5 warm runs of each file, medians recorded
+- [x] 5.1 Fedora: 5 cold + 5 warm runs of each file, medians recorded — accepted at b863e34a7bc7829ae0c149fb359c1dae9b6843e8
 - [ ] 5.2 Windows 11: 5 cold + 5 warm runs of each file, medians recorded
 - [x] 5.3 Fedora: one run watched, the window visibly ready at the mark — accepted at 30cc68882c642047335a29eba9bed0a1863d56e1
 - [x] 5.4 Windows 11: one run watched, the window visibly ready at the mark — accepted at 67084d10952c3d4e7f3902d6ececac8e367d1488
@@ -745,8 +745,8 @@ research.md. Real sign-in and TV checks stay pending until a person sees them.
 - [ ] 7.4 Both: X, Windows sign-out and Linux kill stop the TV and end the process
 - [ ] 7.5 Both: a second launch brings the window to the front
 - [ ] 7.6 Windows: Start menu entry, pinning, Update after a move, Remove
-- [ ] 7.7 Fedora: menu entry, Update after a move, Remove
-- [ ] 7.8 Fedora: HEIC upright, HTTPS lists load, no Fontconfig diagnostics
+- [x] 7.7 Fedora: menu entry, Update after a move, Remove — accepted at b863e34a7bc7829ae0c149fb359c1dae9b6843e8
+- [x] 7.8 Fedora: HEIC upright, HTTPS lists load, no Fontconfig diagnostics — accepted at b863e34a7bc7829ae0c149fb359c1dae9b6843e8
 - [ ] 7.9 Both: the phone panel's QR opens the UI on the phone
 - [ ] 7.10 Both: only the current and previous cache folders remain past the age guard; a running build's folder is kept
 - [ ] 7.11 Both: a cold start killed during unpacking, then started again, opens normally
