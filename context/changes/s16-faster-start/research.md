@@ -438,7 +438,9 @@ spec); `main` has not moved since eed2a5b. So Fedora's rows 5.1, 5.3 and 5.5 hol
 published Linux file and are re-confirmed at this revision, not measured again.
 
 **Windows: measured again.** The Windows rows 5.2 and 5.6 were measured on run 44630376210 at
-7a7eb32, before eed2a5b changed `castlib/processes.py`, so the Windows file is not equal in code;
-it is measured on this run's `cast-tv-windows-x64.exe` and a PyInstaller exe of the same source,
-in the one Windows visit (owner decision 2026-11-20).
+7a7eb32, before eed2a5b changed `castlib/processes.py`, so they are measured again in the one
+Windows visit (owner decision 2026-11-20). Phase 6 builds no PyInstaller file any more, so the pair
+is run 44812632302's two Windows files at eed2a5b: its Nuitka exe is to this run's
+`cast-tv-windows-x64.exe` what the Linux file above is to this one (the same diff), and the
+build-info comparison is written down with the measurement.
 
