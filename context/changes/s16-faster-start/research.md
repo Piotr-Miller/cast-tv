@@ -498,3 +498,6 @@ for the one Windows visit.
 **A finding outside S-16:** while the video played, the now-playing bar still showed the
 **HEIC → JPEG** badge of the photo cast before it. S-16 does not change that part of the UI; it is
 left for a change of its own.
+
+The owner accepted rows 5.1, 7.7 and 7.8 from these observations ("potwierdzam 5.1 7.7 7.8",
+2026-11-20).
