@@ -1,4 +1,4 @@
-# Next steps (2026-11-20, S-16 Phase 5: Windows bar met; Fedora next, draft PR #111)
+# Next steps (2026-11-20, S-16 Phase 5: the Linux bar is missed; the owner decides, draft PR #111)
 
 The standing pause note; overwrite it at the next handoff. Claude ticks each step (`- [x]`) as
 soon as it is done, with the date and, for a merge or a recorded row, the PR or commit.
@@ -49,16 +49,16 @@ soon as it is done, with the date and, for a merge or a recorded row, the PR or 
 - [x] 5a. Phase 5 on Windows 11 — 2026-11-20, 67084d1 + 9217ad9: cold 4.00 vs 4.05 s (0.988),
    warm 2.87 vs 3.95 s (0.727, limit 0.75), watched run ready after 2.98 s; rows 5.2, 5.4, 5.6
    accepted at 67084d1. research.md, "Phase 5 on Windows 11".
-- [ ] 5b. Phase 5 on Fedora (rows 5.1, 5.3, 5.5), on the Linux files of run 44630376210, bar
-   `--warm-ratio 0.5`. In a terminal in the Fedora checkout: `git fetch && git switch
-   s16-faster-start && git pull`, a venv with `pip install -e ".[test]"`, every cast-tv closed;
-   then start Claude there and write "co dalej". By hand:
-   `gh run download 44630376210 -n cast-tv-linux-x64-nuitka -D ~/Downloads/s16-run-44630376210/nuitka`,
-   the same with `-n cast-tv-linux-x64 -D .../pyi`, `chmod +x` both, then the Windows commands.
+- [x] 5b. Phase 5 on Fedora — 2026-11-20. First eed2a5b: Linux counts our undumpable processes
+   (systemd --user, kwin, ssh-agent) as not cast-tv (owner decision); it reopened 5.2 and 5.6. On
+   run 44812632302: cold 2.05 vs 3.24 s (0.633, PASS), warm 2.16 vs 3.05 s (0.706, limit 0.50,
+   **FAIL**). research.md, "Phase 5 on Fedora".
 - [x] 6. `/rune-impl-review s16-faster-start phase 4` (Codex) — 2026-11-20, APPROVED, no
    findings; b3bd7f4.
-- [ ] 7. If Linux passes too: Phase 6, switch the release to Nuitka. Row 1.7 still needs a new
-   watched run.
+- [ ] 7. **You:** decide after the Linux miss: keep PyInstaller (close S-16 as measured, not
+   switched), switch anyway with a recorded decision, or lower the Linux bar. Phases 6-7 wait for it.
+- [ ] 8. Then, if switching: the watched run on Fedora (5.3), Windows 5.2 and 5.6 again on run
+   44812632302, Phase 6. Row 1.7 still needs a new watched run.
 
 ## How to resume with Claude
 

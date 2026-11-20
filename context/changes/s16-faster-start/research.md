@@ -321,3 +321,62 @@ The owner decided (2026-11-20, "tak") to use the same rule as on Windows: a refu
 not ours. cast-tv never makes itself undumpable. Any other read error is still incomplete. After
 the change, `running_images()` on this desktop listed 120 processes.
 
+
+## Phase 5 on Fedora: rows 5.1 and 5.5, the Linux bar missed (2026-11-20)
+
+The Fedora desktop (Fedora 45, kernel 7.3.4, KDE Plasma on Wayland, Intel Core i7-8665U, 8
+threads). The files are the two Linux artifacts of PR #111's release run 44812632302 at eed2a5b
+(the fix above; build-info `commit` c35ddc9 is the PR's merge ref), downloaded with
+`gh run download 44812632302 -n <artifact> -D ~/Downloads/s16-run-44812632302/<nuitka|pyi>`:
+
+- Nuitka `cast-tv-linux-x64-nuitka`: 154,884,312 B, SHA-256
+  `40e2900a4e884626da072ef4b70aee6d9dd6dda17e8d6e3c066369ed5776a022`. Its build-info: identity
+  `0.5.0-gh44812632302.1`, Nuitka 4.3.5, Python 3.12.16, pip-freeze hash
+  `a3a163f14465d216f84e03173c6e521bf809e9ec3d62f78656e95df4a297fe1d`. Cache:
+  `~/.cache/cast-tv/0.5.0-gh44812632302.1`.
+- PyInstaller `cast-tv-linux-x64`: 260,616,920 B, SHA-256
+  `caa9d28056dc92a677b6650bb6c07a141c7c093f1f33cb3d97c93dd46d62a3c5`. Cache: none.
+
+Claude ran the four series one after another from a terminal in the checkout while the owner left
+the desktop alone, then the comparisons:
+
+```
+.venv/bin/python packaging/startup_time.py <nuitka file> --mode cold --out linux-nuitka-cold.json
+.venv/bin/python packaging/startup_time.py <nuitka file> --mode warm --out linux-nuitka-warm.json
+.venv/bin/python packaging/startup_time.py <pyinstaller file> --mode cold --out linux-pyi-cold.json
+.venv/bin/python packaging/startup_time.py <pyinstaller file> --mode warm --out linux-pyi-warm.json
+.venv/bin/python packaging/startup_time.py --compare linux-nuitka-cold.json linux-pyi-cold.json --warm-ratio 0.5
+.venv/bin/python packaging/startup_time.py --compare linux-nuitka-warm.json linux-pyi-warm.json --warm-ratio 0.5
+```
+
+| Fedora | runs (s) | median |
+| --- | --- | --- |
+| Nuitka cold | 2.05 / 2.03 / 2.10 / 2.00 / 2.07 | 2.05 s |
+| Nuitka warm | 2.06 / 2.16 / 2.17 / 2.10 / 2.19 | 2.16 s |
+| PyInstaller cold | 3.24 / 3.13 / 2.86 / 3.46 / 3.27 | 3.24 s |
+| PyInstaller warm | 3.05 / 3.23 / 3.27 / 3.05 / 3.04 | 3.05 s |
+
+```
+cold: Nuitka median 2.05 s, PyInstaller median 3.24 s, ratio 0.633 (limit 1.00): PASS
+warm: Nuitka median 2.16 s, PyInstaller median 3.05 s, ratio 0.706 (limit 0.50): FAIL
+```
+
+Every run finished; the four series and the cold comparison exited 0, the warm comparison 1.
+**The Linux bar is missed (row 5.5):** Nuitka starts about 0.9 s (30 %) sooner warm and 1.2 s
+sooner cold, but the bar asks for half. Nuitka's warm runs are no faster than its cold ones: the
+cached unpack saves nothing measurable here, and about 2 s goes to starting Python, Qt WebEngine
+and the UI. The plan says to stop after Phase 5 and ask the owner; Phases 6 and 7 wait for that
+decision, and the watched run (row 5.3) was not started.
+
+The result files, without the local `binary` path:
+
+```
+linux-nuitka-cold.json:
+{"size": 154884312, "sha256": "40e2900a4e884626da072ef4b70aee6d9dd6dda17e8d6e3c066369ed5776a022", "version": ["cast-tv 0.5.0", "Google Photos client: from /home/piotrmiller/.config/cast-tv/google-client.json", "GoPro window: /usr/bin/google-chrome", "Window: qtwebengine", "Cache: /home/piotrmiller/.cache/cast-tv/0.5.0-gh44812632302.1"], "system": "Linux 7.3.4-300.fc45.x86_64", "mode": "cold", "runs": [2.0508198738098145, 2.029933452606201, 2.1045479774475098, 2.001136541366577, 2.069551467895508], "median": 2.0508198738098145}
+linux-nuitka-warm.json:
+{"size": 154884312, "sha256": "40e2900a4e884626da072ef4b70aee6d9dd6dda17e8d6e3c066369ed5776a022", "version": ["cast-tv 0.5.0", "Google Photos client: from /home/piotrmiller/.config/cast-tv/google-client.json", "GoPro window: /usr/bin/google-chrome", "Window: qtwebengine", "Cache: /home/piotrmiller/.cache/cast-tv/0.5.0-gh44812632302.1"], "system": "Linux 7.3.4-300.fc45.x86_64", "mode": "warm", "runs": [2.058230400085449, 2.1553876399993896, 2.169327735900879, 2.098296880722046, 2.193394899368286], "median": 2.1553876399993896}
+linux-pyi-cold.json:
+{"size": 260616920, "sha256": "caa9d28056dc92a677b6650bb6c07a141c7c093f1f33cb3d97c93dd46d62a3c5", "version": ["cast-tv 0.5.0", "Google Photos client: from /home/piotrmiller/.config/cast-tv/google-client.json", "GoPro window: /usr/bin/google-chrome", "Window: qtwebengine", "Cache: none"], "system": "Linux 7.3.4-300.fc45.x86_64", "mode": "cold", "runs": [3.2409439086914062, 3.1278693675994873, 2.863612651824951, 3.463536500930786, 3.2686100006103516], "median": 3.2409439086914062}
+linux-pyi-warm.json:
+{"size": 260616920, "sha256": "caa9d28056dc92a677b6650bb6c07a141c7c093f1f33cb3d97c93dd46d62a3c5", "version": ["cast-tv 0.5.0", "Google Photos client: from /home/piotrmiller/.config/cast-tv/google-client.json", "GoPro window: /usr/bin/google-chrome", "Window: qtwebengine", "Cache: none"], "system": "Linux 7.3.4-300.fc45.x86_64", "mode": "warm", "runs": [3.052525758743286, 3.226649761199951, 3.268406629562378, 3.04766583442688, 3.0388355255126953], "median": 3.052525758743286}
+```
