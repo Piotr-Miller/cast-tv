@@ -1,9 +1,9 @@
 """Build the Nuitka onefile release of cast-tv for the running system (s16-faster-start).
 
-    python packaging/build_nuitka.py --out dist/cast-tv-linux-x64-nuitka [--build-id gh123.1]
+    python packaging/build_nuitka.py --out dist/cast-tv-linux-x64 [--build-id gh123.1]
 
-The same contents and behaviour as ``packaging/cast-tv.spec``, built from
-``packaging/entry.py`` with the window extra installed. The file unpacks once into
+The release file, built from ``packaging/entry.py`` with the window extra installed; it carries
+what the PyInstaller spec it replaced carried (deleted in s16-faster-start Phase 6). The file unpacks once into
 ``{CACHE_DIR}/cast-tv/<build identity>`` and reuses that folder on later starts.
 
 The build identity is ``<version>-<build>``: ``<build>`` is ``--build-id``, else
@@ -138,7 +138,7 @@ def provenance(identity: str, opts: list[str], *, nuitka: str, freeze: str, comm
 def main(argv=None, *, run=subprocess.run, nuitka_version=installed_nuitka_version, freeze=pip_freeze,
          commit=git_commit, environ=None, now=None, platform=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--out", required=True, help="the file to build, e.g. dist/cast-tv-linux-x64-nuitka")
+    ap.add_argument("--out", required=True, help="the file to build, e.g. dist/cast-tv-linux-x64")
     ap.add_argument("--build-id", help="the <build> part of the identity (gh<run>.<attempt> or local<14 digits>)")
     args = ap.parse_args(argv)
     try:

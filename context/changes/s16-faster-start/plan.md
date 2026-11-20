@@ -503,6 +503,7 @@ PASS/FAIL, with the run ID, the SHA-256 of the files and their build-info.
 
 **Implementation Note**: If either bar is missed, stop after this phase and report to the owner.
 Phases 6 and 7 do not start without the owner's decision.
+(owner decision 2026-11-20) Phase 6 starts with rows 5.2 and 5.6 reopened by eed2a5b (a Linux-only change to `castlib/processes.py`): Fedora and Windows 11 are a dual boot, so Windows is measured once, on Phase 6's PR files, for 5.2, 5.6 and 6.4 together.
 
 ---
 
@@ -726,15 +727,15 @@ research.md. Real sign-in and TV checks stay pending until a person sees them.
 - [ ] 5.2 Windows 11: 5 cold + 5 warm runs of each file, medians recorded
 - [x] 5.3 Fedora: one run watched, the window visibly ready at the mark — accepted at 30cc68882c642047335a29eba9bed0a1863d56e1
 - [x] 5.4 Windows 11: one run watched, the window visibly ready at the mark — accepted at 67084d10952c3d4e7f3902d6ececac8e367d1488
-- [x] 5.5 Linux bar met, or the owner's decision after a miss recorded — accepted at 30cc68882c642047335a29eba9bed0a1863d56e1
+- [ ] 5.5 Linux bar met, or the owner's decision after a miss recorded
 - [ ] 5.6 Windows bar met, or the owner's decision after a miss recorded
 
 ### Phase 6: Switch the release to Nuitka
 
 #### Automated
 
-- [ ] 6.1 test_smoke, test_build_nuitka
-- [ ] 6.2 Full suite
+- [x] 6.1 test_smoke, test_build_nuitka
+- [x] 6.2 Full suite
 - [ ] 6.3 The PR's release workflow green with the two Nuitka files under the release names
 
 #### Manual
