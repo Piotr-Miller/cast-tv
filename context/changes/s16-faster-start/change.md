@@ -27,3 +27,5 @@ archived_at: null
 2026-11-20: reopened 5.2 — was accepted at 67084d10952c3d4e7f3902d6ececac8e367d1488; changed: castlib/processes.py (Linux: an undumpable process of ours is not cast-tv). The previous observation remains in research.md; acceptance needs a committed revision and the Windows files of a new release run, measured again or recorded as equivalent.
 2026-11-20: reopened 5.6 — was accepted at 67084d10952c3d4e7f3902d6ececac8e367d1488; changed: castlib/processes.py (the same fix). The previous observation remains in research.md.
 2026-11-20: owner decision — the Linux warm bar is 75 % of PyInstaller's, as on Windows (was 50 %; Fedora measured 0.706 on run 44812632302). Chosen from 0.72 / 0.75 / 0.80 for a margin like Windows's; plan.md, Decisions, The bar.
+
+2026-11-20: rows 5.1, 5.3 and 5.5 accepted at 30cc68882c642047335a29eba9bed0a1863d56e1 (owner: "potwierdzam"): Fedora cold 2.05 vs 3.24 s (0.633), warm 2.16 vs 3.05 s (0.706, limit 0.75 by the owner's decision after the 0.5 miss), watched run ready after 1.85 s; research.md, "Phase 5 on Fedora".
