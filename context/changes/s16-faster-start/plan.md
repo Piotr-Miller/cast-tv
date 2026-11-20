@@ -100,7 +100,7 @@ none — no Predecessor line
 | Cold start | The first launch of a version after an update. No reboot, OS file cache not cleared, every cast-tv process closed. Nuitka: that version's cache folder is absent before each run. PyInstaller: its normal unpack. | user | A partial cache from a killed first start counts as present (Nuitka's CRC repairs it). Measured cold runs delete the validated folder first. | 1.3, 5.1, 5.2, 7.11 |
 | Warm start | A launch with the version's cache present, after one unmeasured priming start. | user | — | 1.3, 5.1, 5.2 |
 | Median | The median of 5 measured runs per build, mode and system. | user | A run that times out fails the measurement; there is no median of 4. | 1.3 |
-| The bar | Per system. Linux: Nuitka's warm median ≤ 50 % of PyInstaller's. Windows 11: ≤ 75 %. On both, Nuitka's cold median ≤ PyInstaller's. All accepted behaviour stays correct. | user | Exactly 50 % or 75 % passes, and an equal cold median passes. Either system failing: stop and report; the decision is revisited. | 1.3, 5.5, 5.6 |
+| The bar | Per system. Linux: Nuitka's warm median ≤ 75 % of PyInstaller's (owner decision 2026-11-20, after 0.706 missed the first bar of 50 %; research.md, "Phase 5 on Fedora"). Windows 11: ≤ 75 %. On both, Nuitka's cold median ≤ PyInstaller's. All accepted behaviour stays correct. | user | Exactly 75 % passes, and an equal cold median passes. Either system failing: stop and report; the decision is revisited. | 1.3, 5.5, 5.6 |
 | Build identity | `<version>-<build>`. `<build>` is `gh<run id>.<run attempt>` in CI, or `local<UTC yyyymmddHHMMSS>` for a local build. The cache folder is `{CACHE_DIR}/cast-tv/<build identity>`. One grammar is shared by the builder, the pruner and the script: `^\d+\.\d+\.\d+-(gh\d+\.\d+\|local\d{14})$`. | plan (review F6) | `%LOCALAPPDATA%\cast-tv\Cache` (the GoPro browser cache), the spike's `0.5.0` and any other non-matching name are never touched. A re-run of the same commit gets a new identity. | 3.1, 4.1 |
 | Current, previous | Current: the folder this process runs from. Previous: of the other matching folders, the one with the newest start marker. With no marker anywhere, the newest by modification time. A tie goes to the greater name. | user (keep current + previous); plan (marker, tie-break) | Mixed: marked folders win over unmarked ones. A single folder: nothing else exists. | 3.1 |
 | Removable | A matching folder that is neither current nor previous, whose start marker (or, without one, its modification time) is at least 7 days old, and from which no running process's executable comes. | user (2026-11-18: age guard + safe delete) | The process list is incomplete (access denied for a same-user process, or an error): nothing is removed. A process that vanished during the scan is ignored. Rename fails (a locked file on Windows): the folder stays. | 3.1, 7.10 |
@@ -491,7 +491,7 @@ PASS/FAIL, with the run ID, the SHA-256 of the files and their build-info.
 - Fedora, in a terminal in the checkout:
   1. Download the PR run's two Linux files.
   2. Run `startup_time.py` cold then warm on each.
-  3. Run `--compare … --warm-ratio 0.5`.
+  3. Run `--compare … --warm-ratio 0.75` (0.5 until the owner's decision of 2026-11-20).
 
   The terminal prints PASS/FAIL per mode; the results and both JSON files go to research.md.
   — surface: castlib/, packaging/, pyproject.toml, .github/workflows/release.yml

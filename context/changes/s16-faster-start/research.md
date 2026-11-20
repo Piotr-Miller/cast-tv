@@ -380,3 +380,12 @@ linux-pyi-cold.json:
 linux-pyi-warm.json:
 {"size": 260616920, "sha256": "caa9d28056dc92a677b6650bb6c07a141c7c093f1f33cb3d97c93dd46d62a3c5", "version": ["cast-tv 0.5.0", "Google Photos client: from /home/piotrmiller/.config/cast-tv/google-client.json", "GoPro window: /usr/bin/google-chrome", "Window: qtwebengine", "Cache: none"], "system": "Linux 7.3.4-300.fc45.x86_64", "mode": "warm", "runs": [3.052525758743286, 3.226649761199951, 3.268406629562378, 3.04766583442688, 3.0388355255126953], "median": 3.052525758743286}
 ```
+
+**The owner's decision after the miss** (2026-11-20, option "c", bar "0,75"): the Linux warm bar is
+75 % of PyInstaller's, the same as Windows. Against it the same two result files pass:
+
+```
+.venv/bin/python packaging/startup_time.py --compare linux-nuitka-warm.json linux-pyi-warm.json --warm-ratio 0.75
+warm: Nuitka median 2.16 s, PyInstaller median 3.05 s, ratio 0.706 (limit 0.75): PASS
+```
+
