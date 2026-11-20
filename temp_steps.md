@@ -1,4 +1,4 @@
-# Next steps (2026-11-20, S-16 Phase 5: Linux passes the 0.75 bar; the watched run next, draft PR #111)
+# Next steps (2026-11-20, S-16 Phase 5: Fedora done; Windows 5.2 and 5.6 again next, draft PR #111)
 
 The standing pause note; overwrite it at the next handoff. Claude ticks each step (`- [x]`) as
 soon as it is done, with the date and, for a merge or a recorded row, the PR or commit.
@@ -57,13 +57,8 @@ soon as it is done, with the date and, for a merge or a recorded row, the PR or 
    findings; b3bd7f4.
 - [x] 7. The owner's decision after the miss — 2026-11-20: the Linux bar is 0.75 like Windows;
    0.706 passes it (plan.md, The bar; research.md).
-- [ ] 8. Fedora: the watched Nuitka warm run (5.3); then the owner accepts 5.1, 5.3 and 5.5.
-   After the reboot, start Claude in `~/Source/cast-tv` (branch `s16-faster-start`), write "start"
-   and watch the screen. Claude runs `.venv/bin/python packaging/startup_time.py
-   ~/Downloads/s16-run-44812632302/nuitka/cast-tv-linux-x64-nuitka --mode warm --runs 1 --hold 30
-   --out linux-nuitka-watched.json`; when it prints "ready after … s", the cast-tv window shows the
-   TV button and the source tabs, and a click on a source tab (e.g. OneDrive) switches it at once.
-   The files stay in `~/Downloads/s16-run-44812632302`; the results are in research.md.
+- [x] 8. Fedora: the watched run, ready after 1.85 s; 5.1, 5.3 and 5.5 accepted at 30cc688.
+   — 2026-11-20.
 - [ ] 9. Windows 11: 5.2 and 5.6 again on the Windows files of run 44812632302 (reopened by eed2a5b).
 - [ ] 10. Phase 6, switch the release to Nuitka. Row 1.7 still needs a new watched run.
 
