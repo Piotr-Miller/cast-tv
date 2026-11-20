@@ -734,9 +734,9 @@ research.md. Real sign-in and TV checks stay pending until a person sees them.
 
 #### Automated
 
-- [x] 6.1 test_smoke, test_build_nuitka
-- [x] 6.2 Full suite
-- [ ] 6.3 The PR's release workflow green with the two Nuitka files under the release names
+- [x] 6.1 test_smoke, test_build_nuitka — fe88a52
+- [x] 6.2 Full suite — fe88a52
+- [x] 6.3 The PR's release workflow green with the two Nuitka files under the release names — fe88a52
 
 #### Manual
 
