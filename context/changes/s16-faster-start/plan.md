@@ -723,7 +723,7 @@ research.md. Real sign-in and TV checks stay pending until a person sees them.
 
 #### Manual
 
-- [x] 5.1 Fedora: 5 cold + 5 warm runs of each file, medians recorded — accepted at 30cc68882c642047335a29eba9bed0a1863d56e1
+- [x] 5.1 Fedora: 5 cold + 5 warm runs of each file, medians recorded — accepted at eff390b8c7e9660f25b740cec714c40443dbf8ea
 - [ ] 5.2 Windows 11: 5 cold + 5 warm runs of each file, medians recorded
 - [x] 5.3 Fedora: one run watched, the window visibly ready at the mark — accepted at 30cc68882c642047335a29eba9bed0a1863d56e1
 - [x] 5.4 Windows 11: one run watched, the window visibly ready at the mark — accepted at 67084d10952c3d4e7f3902d6ececac8e367d1488
