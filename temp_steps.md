@@ -6,33 +6,36 @@ soon as it is done, with the date and, for a merge or a recorded row, the PR or 
 ## Where it stands
 
 - **S-16, a faster-starting release file** (`context/changes/s16-faster-start/`, branch
-  `s16-faster-start`, pushed; no PR yet). It switches both release files from PyInstaller to a
-  Nuitka onefile that unpacks once into a cache folder.
-  - **The owner's bars:** the warm median of 5 runs ≤ 50 % of PyInstaller's on Linux and ≤ 75 % on
-    Windows 11. The cold median must be no slower. If either is missed, stop and decide again.
-  - **Old cache folders:** keep the current and previous build. An older one is deleted after
-    7 days unused and with nothing running from it.
-- **Phase 1 is done and reviewed.**
-  - a558115 and 5155ad8 are the implementation.
-  - Codex's review is `reviews/impl-review-phase-1-0707dac.md`: REJECTED, then F1-F7 fixed in
-    99287e6, then APPROVED.
-  - 3e67ec8: Windows counts an access-denied process as not ours unless WTS names our SID (owner
-    decision, verified with a normal and an elevated cast-tv). Without it the measurement refused
-    and pruning would never run. Phase 3 keeps "nothing removed on an incomplete listing".
-  - a32a0ea: the priming start is never held.
-  - **Row 1.7 is accepted at 185f206** (5982c46). PyInstaller warm median 4.28 s on this laptop.
-  - Linux owner coverage (`tests/test_processes.py`) and the release build/smoke still need CI;
-    no PR run exists yet.
-- **v0.5.0** is released, and S-12 is archived. ci-actions-node24's row 1.4 passed on that release;
-  it stays unticked in its read-only archive.
-- **CI notice:** `ubuntu-latest` moves to Ubuntu 26 (the `test` and `release` jobs); the Linux build
-  is pinned to `ubuntu-22.04`.
+  `s16-faster-start`, **draft PR #111**). The release switches from PyInstaller to a Nuitka onefile
+  that unpacks once per version into `~/.cache/cast-tv/<version>-gh<build>` (Windows:
+  `%LOCALAPPDATA%\cast-tv\...`). Phases 1-6 are implemented; Phase 7 is acceptance only.
+  - **The bars** (owner decisions): Nuitka's warm median ≤ 75 % of PyInstaller's on both systems
+    (Linux was 50 %, lowered after 0.706 missed it), the cold median no slower.
+  - **Measured:** Windows 11 (run 44630376210): warm 0.727, cold 0.988. Fedora (run 44812632302):
+    warm 0.706, cold 0.633; watched run ready after 1.85 s.
+  - **eed2a5b:** Linux counts our undumpable processes (systemd --user, kwin, ssh-agent) as not
+    cast-tv; without it the measurement refused and pruning never ran on Fedora. It reopened
+    Windows's 5.2 and 5.6.
+  - **Phase 6 (fe88a52):** `release.yml` builds, smoke-tests and publishes only Nuitka under the
+    old names; `packaging/cast-tv.spec` deleted; README describes the cache (about 550 MB on Linux,
+    80 MB on Windows). Release run 44821655658 green.
+  - **Accepted:** 5.1, 5.3, 5.4, 5.5, 7.7, 7.8. **Open, all on Windows:** 1.7, 5.2, 5.6, 6.4 and the
+    Windows parts of 7.1-7.6 and 7.9-7.13 (their Fedora parts passed, research.md "Phase 7 on
+    Fedora").
+  - **Finding outside S-16:** while a video plays, the now-playing bar still shows the
+    **HEIC → JPEG** badge of the photo cast before it; for a change of its own.
+- **Fedora and Windows 11 are a dual boot on one laptop:** every switch is a reboot, so all
+  Windows rows go into one visit (step 11).
+- **v0.5.0** is released (2026-11-18), and S-12 is archived.
+- **CI notice:** `ubuntu-latest` moves to Ubuntu 26 (the `test` job); the Linux build is pinned to
+  `ubuntu-22.04`.
 - **The TV** allows DLNA per client (Settings → General → Device Connection Manager → Device List).
   "No TV found" while `curl http://192.168.50.142:9197/dmr` answers 401 means that list.
 - **Test material:** OneDrive → Dokumenty → Videos → `Przejazd - SuperCars.mp4`;
   `shelf-christmas-decoration.heic` in OneDrive → Pictures; `Test_Pictures` on Nextcloud.
-- **Home Windows:** after a sign-out, `vEthernet (Default Switch)` may get a new address. The full
-  suite passed 592/6 skipped twice on 2026-11-19 after Codex's test-synchronization fixes (F6).
+- **Windows:** after a sign-out, `vEthernet (Default Switch)` may get a new address. The full
+  suite passed 592/6 skipped twice on 2026-11-19.
+- **Fedora's GoPro session** expired (captured 2026-09-24); not needed for S-16.
 
 ## Next
 
