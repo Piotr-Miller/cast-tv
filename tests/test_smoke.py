@@ -1,6 +1,7 @@
 """Release smoke shutdown must never terminate a session it did not start."""
 import importlib.util
 import json
+import os
 from pathlib import Path
 import types
 
@@ -99,7 +100,7 @@ def test_quit_does_not_reconnect_or_touch_a_replacement(smoke, monkeypatch, payl
 def test_main_rejects_another_server_on_the_selected_port(smoke, monkeypatch):
     proc = Process()
     monkeypatch.setattr(smoke.os.path, "getsize", lambda path: 1)
-    monkeypatch.setattr(smoke, "run", lambda *args: smoke.WINDOW + "\nGoogle Photos client: built in\nGoPro window: chrome")
+    monkeypatch.setattr(smoke, "run", lambda *args: smoke.WINDOW + "\nGoogle Photos client: built in\nGoPro window: chrome\nCache: none")
     monkeypatch.setattr(smoke, "free_port", lambda: 45678)
     monkeypatch.setattr(smoke.subprocess, "Popen", lambda *a, **kw: proc)
     monkeypatch.setattr(smoke, "get", lambda *args: (200, json.dumps({"instance": {"id": "other", "pid": 5678}}).encode()))
@@ -115,3 +116,43 @@ def test_window_smoke_rejects_fontconfig_diagnostics(smoke, monkeypatch):
     monkeypatch.setattr(smoke.subprocess, "run", lambda *a, **kw: result)
     with pytest.raises(SystemExit, match="Fontconfig diagnostics"):
         smoke.run("fixture", "--window-check")
+
+
+def _version(cache_line):
+    return "cast-tv 0.6.0\nGoogle Photos client: built in\nGoPro window: chrome\nWindow: qtwebengine\n" + cache_line + "\n"
+
+
+def test_nuitka_file_must_name_a_build_folder(smoke):
+    """``--nuitka`` requires a Cache: folder under the cast-tv cache whose name matches the build identity."""
+    parent = smoke.bundle.cache_parent()
+    assert smoke.cache_problem(_version("Cache: " + os.path.join(parent, "0.6.0-gh123.1")), nuitka=True) is None
+    assert "Cache: none" in smoke.cache_problem(_version("Cache: none"), nuitka=True)
+    for bad in (os.path.join(parent, "0.5.0"),                              # the spike's folder
+                os.path.join(parent, "Cache"),                              # the GoPro browser cache
+                os.path.abspath(os.path.join("elsewhere", "cast-tv", "0.6.0-gh123.1"))):   # not under the cache
+        assert "not a build folder" in smoke.cache_problem(_version("Cache: " + bad), nuitka=True)
+
+
+def test_pyinstaller_file_must_say_cache_none(smoke):
+    assert smoke.cache_problem(_version("Cache: none"), nuitka=False) is None
+    folder = os.path.join(smoke.bundle.cache_parent(), "0.6.0-gh123.1")
+    assert "names a cache folder" in smoke.cache_problem(_version("Cache: " + folder), nuitka=False)
+
+
+@pytest.mark.parametrize("nuitka", [False, True])
+def test_a_missing_or_doubled_cache_line_fails(smoke, nuitka):
+    assert "0 Cache: lines" in smoke.cache_problem(_version("").rstrip() + "\n", nuitka=nuitka)
+    assert "2 Cache: lines" in smoke.cache_problem(_version("Cache: none\nCache: none"), nuitka=nuitka)
+
+
+@pytest.mark.parametrize("nuitka,expected", [(False, "reached the server start"), (True, "Cache: none")])
+def test_smoke_main_checks_the_cache_line_first(smoke, monkeypatch, nuitka, expected):
+    """``Cache: none`` passes a PyInstaller file on to the server start and stops a Nuitka file before it."""
+    def server_start():
+        raise SystemExit("reached the server start")
+    monkeypatch.setattr(smoke.os.path, "getsize", lambda path: 1)
+    monkeypatch.setattr(smoke, "run", lambda *args: smoke.WINDOW + "\nGoogle Photos client: built in\n"
+                        "GoPro window: chrome\nCache: none")
+    monkeypatch.setattr(smoke, "free_port", server_start)
+    with pytest.raises(SystemExit, match=expected):
+        smoke.main("fixture.exe", nuitka)

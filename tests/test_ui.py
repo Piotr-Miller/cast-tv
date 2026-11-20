@@ -135,7 +135,7 @@ def test_gopro_steps_are_not_duplicated_in_the_ui():
     assert "fallback(tab).steps" in html and "fallbackText(tab)" in html
 
 
-def drive_ui(steps, scripts=()):
+def drive_ui(steps, scripts=(), *, manual_render=False):
     """Run the page's component in node against scripted answers (tests/ui_driver.js); skipped without node.
 
     ``scripts`` are other files under /ui/ the page loads before app.js, such as qrcode.js."""
@@ -150,7 +150,7 @@ def drive_ui(steps, scripts=()):
         pytest.skip("node is not installed")
     driver = os.path.join(os.path.dirname(__file__), "ui_driver.js")
     done = subprocess.run([node, driver, os.path.join(UI_DIR, "app.js")] + [os.path.join(UI_DIR, s) for s in scripts],
-                          input=json.dumps({"steps": steps}),
+                          input=json.dumps({"steps": steps, "manualRender": manual_render}),
                           capture_output=True, text=True, encoding="utf-8", timeout=30)
     assert done.returncode == 0, done.stderr
     return json.loads(done.stdout)
@@ -396,3 +396,121 @@ def test_menu_action_keeps_its_message_across_polls():
     assert label == "Remove from menu"                       # the answer counts before the next poll
     assert note == "Added: find cast-tv in the applications menu."
     assert out["requests"].count("POST /api/shortcut") == 2
+
+
+# ------------------------------------------------------------- the Ready mark (s16-faster-start)
+
+def _ready_status(**extra):
+    s = {"tv": None, "tvs": [], "interfaces": [], "cast": None, "show": None, "sources": {}, "session": [],
+         "errors": 0, "errors_seq": 0, "settings": {"interval": 8}, "host": True}
+    s.update(extra)
+    return s
+
+
+def _ready_posts(out):
+    return out["requests"].count("POST /api/ready")
+
+
+def test_page_runs_init_once():
+    """Alpine calls a component's init() by itself; an x-init on the same element would start it twice."""
+    html = _ui_text("index.html")
+    assert '<body x-data="castTv()" x-cloak>' in html and 'x-init="init()"' not in html
+
+
+def test_ready_mark_follows_the_first_rendered_status_once():
+    out = drive_ui([{"status": _ready_status()}, {"call": "init"}, {"wait": True},
+                    {"call": "refresh"}, {"call": "refresh"}, {"wait": True}])
+    assert _ready_posts(out) == 1
+    first_status = out["requests"].index("GET /api/status")
+    assert out["requests"].index("POST /api/ready") > first_status
+
+
+def test_ready_mark_waits_for_the_render_tick_and_two_distinct_frames():
+    out = drive_ui([{"status": _ready_status()}, {"call": "init"}, {"requests": True},
+                    {"frame": True}, {"requests": True},  # a frame before the render tick cannot mark
+                    {"tick": True}, {"requests": True},
+                    {"frame": True}, {"requests": True},
+                    {"frame": True}, {"requests": True}], manual_render=True)
+    assert [_ready_posts({"requests": r}) for r in out["reads"]] == [0, 0, 0, 0, 1]
+
+
+def test_ready_mark_waits_for_a_delayed_first_status_and_ignores_a_second_init():
+    """Review F1: a second init() while the first status is still on its way finds _refreshing set and
+    returns at once; that must not mark Ready on the default status."""
+    out = drive_ui([{"status": _ready_status()}, {"hold": "/api/status"},
+                    {"start": "init"}, {"start": "init"}, {"wait": True},
+                    {"read": "_readyMarked"},
+                    {"release": "/api/status"}, {"wait": True},
+                    {"read": "_readyMarked"}])
+    before, after = out["reads"]
+    assert before is False and after is True
+    assert _ready_posts(out) == 1
+
+
+def test_ready_mark_skips_a_failed_status_and_marks_after_a_later_success():
+    out = drive_ui([{"status": _ready_status()}, {"fail": "/api/status"}, {"call": "refresh"}, {"wait": True},
+                    {"read": "offline"},
+                    {"fail": "/api/status", "value": False}, {"call": "refresh"}, {"wait": True}])
+    assert out["reads"] == [True]
+    assert _ready_posts(out) == 1
+    assert out["requests"].index("POST /api/ready") > out["requests"].index("GET /api/status", 1)
+
+
+def test_ready_mark_does_not_wait_for_the_errors_fetch():
+    """The status says there are errors, so refresh() awaits /api/errors next; Ready goes out meanwhile."""
+    out = drive_ui([{"status": _ready_status(errors=1, errors_seq=1)}, {"hold": "/api/errors"},
+                    {"start": "refresh"}, {"wait": True},
+                    {"read": "_readyMarked"}])
+    assert out["reads"] == [True]
+    assert "GET /api/errors" in out["requests"] and _ready_posts(out) == 1
+
+
+def test_ready_controls_work_during_initial_errors_fetch():
+    sources = {"gopro": {"state": "disconnected", "detail": {"stored": True}},
+               "onedrive": {"state": "connected", "detail": {}}}
+    out = drive_ui([{"status": _ready_status(sources=sources, errors_seq=1)},
+                    {"answer": {"path": "/api/sources/gopro/connect", "body": {}}},
+                    {"answer": {"path": "/api/sources/onedrive/list", "body": {"items": [{"id": "one"}]}}},
+                    {"hold": "/api/errors"}, {"start": "init"}, {"wait": True},
+                    {"requests": True}, {"set": {"tab": "onedrive"}}, {"wait": True},
+                    {"read": "items", "args": ["onedrive"]}])
+    before_click, items = out["reads"]
+    assert "POST /api/ready" in before_click and "GET /api/errors" in before_click
+    assert before_click.count("POST /api/sources/gopro/connect") == 1
+    assert items == [{"id": "one"}]
+
+
+def test_failed_initial_status_retries_initial_source_setup_once():
+    sources = {"gopro": {"state": "disconnected", "detail": {"stored": True}}}
+    out = drive_ui([{"status": _ready_status(sources=sources)}, {"fail": "/api/status"},
+                    {"call": "init"}, {"wait": True}, {"requests": True},
+                    {"fail": "/api/status", "value": False},
+                    {"answer": {"path": "/api/sources/gopro/connect", "body": {}}},
+                    {"call": "refresh"}, {"call": "refresh"}, {"wait": True}])
+    assert "POST /api/ready" not in out["reads"][0]
+    assert out["requests"].count("POST /api/sources/gopro/connect") == 1
+    assert _ready_posts(out) == 1
+
+
+def test_held_status_keeps_the_answer_from_request_time():
+    out = drive_ui([{"status": _ready_status()}, {"hold": "/api/status"},
+                    {"start": "refresh"}, {"status": _ready_status(host=False)},
+                    {"release": "/api/status"}, {"wait": True}, {"read": "status"}])
+    assert out["reads"][0]["host"] is True
+    assert _ready_posts(out) == 1
+
+
+def test_driver_reports_a_started_async_failure_before_exiting(tmp_path, monkeypatch):
+    import pytest
+    from castlib import server
+    (tmp_path / "app.js").write_text(
+        "function castTv() { return { async fail() { throw new Error('started task failed'); } }; }",
+        encoding="utf-8")
+    monkeypatch.setattr(server, "UI_DIR", str(tmp_path))
+    with pytest.raises(AssertionError, match="started task failed"):
+        drive_ui([{"start": "fail"}])
+
+
+def test_phone_page_never_marks_ready():
+    out = drive_ui([{"status": _ready_status(host=False)}, {"call": "refresh"}, {"call": "refresh"}, {"wait": True}])
+    assert _ready_posts(out) == 0

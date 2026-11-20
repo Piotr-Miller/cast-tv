@@ -29,7 +29,7 @@ THUMB_LOOSE = ("", "application/octet-stream", "binary/octet-stream")   # CDNs t
 SHOW_CONTROLS = ("pause", "resume", "next", "prev", "stop")
 _SOURCE = re.compile(r"^/api/sources/([A-Za-z0-9_-]+)(?:/(status|connect|disconnect|list|thumb|pick|link))?(?:/(.+))?$")
 SOURCE_EXTRAS = ("pick", "link")   # POST steps a source may offer beyond the contract (Google Photos does)
-HOST_ONLY = ("/api/window", "/api/quit", "/api/shortcut")   # loopback only: a second launch, Quit, the menu entry
+HOST_ONLY = ("/api/window", "/api/quit", "/api/shortcut", "/api/ready")   # loopback only: a second launch, Quit, the menu entry, the Ready mark
 
 
 class BadRequest(Exception):
@@ -110,7 +110,8 @@ def _route(app, handler, method: str, path: str, params: dict) -> None:
             handler._drain()
             status = dict(app.status(), host=handler.from_loopback())
             if status["host"]:                   # local smoke tooling; no process metadata on the LAN
-                status["instance"] = {"id": app.server.instance_id, "pid": os.getpid(), "parent_pid": os.getppid()}
+                status["instance"] = {"id": app.server.instance_id, "pid": os.getpid(), "parent_pid": os.getppid(),
+                                      "ui_ready_at": app.ui_ready_at, "shown_at": app.shown_at}
             handler._json(200, status)
         return
     if path in HOST_ONLY:
@@ -123,6 +124,9 @@ def _route(app, handler, method: str, path: str, params: dict) -> None:
                 handler._json(200, shortcut.install() if action == "install" else shortcut.remove())
             elif path == "/api/window":
                 handler._json(200, {"window": window.show()})
+            elif path == "/api/ready":
+                app.mark_ui_ready()
+                handler._json(200, {"ok": True})
             else:
                 if "instance" in body and body["instance"] != app.server.instance_id:
                     handler._json_error(409, "instance_changed", "This is a different cast-tv instance.")

@@ -15,13 +15,14 @@ import json
 import os
 import signal
 import sys
+import threading
 import traceback
 import urllib.parse
 import urllib.request
 import webbrowser
 
 import castlib
-from castlib import net, platform, window, window_probe
+from castlib import bundle, net, platform, window, window_probe
 from castlib.auth import browser, loopback
 from castlib.app import ENDS_HINT, AlreadyRunning, App, end_on_sigterm, main_wait
 from castlib.diagnostics import check_codecs
@@ -340,7 +341,7 @@ def _in_window(app):
             platform.console_close_ends(window.destroy)
             session = platform.end_on_session_end(session_end)
             result = window.run(app, "http://127.0.0.1:%d/ui/" % app.server.port,   # not localhost: it may be ::1 first
-                                on_shown=lambda: print("  %s" % WINDOW_ENDS, flush=True))
+                                on_shown=_on_shown)
         finally:
             if session is not None:
                 session.release()
@@ -360,6 +361,33 @@ def _in_window(app):
     return result
 
 
+def _on_shown():
+    print("  %s" % WINDOW_ENDS, flush=True)
+    prune_old_caches()
+
+
+def prune_old_caches(kind_=None, cache_dir=None, thread=threading.Thread):
+    """A Nuitka release removes its old build folders, in the background so it never delays the UI.
+
+    Returns the started thread, or None when this is not a Nuitka release (nothing to prune).
+    """
+    kind_ = bundle.kind() if kind_ is None else kind_
+    if kind_ != bundle.NUITKA:
+        return None
+    cache_dir = cache_dir or bundle.cache_dir(kind_)
+    if not cache_dir:
+        return None
+
+    def prune():
+        try:
+            bundle.prune_caches(cache_dir)
+        except Exception:
+            pass                                 # disk housekeeping must never end cast-tv
+    worker = thread(target=prune, name="cast-tv-prune", daemon=True)
+    worker.start()
+    return worker
+
+
 def _bring_forward(port):
     """Ask the cast-tv already on ``port`` to bring its window to the front; False when it has none."""
     req = urllib.request.Request("http://127.0.0.1:%d/api/window" % port, data=b"{}", method="POST",
@@ -372,21 +400,23 @@ def _bring_forward(port):
 
 
 def version_text() -> str:
-    """``cast-tv <version>``, the Google Photos client's origin, the GoPro window's browser, the cast-tv window's engine.
+    """``cast-tv <version>``, the Google Photos client's origin, the GoPro window's browser, the cast-tv window's engine,
+    and where the release keeps its unpacked files.
 
-    Four lines, so a support question is answered from one command. Nothing
+    Five lines, so a support question is answered from one command. Nothing
     is launched: the third line is the first candidate ``browser.candidates()``
     would try, or ``CAST_TV_BROWSER`` when set (with ``(not found)`` when the
     file is missing), or ``none found (token paste only)``; the fourth is
-    ``window.describe()``, which loads the backend but opens no window.
+    ``window.describe()``, which loads the backend but opens no window; the
+    fifth is ``Cache: <folder>``, a Nuitka release's build folder, or ``Cache: none``.
     """
     source = loopback.client_source()
     where = {"built-in": "built in", None: "none"}.get(source, "from " + str(source))
     gopro_window = browser.describe()
     if gopro_window == "none found":
         gopro_window += " (token paste only)"
-    return "cast-tv %s\nGoogle Photos client: %s\nGoPro window: %s\n%s" % (
-        castlib.__version__, where, gopro_window, window.describe())
+    return "cast-tv %s\nGoogle Photos client: %s\nGoPro window: %s\n%s\nCache: %s" % (
+        castlib.__version__, where, gopro_window, window.describe(), bundle.cache_dir() or "none")
 
 
 def window_check() -> int:
@@ -454,7 +484,8 @@ def main_tv(argv=None):
     ap.add_argument("--version", action="store_true",
                     help="print the version, where the Google Photos client comes from, "
                          "which browser would open the gopro.com window, "
-                         "and which engine the cast-tv window would use")
+                         "which engine the cast-tv window would use, "
+                         "and the folder a release unpacks into")
     ap.add_argument("--self-check", action="store_true", help=argparse.SUPPRESS)   # the release smoke test
     ap.add_argument("--window-check", action="store_true", help=argparse.SUPPRESS)  # the release smoke test
     args = ap.parse_args(argv)

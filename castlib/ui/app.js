@@ -103,17 +103,21 @@ function castTv() {
     _retryAt: 0,
     _errorsSeq: 0,           // errors_seq of the list last fetched successfully
     _verified: {},           // sources whose stored token this page already asked to verify
+    _readyMarked: false,     // the Ready mark went out (s16): once per page, after the first status is on screen
+    _initialized: false,
+    _initialTabEntered: false,
 
     async init() {
-      await this.refresh();
+      if (this._initialized) return;
+      this._initialized = true;
       this.$watch('tab', t => this.enterTab(t));
-      this.enterTab(this.tab);
       this._timer = setInterval(() => {
         if (document.visibilityState === 'hidden') return;
         if (this.offline && Date.now() < this._retryAt) return;   // slower while the server is away
         this.refresh();
       }, POLL_MS);
       document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') this.refresh(); });
+      await this.refresh();
     },
 
     async refresh() {
@@ -126,16 +130,34 @@ function castTv() {
         this.status = s;
         this.offline = false;
         if (s.settings && typeof s.settings.interval === 'number') this.interval = s.settings.interval;
+        this.watchPicks(s);
+        if (this._initialized && !this._initialTabEntered) {
+          this._initialTabEntered = true;
+          this.enterTab(this.tab);
+        }
+        this.ensureList(this.tab);
+        this.markReady(s);
         // errors_seq grows past the ring's size; a failed list fetch leaves _errorsSeq behind, so it is retried
         if (this.panel || (s.errors_seq || 0) !== this._errorsSeq) await this.loadErrors();
-        this.watchPicks(s);
-        this.ensureList(this.tab);
       } catch (e) {
         this.offline = true;
         this._retryAt = Date.now() + OFFLINE_POLL_MS;
       } finally {
         this._refreshing = false;
       }
+    },
+
+    // The Ready mark for packaging/startup_time.py: the first status that arrived is assigned; once Alpine
+    // has rendered it ($nextTick) and two frames have been painted, the page tells the server, once.
+    // A failed refresh never gets here, so a later success marks instead. Only the computer's own page
+    // posts (status.host); the post is not awaited, so the errors fetch after it does not delay it.
+    markReady(s) {
+      if (this._readyMarked || !s || !s.host) return;
+      this._readyMarked = true;
+      const frame = typeof requestAnimationFrame === 'function' ? requestAnimationFrame : (cb => setTimeout(cb, 16));
+      const post = () => { api('POST', '/api/ready').catch(() => {}); };
+      const after = typeof this.$nextTick === 'function' ? (cb => this.$nextTick(cb)) : (cb => setTimeout(cb, 0));
+      after(() => frame(() => frame(post)));
     },
 
     async loadErrors() {

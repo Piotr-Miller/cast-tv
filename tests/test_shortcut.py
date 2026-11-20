@@ -34,6 +34,35 @@ def test_target_per_install_kind(tmp_path):
     assert bare.target() == Command(("/usr/bin/python3", "-m", "castlib"))
 
 
+def test_nuitka_target_is_the_file_the_user_started(tmp_path, monkeypatch):
+    """Not ``sys.executable``: under Nuitka that is the unpacked copy in the cache folder."""
+    monkeypatch.setattr(shortcut.bundle, "started_file", lambda kind: "/opt/x/cast-tv-linux-x64")
+    entry = MenuEntry(platform="linux", kind="nuitka", root="")
+    assert entry.frozen and entry.target() == Command(("/opt/x/cast-tv-linux-x64",))
+    assert MenuEntry(platform="linux", kind="nuitka", executable="/given", root="").target() == Command(("/given",))
+
+
+def test_a_release_whose_file_cannot_be_found_asks_for_a_start_from_it(tmp_path, monkeypatch):
+    monkeypatch.setattr(shortcut.bundle, "started_file", lambda kind: None)
+    entry = MenuEntry(platform="linux", environ={}, home=str(tmp_path), kind="nuitka", run=lambda *a, **k: None)
+    with pytest.raises(ConfigError) as e:
+        entry.install()
+    assert e.value.code == "menu_no_file" and "start cast-tv from its file once" in e.value.message
+    assert entry.state()["installed"] is False and not os.path.exists(entry.path())
+
+
+def test_nuitka_windows_shortcut_is_the_release_kind(tmp_path, monkeypatch):
+    exe = str(tmp_path / "Down loads" / "cast-tv-windows-x64.exe")
+    monkeypatch.setattr(shortcut.bundle, "started_file", lambda kind: exe)
+    ps = FakePowerShell()
+    entry = windows(tmp_path, ps, frozen=None, executable=None, kind="nuitka")
+    assert entry.install()["current"]
+    _, env = ps.calls[0]
+    assert env["CAST_TV_LNK_TARGET"] == exe and env["CAST_TV_LNK_ICON"] == exe + ",0"
+    assert env["CAST_TV_LNK_STYLE"] == "1"                     # the release hides its console itself
+    assert not os.path.exists(entry.icon_path())
+
+
 def test_pipx_target_is_the_launcher_that_started_it_not_the_first_on_path(tmp_path):
     # row 4.7 (2026-11-05): started from the menu, PATH named the old symlink install, so the entry
     # written by this very launcher read as "points to another file"
@@ -124,6 +153,16 @@ def test_install_and_remove_send_kdes_icon_change_signal(tmp_path):
               "--signal", "org.kde.KIconLoader.iconChanged", "0"]
     assert [cmd for cmd, _ in calls] == [signal, signal]
     assert all(env["LD_LIBRARY_PATH"] == "/opt/lib" and "LD_LIBRARY_PATH_ORIG" not in env for _, env in calls)
+
+
+def test_nuitka_leaves_the_hosts_library_path_for_gdbus(tmp_path):
+    """Nuitka does not set LD_LIBRARY_PATH: whatever is there is the host's own and stays."""
+    calls = []
+    entry = linux(tmp_path, frozen=None, kind="nuitka", run=lambda cmd, **kw: calls.append(kw["env"]),
+                  which=lambda n: "/usr/bin/gdbus" if n == "gdbus" else None)
+    entry.environ.update(LD_LIBRARY_PATH="/opt/lib")
+    entry.install()
+    assert calls and all(env["LD_LIBRARY_PATH"] == "/opt/lib" for env in calls)
 
 
 def test_no_gdbus_or_no_session_bus_is_not_an_error(tmp_path):

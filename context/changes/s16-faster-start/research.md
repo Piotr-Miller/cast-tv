@@ -1,0 +1,503 @@
+# Research: s16-faster-start
+
+2026-11-18. No codebase research was run for this change; the blocking question was external.
+Spikes below.
+
+## Spike: does a Nuitka onefile of cast-tv unpack once into a fixed cache and start clearly faster than the PyInstaller onefile on later launches, with `--window-check` passing? (2026-11-18, 20:40)
+
+Windows 11 Pro on the home laptop (`DESKTOP-35JAM1C`), Python 3.14.5, and a throwaway GitHub
+Actions job on `ubuntu-22.04` with Python 3.12, the release's runner and Python. Both builds were
+made from `main` at a85f59d (cast-tv 0.5.0), with the stub Google client: no secrets.
+
+**What the previous source said.** `context/foundation/roadmap.md:222` — "the S-12 release is a
+PyInstaller onefile that unpacks itself on every start: Linux 260.6 MB, Windows 26.1 MB"; and
+`:226-228` — "whether its onefile can unpack once into a fixed cache directory
+(`--onefile-tempdir-spec`) and reuse it on later starts" (roadmap `updated: 2026-11-18`, S-16
+written 2026-11-05). The measured S-12 starts: `context/archive/2026-10-15-s12-desktop-window/research.md:861`
+— "7.35 s to a usable UI, is under the plan's 15 s threshold, so the Linux release stays one
+file" (Fedora 44, 2026-10-27); `:837` — "The cast-tv window opened on the UI 1.5-2 s after Enter
+(owner's estimate)" (Windows, 2026-10-26). The roadmap's "unpacks itself on every start" is
+confirmed below; the cache claim was an open question, now answered.
+
+**Documentary half.**
+
+- **PyInstaller unpacks on every start and deletes the folder** — "When started it creates a
+  temporary folder in the appropriate temp-folder location for this OS." and "When the bundled
+  code terminates, the bootloader deletes the temporary folder."
+  (https://pyinstaller.org/en/stable/operating-mode.html, read 2026-11-18)
+- **`--runtime-tmpdir` only moves that folder** — "The `_MEIxxxxxx`-folder will be created here."
+  (https://pyinstaller.org/en/stable/usage.html, read 2026-11-18). The page does not describe
+  reusing an earlier extraction.
+- **Nuitka's cached onefile** — from `python -m nuitka --help`, Nuitka 4.3.5, the vendor's own
+  text in the installed version (read 2026-11-18): `--onefile-tempdir-spec` "Defaults to
+  '{TEMP}/onefile_{PID}_{TIME_US}_{RANDOM}', i.e. user temporary directory and being non-static
+  it's removed. Use e.g. a string like '{CACHE_DIR}/{COMPANY}/{PRODUCT}/{VERSION}' which is a good
+  static cache path, this will then not be removed." `--onefile-cache-mode`: "cached will not
+  remove it and see to reuse its contents during next execution for faster startup times."
+- **The web user manual is silent on the cache** — https://nuitka.net/user-documentation/user-manual.html,
+  read 2026-11-18, does not mention `--onefile-tempdir-spec`, `{CACHE_DIR}` or reuse; it says "The
+  startup of **Nuitka** in **Onefile** is fast, but your program might need more time." Current
+  release: "The current release is Nuitka 4.3.5." (https://nuitka.net/doc/download.html, read
+  2026-11-18). PySide6: "# nuitka-project: --enable-plugin=pyside6" (user manual). The manual does
+  not mention QtWebEngine. Compilers: GCC, Clang or Zig on Linux; on Windows "Visual Studio 2022"
+  or higher, or the MinGW64 that Nuitka downloads (user manual, "C Compiler").
+
+**Empirical half.**
+
+Windows (Visual Studio Build Tools 2026, `cl 14.5`; 16.3 min build):
+
+```
+python -m nuitka --onefile --assume-yes-for-downloads --msvc=latest
+  --onefile-tempdir-spec="{CACHE_DIR}/cast-tv/{VERSION}" --product-name=cast-tv
+  --product-version=0.5.0 --file-version=0.5.0 --windows-icon-from-ico=castlib/ui/cast-tv.ico
+  --include-package=castlib --include-package-data=castlib --include-package=pillow_heif
+  --include-package-data=pillow_heif --include-module=webview.platforms.winforms
+  --nofollow-import-to=tkinter --nofollow-import-to=pytest
+  --output-dir=<scratch>\nuitka-out --output-filename=cast-tv-nuitka.exe packaging\entry.py
+pyinstaller --noconfirm packaging\cast-tv.spec        # PyInstaller 6.22.3, same venv
+```
+
+Each file run three times in a row with `--version`, then three times with `--window-check`
+(wall time from `subprocess.run`, the Nuitka cache deleted before its first run):
+
+| Windows | size | `--version` 1 / 2 / 3 | `--window-check` 1 / 2 / 3 |
+| --- | --- | --- | --- |
+| PyInstaller | 26,226,118 B | 4.77 / 3.60 / 3.63 s | 6.74 / 7.17 / 5.91 s |
+| Nuitka, cached | 18,874,880 B | 4.86 / 2.73 / 2.38 s | 4.32 / 4.37 / 5.10 s |
+
+- The cache stayed: `%LOCALAPPDATA%\cast-tv\0.5.0`, 56 files, 81,544,554 bytes (Nuitka's payload
+  "size 81547822 to 18624112", 22.84 % compression). The existing `%LOCALAPPDATA%\cast-tv\Cache`
+  (the GoPro browser cache) was left alone.
+- Every run printed `Window: edgechromium` or `window-check: edgechromium OK`, rc 0. Some window
+  checks of both builds also printed the GoPro 401 traceback and `ConnectionAbortedError [WinError
+  10053]` (this laptop's GoPro session is expired; the page's request outlives the closing window);
+  it is the same noise in both and not caused by Nuitka.
+
+Linux, GitHub Actions run 44379679380 on `ubuntu-22.04` (branch `spike/s16-nuitka`, workflow
+`.github/workflows/spike-nuitka.yml`; Nuitka 4.3.5, PyInstaller 6.22.3; 10 min Nuitka build):
+
+```
+python -m nuitka --onefile --assume-yes-for-downloads \
+  --onefile-tempdir-spec='{CACHE_DIR}/cast-tv/{VERSION}' \
+  --product-name=cast-tv --product-version=0.5.0 --file-version=0.5.0 \
+  --enable-plugin=pyside6 \
+  --include-package=castlib --include-package-data=castlib \
+  --include-package=pillow_heif --include-package-data=pillow_heif \
+  --include-module=webview.platforms.qt --include-module=qtpy \
+  --noinclude-dlls='libgbm.so*' --noinclude-dlls='libstdc++.so*' \
+  --nofollow-import-to=tkinter --nofollow-import-to=pytest --nofollow-import-to=gi \
+  --output-dir=nuitka-out --output-filename=cast-tv-nuitka packaging/entry.py
+```
+
+| Linux (CI runner, xvfb) | size | `--version` 1 / 2 / 3 | `--window-check` 1 / 2 / 3 |
+| --- | --- | --- | --- |
+| PyInstaller | 260,587,936 B | 4.21 / 4.23 / 4.22 s | 8.35 / 4.79 / 4.81 s |
+| Nuitka, cached | 154,765,528 B | 1.82 / 1.56 / 1.57 s | 2.21 / 2.18 / 2.23 s |
+
+- The cache stayed: `~/.cache/cast-tv/0.5.0`, 545,667,616 bytes.
+- Every run printed `Window: qtwebengine` or `window-check: qtwebengine OK`, rc 0; zero
+  `Fontconfig error|warning` lines from the last window check of each build. The pyside6 plugin
+  reported "Including QtWebEngine executable."
+
+**Not yet checked:**
+
+- **Start time on the real machines.** CI runner and this laptop only. Fedora, where the 260 MB
+  unpack hurts most, is not timed; nor is the time to a usable UI as rows 2.6 and 2.7 measure it.
+  On CI the first Nuitka start (cache just deleted) took 1.82 s, so the cold cost there is small;
+  on Windows it was 4.86 s, like PyInstaller's every start.
+- **A stale cache.** Whether a new release with the same `{VERSION}` (or a damaged cache folder)
+  is detected; the help text does not say. Every release would need its own version in the path.
+- **Where `sys.frozen` and `sys._MEIPASS` are read.** Nuitka does not set them the PyInstaller way;
+  `castlib/platform.py:508` (the console detach, row 3.10), `:801`/`:806` (the private Fontconfig
+  rules), `:827` (the CA bundle), `castlib/shortcut.py:165` (the menu entry's target) and
+  `castlib/window.py:79` (the window icon) branch on them. Not exercised by `--version` or
+  `--window-check`.
+- **The menu entry's target.** In a cached onefile the running Python is the unpacked copy in the
+  cache; which path a shortcut must name is untested.
+- **Hiding the console on a Windows double-click** (PyInstaller's `hide_console="hide-early"`);
+  Nuitka has its own console options, not tried.
+- **Fontconfig on a newer distribution.** The CI runner's fonts match the old bundled parser; the
+  45 diagnostics of S-12's F7 appeared only on a newer host, which this run does not have.
+- **Old cache folders.** Each version leaves 81 MB (Windows) or 546 MB (Linux) in the cache, and
+  nothing removes them.
+- **SmartScreen and antivirus** reaction to a Nuitka exe that writes and runs DLLs from
+  `%LOCALAPPDATA%`.
+- **The real smoke test** (`packaging/smoke.py`: HEIC, HTTP, owned Quit) on the Nuitka files.
+
+**What this settles:** yes. With `--onefile-tempdir-spec` a Nuitka onefile keeps its unpacked files
+and later starts reuse them. Both builds pass `--window-check` on the expected engine. On the
+same machines the warm starts were faster than PyInstaller's: `--version` 2.4–2.7 s against
+3.6 s on Windows and 1.6 s against 4.2 s on the Linux runner; `--window-check` 2.2 s against
+4.8 s on Linux. The Linux file was 41 % smaller (154.8 MB against 260.6 MB). The slice stays
+open. `/rune-plan` can now weigh these numbers against the open items above.
+
+## Row 1.7: the Ready mark on Windows 11 (2026-11-18)
+
+The home Windows 11 laptop (`DESKTOP-35JAM1C`). A PyInstaller exe built from a558115 (Phase 1's
+commit; the castlib code is unchanged at 5155ad8) with `pyinstaller --noconfirm packaging\cast-tv.spec`
+in the spike's venv (PyInstaller 6.22.3, Python 3.14.5): 26,225,168 bytes, SHA-256
+`AC4FC324C18FCC1AF1B310DA6E4A5B18B8DF4405A3942884288E3B90168C6AA0`. Claude ran, from the
+checkout's venv at 5155ad8:
+
+```
+python packaging\startup_time.py <exe> --mode warm --runs 5 --out p1-warm.json
+python packaging\startup_time.py <exe> --mode warm --runs 1 --hold 15 --out p1-watched.json
+```
+
+- 5 warm runs, one unmeasured start first: 4.32 / 4.24 / 4.64 / 3.86 / 3.41 s, median 4.24 s.
+- The watched run: "ready after 3.62 s: the window stays open 15 s". The owner watched the screen
+  and accepted ("akceptuję"): at the moment the time printed, the window showed the TV button and
+  the GoPro / OneDrive / Google Photos tabs, and a tab click responded.
+- Found: `--hold` also held the unmeasured priming start (the window stayed open after 4.17 s as
+  well). It does not change any time; the priming start is never measured.
+
+Row 1.7 is accepted at fc780beb1660330a543a6c0bf9fd41036f840f2c (the docs commit over 5155ad8; same code).
+
+## Phase 1 implementation review and fixes (2026-11-19)
+
+Report: `reviews/impl-review-phase-1-0707dac.md`. The owner authorized all recommended fixes;
+the changes remain uncommitted as requested. This section is automated review evidence, not a
+new observation accepting row 1.7.
+
+- A held `/api/errors` reproduced Ready before the tab watcher was installed. The fixed UI
+  installs its handlers first and starts initial source setup after a successful status,
+  independently of errors fetching. The test driver now controls the render tick and distinct
+  frames, exercises watcher callbacks, and reports started asynchronous failures.
+- Deliberately replacing the Ready barrier with an immediate post, a single frame, or two frames
+  without the render tick makes the new regression test fail. The initial-setup regression test
+  also rejects the original committed component. These experiments used temporary source copies.
+- Native Windows probes showed why desktop-session inference was unsafe: ProcessIdToSessionId
+  returned access denied for image-denied processes; a WTS snapshot found protected processes
+  in both session 0 and our desktop session 1. The lister now uses explicit user-SID ownership,
+  and treats unknown ownership as incomplete rather than treating it as an exited process.
+- **Windows limitation observed:** in this unelevated session WTS returned no owner SID for the
+  inaccessible other-account processes. The fixed lister therefore raises IncompleteListing at
+  PID 4. This is an intentional safe refusal, not a successful complete scan. Elevated rights may
+  provide more ownership information, but that outcome has not been observed or accepted here.
+  The future Phase 3 pruner must retain its no-deletion-on-IncompleteListing rule.
+- Failed version probing and failed owned shutdown now reject a measurement. The known `--hold`
+  behavior on priming remains deferred to Phase 4.
+- The first full review run failed three existing test-synchronization hazards. The OneDrive
+  failure also reproduced in a temporary checkout of base a85f59d. The tests now wait for the
+  post-response Quit effect, tolerate App initialization in the CLI predicate, and wait for the
+  account write through its lock before reading the fake credential file on Windows.
+- Row 1.7 was reopened after the acceptance-state script reported its surface stale through
+  `castlib/processes.py`, `castlib/ui/app.js` and `packaging/startup_time.py`. The original human
+  observation above is preserved; only a new human observation at a committed revision can
+  restore acceptance. Packaging PR build/smoke validation is also still required.
+
+## Windows ownership without elevation (2026-11-19)
+
+After the Phase 1 review (F7), `castlib/processes.py` decided ownership by the user SID from
+`WTSEnumerateProcessesW`. On the home Windows 11 laptop, unelevated, that snapshot had no owner for
+176 of 451 processes (PID 0, 4 and the protected and service processes), and those refuse
+`OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION)`. Every listing was therefore incomplete:
+`startup_time.py` refused at PID 4, and Phase 3 would never prune on Windows.
+
+Experiment (Claude, unelevated Python 3.14.5 probe; the exe is the PyInstaller build of a558115,
+SHA-256 `AC4FC324…6AA0`):
+
+- cast-tv started normally (`--no-browser -p 8897`): both processes (bootloader 32188, child 29764)
+  were readable from the probe, WTS owner = our SID.
+- cast-tv started with `Start-Process -Verb RunAs` (the owner approved the UAC prompt) on port
+  8898: both processes (17844, 23244) were readable, WTS owner = our SID; a token check confirmed
+  both elevated while the probe was not.
+- In both runs, no process whose WTS owner is our SID refused the image query.
+
+Owner decision (2026-11-19): a refusal counts as "not ours" unless WTS names our SID, which stays
+incomplete. Other API errors stay incomplete. With this rule the unelevated listing returns
+273 processes.
+
+## Row 1.7 again, after the Phase 1 review fixes (2026-11-19)
+
+Row 1.7 was reopened by the review fixes (99287e6). Same laptop. A PyInstaller exe built from
+a32a0ea (the fixes, the Windows ownership rule 3e67ec8 and the unheld priming start), same venv
+and command as before: 26,226,959 bytes, SHA-256
+`5AD64532F501123EC122C6A670735531262C12F9D7BE01DD5143417DF2E44D26`. Claude ran from an ordinary,
+unelevated PowerShell (no refusal: the ownership rule works without elevation):
+
+```
+python packaging\startup_time.py <exe> --mode warm --runs 5 --out p1b-warm.json
+python packaging\startup_time.py <exe> --mode warm --runs 1 --hold 15 --out p1b-watched.json
+```
+
+- 5 warm runs: 4.28 / 4.00 / 4.08 / 4.82 / 5.10 s, median 4.28 s (2026-11-18: 4.24 s).
+- The watched run: "ready after 4.17 s: the window stays open 15 s"; the priming start was no
+  longer held. The owner watched and accepted ("akceptuję"): the TV button and the GoPro / OneDrive
+  / Google Photos tabs were on screen when the time printed, and a tab click responded.
+Row 1.7 is accepted at 185f2062837a293ab9b02b5dfbd00ed4d1cd21d6 (the docs commit over a32a0ea; same code).
+
+## Phase 5 on Windows 11: rows 5.2, 5.4 and 5.6 (2026-11-20)
+
+The home laptop (Windows 11, the same one as row 1.7). The files are the two Windows artifacts of
+PR #111's release run 44630376210 at 7a7eb32 (Phase 4 review APPROVED), downloaded with
+`gh run download 44630376210 -n <artifact> -D <dir>` into `%USERPROFILE%\Downloads\s16-run-44630376210`:
+
+- Nuitka `cast-tv-windows-x64-nuitka.exe`: 18,300,416 B, SHA-256
+  `7d044dfdffda52e52d3912c2f4f581f909ce47d0a1662366e6a20cdefaeeda99` (the review's value).
+  Its build-info: identity `0.5.0-gh44630376210.1`, Nuitka 4.3.5, Python 3.12.10, pip-freeze hash
+  `4e2a97f748eafcf0b5ca79f300a445f382cd6979859adf52c3ba113ebb6165a6`. Cache: `C:\Users\pmill\AppData\Local\cast-tv\0.5.0-gh44630376210.1`.
+- PyInstaller `cast-tv-windows-x64.exe`: 26,143,942 B, SHA-256
+  `1a622aec330dd4647dff906c6779037552669da871864877f60e985eedd9f8bf`. Cache: none.
+
+At the owner's request, Claude ran the four series one after another from an unelevated Git Bash
+in the checkout, while the owner left the laptop alone; then the comparisons:
+
+```
+.venv/Scripts/python packaging/startup_time.py <nuitka exe> --mode cold --out win-nuitka-cold.json
+.venv/Scripts/python packaging/startup_time.py <nuitka exe> --mode warm --out win-nuitka-warm.json
+.venv/Scripts/python packaging/startup_time.py <pyinstaller exe> --mode cold --out win-pyi-cold.json
+.venv/Scripts/python packaging/startup_time.py <pyinstaller exe> --mode warm --out win-pyi-warm.json
+.venv/Scripts/python packaging/startup_time.py --compare win-nuitka-cold.json win-pyi-cold.json --warm-ratio 0.75
+.venv/Scripts/python packaging/startup_time.py --compare win-nuitka-warm.json win-pyi-warm.json --warm-ratio 0.75
+```
+
+| Windows 11 | runs (s) | median |
+| --- | --- | --- |
+| Nuitka cold | 4.41 / 4.00 / 3.90 / 3.84 / 4.02 | 4.00 s |
+| Nuitka warm | 2.77 / 3.08 / 2.85 / 2.87 / 2.88 | 2.87 s |
+| PyInstaller cold | 4.34 / 4.20 / 4.01 / 3.74 / 4.05 | 4.05 s |
+| PyInstaller warm | 3.83 / 3.95 / 4.14 / 3.78 / 4.20 | 3.95 s |
+
+```
+cold: Nuitka median 4.00 s, PyInstaller median 4.05 s, ratio 0.988 (limit 1.00): PASS
+warm: Nuitka median 2.87 s, PyInstaller median 3.95 s, ratio 0.727 (limit 0.75): PASS
+```
+
+Every run finished; all six commands exited 0. **The Windows bar is met (row 5.6)**, with a small
+margin: warm 0.727 against 0.75, cold practically equal. PyInstaller's warm median was 4.28 s at
+row 1.7 (2026-11-19) and 3.95 s here; a session-to-session spread of that size moves the warm
+ratio by about 0.05.
+
+The watched run (row 5.4), started by Claude at the owner's request while the owner watched:
+
+```
+.venv/Scripts/python packaging/startup_time.py <nuitka exe> --mode warm --runs 1 --hold 30 --out win-nuitka-watched.json
+```
+
+It printed "ready after 2.98 s: the window stays open 30 s". The owner confirmed ("Potwierdzam",
+2026-11-20) what the row asks: the window showed the TV button and the source tabs when the time
+printed, and a tab click responded. The owner also confirmed rows 5.2 and 5.6 from the results
+above.
+
+The result files, without the local `binary` path:
+
+```
+win-nuitka-cold.json:
+{"size": 18300416, "sha256": "7d044dfdffda52e52d3912c2f4f581f909ce47d0a1662366e6a20cdefaeeda99", "version": ["cast-tv 0.5.0", "Google Photos client: built in", "GoPro window: C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe", "Window: edgechromium", "Cache: C:\\Users\\pmill\\AppData\\Local\\cast-tv\\0.5.0-gh44630376210.1"], "system": "Windows 11", "mode": "cold", "runs": [4.406747102737427, 4.001554012298584, 3.8981690406799316, 3.840561866760254, 4.01525092124939], "median": 4.001554012298584}
+win-nuitka-warm.json:
+{"size": 18300416, "sha256": "7d044dfdffda52e52d3912c2f4f581f909ce47d0a1662366e6a20cdefaeeda99", "version": ["cast-tv 0.5.0", "Google Photos client: built in", "GoPro window: C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe", "Window: edgechromium", "Cache: C:\\Users\\pmill\\AppData\\Local\\cast-tv\\0.5.0-gh44630376210.1"], "system": "Windows 11", "mode": "warm", "runs": [2.7672276496887207, 3.0761852264404297, 2.851867198944092, 2.871990203857422, 2.875440835952759], "median": 2.871990203857422}
+win-pyi-cold.json:
+{"size": 26143942, "sha256": "1a622aec330dd4647dff906c6779037552669da871864877f60e985eedd9f8bf", "version": ["cast-tv 0.5.0", "Google Photos client: built in", "GoPro window: C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe", "Window: edgechromium", "Cache: none"], "system": "Windows 11", "mode": "cold", "runs": [4.341491222381592, 4.200770378112793, 4.007715702056885, 3.7367427349090576, 4.0519304275512695], "median": 4.0519304275512695}
+win-pyi-warm.json:
+{"size": 26143942, "sha256": "1a622aec330dd4647dff906c6779037552669da871864877f60e985eedd9f8bf", "version": ["cast-tv 0.5.0", "Google Photos client: built in", "GoPro window: C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe", "Window: edgechromium", "Cache: none"], "system": "Windows 11", "mode": "warm", "runs": [3.8308188915252686, 3.9477617740631104, 4.13898491859436, 3.7803218364715576, 4.197201251983643], "median": 3.9477617740631104}
+win-nuitka-watched.json:
+{"size": 18300416, "sha256": "7d044dfdffda52e52d3912c2f4f581f909ce47d0a1662366e6a20cdefaeeda99", "version": ["cast-tv 0.5.0", "Google Photos client: built in", "GoPro window: C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe", "Window: edgechromium", "Cache: C:\\Users\\pmill\\AppData\\Local\\cast-tv\\0.5.0-gh44630376210.1"], "system": "Windows 11", "mode": "warm", "runs": [2.97684907913208], "median": 2.97684907913208}
+```
+
+## Linux: our undumpable processes (2026-11-20)
+
+The Fedora desktop (Fedora 45, KDE Plasma, systemd 262). The first Phase 5 command on the Linux
+files of run 44630376210 refused before any start, and so did the other three:
+
+```
+refused: the process list is incomplete (process 3535 is ours but its executable cannot be read); close cast-tv and try again
+```
+
+Process 3535 is `systemd --user` (UID 1000, `CapEff 0000000800000000`). Linux refuses
+`readlink /proc/<pid>/exe` for a process that is not dumpable, even to its owner. Seven of ours
+refused: `systemd --user`, `(sd-pam)`, `kwin_wayland` (`CapEff 0000000000800000`),
+`polkit-kde-authentication-agent-1`, two `ssh-agent` (capabilities zero; they make themselves
+undumpable) and a zombie `zypak-sandbox` of the Bitwarden Flatpak. So every Linux listing on this
+desktop was incomplete: `startup_time.py` could not measure, and Phase 3's pruning would never
+have removed anything.
+
+Claude started the Nuitka file of run 44630376210 for 8 s and listed the processes. All six of
+cast-tv's processes had a readable `exe`: the onefile starter in `~/Downloads/...`, and
+`cast-tv-linux-x64-nuitka.bin` and four `QtWebEngineProcess` in
+`~/.cache/cast-tv/0.5.0-gh44630376210.1/`. Only the seven listed above refused.
+
+The owner decided (2026-11-20, "tak") to use the same rule as on Windows: a refused `exe` counts as
+not ours. cast-tv never makes itself undumpable. Any other read error is still incomplete. After
+the change, `running_images()` on this desktop listed 120 processes.
+
+
+## Phase 5 on Fedora: rows 5.1 and 5.5, the Linux bar missed (2026-11-20)
+
+The Fedora desktop (Fedora 45, kernel 7.3.4, KDE Plasma on Wayland, Intel Core i7-8665U, 8
+threads). The files are the two Linux artifacts of PR #111's release run 44812632302 at eed2a5b
+(the fix above; build-info `commit` c35ddc9 is the PR's merge ref), downloaded with
+`gh run download 44812632302 -n <artifact> -D ~/Downloads/s16-run-44812632302/<nuitka|pyi>`:
+
+- Nuitka `cast-tv-linux-x64-nuitka`: 154,884,312 B, SHA-256
+  `40e2900a4e884626da072ef4b70aee6d9dd6dda17e8d6e3c066369ed5776a022`. Its build-info: identity
+  `0.5.0-gh44812632302.1`, Nuitka 4.3.5, Python 3.12.16, pip-freeze hash
+  `a3a163f14465d216f84e03173c6e521bf809e9ec3d62f78656e95df4a297fe1d`. Cache:
+  `~/.cache/cast-tv/0.5.0-gh44812632302.1`.
+- PyInstaller `cast-tv-linux-x64`: 260,616,920 B, SHA-256
+  `caa9d28056dc92a677b6650bb6c07a141c7c093f1f33cb3d97c93dd46d62a3c5`. Cache: none.
+
+Claude ran the four series one after another from a terminal in the checkout while the owner left
+the desktop alone, then the comparisons:
+
+```
+.venv/bin/python packaging/startup_time.py <nuitka file> --mode cold --out linux-nuitka-cold.json
+.venv/bin/python packaging/startup_time.py <nuitka file> --mode warm --out linux-nuitka-warm.json
+.venv/bin/python packaging/startup_time.py <pyinstaller file> --mode cold --out linux-pyi-cold.json
+.venv/bin/python packaging/startup_time.py <pyinstaller file> --mode warm --out linux-pyi-warm.json
+.venv/bin/python packaging/startup_time.py --compare linux-nuitka-cold.json linux-pyi-cold.json --warm-ratio 0.5
+.venv/bin/python packaging/startup_time.py --compare linux-nuitka-warm.json linux-pyi-warm.json --warm-ratio 0.5
+```
+
+| Fedora | runs (s) | median |
+| --- | --- | --- |
+| Nuitka cold | 2.05 / 2.03 / 2.10 / 2.00 / 2.07 | 2.05 s |
+| Nuitka warm | 2.06 / 2.16 / 2.17 / 2.10 / 2.19 | 2.16 s |
+| PyInstaller cold | 3.24 / 3.13 / 2.86 / 3.46 / 3.27 | 3.24 s |
+| PyInstaller warm | 3.05 / 3.23 / 3.27 / 3.05 / 3.04 | 3.05 s |
+
+```
+cold: Nuitka median 2.05 s, PyInstaller median 3.24 s, ratio 0.633 (limit 1.00): PASS
+warm: Nuitka median 2.16 s, PyInstaller median 3.05 s, ratio 0.706 (limit 0.50): FAIL
+```
+
+Every run finished; the four series and the cold comparison exited 0, the warm comparison 1.
+**The Linux bar is missed (row 5.5):** Nuitka starts about 0.9 s (30 %) sooner warm and 1.2 s
+sooner cold, but the bar asks for half. Nuitka's warm runs are no faster than its cold ones: the
+cached unpack saves nothing measurable here, and about 2 s goes to starting Python, Qt WebEngine
+and the UI. The plan says to stop after Phase 5 and ask the owner; Phases 6 and 7 wait for that
+decision, and the watched run (row 5.3) was not started.
+
+The result files, without the local `binary` path:
+
+```
+linux-nuitka-cold.json:
+{"size": 154884312, "sha256": "40e2900a4e884626da072ef4b70aee6d9dd6dda17e8d6e3c066369ed5776a022", "version": ["cast-tv 0.5.0", "Google Photos client: from /home/piotrmiller/.config/cast-tv/google-client.json", "GoPro window: /usr/bin/google-chrome", "Window: qtwebengine", "Cache: /home/piotrmiller/.cache/cast-tv/0.5.0-gh44812632302.1"], "system": "Linux 7.3.4-300.fc45.x86_64", "mode": "cold", "runs": [2.0508198738098145, 2.029933452606201, 2.1045479774475098, 2.001136541366577, 2.069551467895508], "median": 2.0508198738098145}
+linux-nuitka-warm.json:
+{"size": 154884312, "sha256": "40e2900a4e884626da072ef4b70aee6d9dd6dda17e8d6e3c066369ed5776a022", "version": ["cast-tv 0.5.0", "Google Photos client: from /home/piotrmiller/.config/cast-tv/google-client.json", "GoPro window: /usr/bin/google-chrome", "Window: qtwebengine", "Cache: /home/piotrmiller/.cache/cast-tv/0.5.0-gh44812632302.1"], "system": "Linux 7.3.4-300.fc45.x86_64", "mode": "warm", "runs": [2.058230400085449, 2.1553876399993896, 2.169327735900879, 2.098296880722046, 2.193394899368286], "median": 2.1553876399993896}
+linux-pyi-cold.json:
+{"size": 260616920, "sha256": "caa9d28056dc92a677b6650bb6c07a141c7c093f1f33cb3d97c93dd46d62a3c5", "version": ["cast-tv 0.5.0", "Google Photos client: from /home/piotrmiller/.config/cast-tv/google-client.json", "GoPro window: /usr/bin/google-chrome", "Window: qtwebengine", "Cache: none"], "system": "Linux 7.3.4-300.fc45.x86_64", "mode": "cold", "runs": [3.2409439086914062, 3.1278693675994873, 2.863612651824951, 3.463536500930786, 3.2686100006103516], "median": 3.2409439086914062}
+linux-pyi-warm.json:
+{"size": 260616920, "sha256": "caa9d28056dc92a677b6650bb6c07a141c7c093f1f33cb3d97c93dd46d62a3c5", "version": ["cast-tv 0.5.0", "Google Photos client: from /home/piotrmiller/.config/cast-tv/google-client.json", "GoPro window: /usr/bin/google-chrome", "Window: qtwebengine", "Cache: none"], "system": "Linux 7.3.4-300.fc45.x86_64", "mode": "warm", "runs": [3.052525758743286, 3.226649761199951, 3.268406629562378, 3.04766583442688, 3.0388355255126953], "median": 3.052525758743286}
+```
+
+**The owner's decision after the miss** (2026-11-20, option "c", bar "0,75"): the Linux warm bar is
+75 % of PyInstaller's, the same as Windows. Against it the same two result files pass:
+
+```
+.venv/bin/python packaging/startup_time.py --compare linux-nuitka-warm.json linux-pyi-warm.json --warm-ratio 0.75
+warm: Nuitka median 2.16 s, PyInstaller median 3.05 s, ratio 0.706 (limit 0.75): PASS
+```
+
+
+### The watched run on Fedora (row 5.3) and the owner's confirmation (2026-11-20)
+
+After a reboot of the Fedora desktop, the cache folder `0.5.0-gh44812632302.1` was still there, so
+Claude started one warm run of the same Nuitka file while the owner watched:
+
+```
+.venv/bin/python packaging/startup_time.py ~/Downloads/s16-run-44812632302/nuitka/cast-tv-linux-x64-nuitka --mode warm --runs 1 --hold 30 --out linux-nuitka-watched.json
+ready after 1.85 s: the window stays open 30 s
+```
+
+It exited 0. The owner confirmed ("potwierdzam", 2026-11-20) what the row asks: when the time
+printed, the window showed the TV button and the source tabs, and a click on a source tab
+responded. The owner also confirmed rows 5.1 and 5.5 from the results and the decision above.
+
+```
+linux-nuitka-watched.json:
+{"size": 154884312, "sha256": "40e2900a4e884626da072ef4b70aee6d9dd6dda17e8d6e3c066369ed5776a022", "version": ["cast-tv 0.5.0", "Google Photos client: from /home/piotrmiller/.config/cast-tv/google-client.json", "GoPro window: /usr/bin/google-chrome", "Window: qtwebengine", "Cache: /home/piotrmiller/.cache/cast-tv/0.5.0-gh44812632302.1"], "system": "Linux 7.3.4-300.fc45.x86_64", "mode": "warm", "runs": [1.8493890762329102], "median": 1.8493890762329102}
+```
+
+## Phase 6: the published files against the measured ones (row 6.4, 2026-11-20)
+
+Phase 6 (fe88a52) builds, smoke-tests and would publish only the Nuitka files, under the release
+names. PR #111's release run 44821655658 at fe88a52 was green (both builds and smoke tests; test
+run 44821655716 green). Its files, downloaded with `gh run download 44821655658 -n <artifact>`:
+
+- `cast-tv-linux-x64`: 154,876,120 B, SHA-256
+  `589725070ad5bbc9ae63d0469519b1f79b27e8324d7d6e8a468a2224617921de`.
+- `cast-tv-windows-x64.exe`: 18,296,320 B, SHA-256
+  `4718832ca88d7973886e06884992ed5936593e0a11cfad86860d8da90df7514e`; build-info: Nuitka 4.3.5,
+  Python 3.12.10, pip-freeze hash `c2e1b45611244254619800be980f3777d03b9bcd620b1259977f7dbb1dab6d1f`.
+
+**Linux: equal apart from names.** Its build-info against the file measured on Fedora (run
+44812632302 at eed2a5b) differs only in the identity and cache folder (`0.5.0-gh44821655658.1`),
+the commit (the PR's merge ref, d0c7842 against c35ddc9) and two options that carry those names:
+`--onefile-tempdir-spec=…/0.5.0-gh44821655658.1` and `--output-filename=cast-tv-linux-x64` (was
+`-nuitka`). The Nuitka version (4.3.5), the Python version (3.12.16), the pip-freeze hash
+(`a3a163f1…`) and every other option are equal. The code:
+
+```
+git diff --stat eed2a5b..fe88a52 -- castlib packaging/build_nuitka.py packaging/entry.py packaging/fonts.conf pyproject.toml
+ packaging/build_nuitka.py | 8 ++++----
+```
+
+Those four lines are the docstring and the `--out` help text (the example name and the deleted
+spec); `main` has not moved since eed2a5b. So Fedora's rows 5.1, 5.3 and 5.5 hold for the
+published Linux file and are re-confirmed at this revision, not measured again.
+
+**Windows: measured again.** The Windows rows 5.2 and 5.6 were measured on run 44630376210 at
+7a7eb32, before eed2a5b changed `castlib/processes.py`, so they are measured again in the one
+Windows visit (owner decision 2026-11-20). Phase 6 builds no PyInstaller file any more, so the pair
+is run 44812632302's two Windows files at eed2a5b: its Nuitka exe is to this run's
+`cast-tv-windows-x64.exe` what the Linux file above is to this one (the same diff), and the
+build-info comparison is written down with the measurement.
+
+
+The owner re-confirmed rows 5.1 and 5.5 for the published Linux file from this equivalence
+("potwierdzam 5.1 5.5", 2026-11-20); 5.3 stayed current.
+
+## Phase 7 on Fedora (2026-11-20)
+
+The Fedora desktop (Fedora 45, KDE Plasma 6.8 on Wayland). The file is Phase 6's
+`cast-tv-linux-x64` of run 44821655658 (154,876,120 B, SHA-256 `589725070ad5…`), in
+`~/Downloads/s16-run-44821655658/linux`. Claude drove the window through Qt WebEngine's DevTools
+(`QTWEBENGINE_REMOTE_DEBUGGING`) and KWin scripts, read the TV's state over UPnP
+(`GetTransportInfo` at 192.168.50.142:9197) and ended instances with the ownership-checked
+`POST /api/quit`; the owner watched the TV and the menu. The Windows parts of the "Both" rows wait
+for the one Windows visit.
+
+- **7.11, an interrupted first start.** The build folder deleted; the file started and killed with
+  `kill -9` after 1 s, leaving a partial folder of 324 MiB and no process. Started again: the Ready
+  mark (`ui_ready_at`, `shown_at`) after about 3 s, the window normal.
+- **7.13, the cache size.** `du`: 522 MiB, 545,895,086 B apparent, for
+  `~/.cache/cast-tv/0.5.0-gh44821655658.1`; README says "about 550 MB on Linux".
+- **7.5, a second start.** The window minimized by a KWin script; the file started again printed
+  `cast-tv is already running: http://127.0.0.1:8895/ui/` and `Its window is in front.`, exited 0
+  after 1.7 s, and a Spectacle capture of the active window showed cast-tv in front.
+- **7.10, retention, on the PR's three builds** (owner decision 2026-11-20): folders
+  `0.5.0-gh44630376210.1`, `0.5.0-gh44812632302.1`, `0.5.0-gh44821655658.1`, each started once.
+  1. The oldest's `.cast-tv-started` set 8 days back (`touch -d '8 days ago'`), the newest started:
+     the oldest folder was gone after about 4 s; the other two remained.
+  2. The oldest build started again (its folder unpacked anew) and left running, its marker set
+     8 days back, then the newest started on `-p 8896`: its start marker was rewritten at the
+     window's show (22:57:59, so the pruning ran), and after 30 s all three folders remained.
+- **7.8, HEIC, lists, Fontconfig.** `shelf-christmas-decoration.heic` from OneDrive → Pictures
+  cast; the TV reported `PLAYING`, the UI "on screen"; the owner: "stoi prosto" (upright). The
+  OneDrive tab listed its folders (signed in), the Google Photos tab connected ("nothing picked
+  yet", the picker offered). The log of that run has no `Fontconfig` line.
+- **7.9, the QR code.** The window's **QR code** decoded (OpenCV) to `http://192.168.50.198:8895/ui/`;
+  headless Chrome with a phone user agent opened it from the LAN address: the UI with the TV
+  button, the source tabs and the now-playing bar, no phone panel, no **Add to menu**, no Quit. Not
+  scanned with a real phone.
+- **7.4, stopping the TV.** `Przejazd - SuperCars.mp4` from OneDrive → Dokumenty → Videos playing
+  (`PLAYING`, 0:00:17 of 0:02:59):
+  - the window closed by a KWin `closeWindow()` (as X): the process ended within 1 s, the TV
+    `STOPPED`, the log `Stopped.`;
+  - started again, the video playing, `kill <pid>` of the started file: the process ended within
+    1 s, the TV `STOPPED`, no cast-tv or QtWebEngine process left, so no window.
+- **7.7, the menu.** **Add to menu**: "Added: find cast-tv in the applications menu.";
+  `cast-tv.desktop` with `Exec=` the started file (not the cache folder), `Icon=cast-tv`,
+  `Terminal=false`. The file moved to `moved/` and started there: **Update menu entry (points to
+  another file)**, which after a click became **Remove from menu**, with `Exec=` the new path.
+  The owner, Meta key, `cast`: the cast-tv tile with its icon, and Enter opened the window
+  ("pokazała się ikona cast-tv i później otworzyła się apka"); that process had no terminal (no
+  tty, parent systemd). **Remove from menu**: "Removed from the menu.", the file gone.
+
+**A finding outside S-16:** while the video played, the now-playing bar still showed the
+**HEIC → JPEG** badge of the photo cast before it. S-16 does not change that part of the UI; it is
+left for a change of its own.
+
+The owner accepted rows 5.1, 7.7 and 7.8 from these observations ("potwierdzam 5.1 7.7 7.8",
+2026-11-20).

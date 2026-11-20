@@ -437,12 +437,40 @@ def test_double_click_into_windows_terminal_starts_again_without_a_console():
         assert env["PATH"] == "/usr/bin"
 
 
+def test_nuitka_double_click_starts_the_file_the_user_started_as_a_new_instance(monkeypatch):
+    """Nuitka: not the unpacked copy in the cache, and without the onefile variables of this run's bootstrap."""
+    exe = "C:\\Dl\\cast-tv-windows-x64.exe"
+    environ = {"PATH": "/usr/bin", "NUITKA_ONEFILE_PARENT": "4242", "NUITKA_ONEFILE_DIRECTORY": "C:\\Dl",
+               "NUITKA_ORIGINAL_ARGV0": exe}
+    monkeypatch.setattr(platform.bundle, "started_file", lambda kind: exe)
+    spawned = []
+    result = real_leave_terminal_tab(native=FakeConsole(owner=100, cls=TERMINAL), pids=PIDS, platform="win32",
+                                     kind="nuitka", environ=environ, argv=["-p", "8080"],
+                                     spawn=lambda args, env: spawned.append((args, env)))
+    assert result is True
+    ((args, env),) = spawned
+    assert args == [exe, "-p", "8080"]
+    assert env == {"PATH": "/usr/bin", "CAST_TV_DETACHED": "1"}
+    assert "NUITKA_ONEFILE_PARENT" in environ                       # this process's own environment is untouched
+
+
+def test_a_release_whose_file_cannot_be_found_stays_in_the_tab(monkeypatch):
+    monkeypatch.setattr(platform.bundle, "started_file", lambda kind: None)
+    for kind in ("nuitka", "pyinstaller"):
+        spawned = []
+        assert real_leave_terminal_tab(native=FakeConsole(owner=100, cls=TERMINAL), pids=PIDS, platform="win32",
+                                       kind=kind, environ={}, argv=[],
+                                       spawn=lambda args, env: spawned.append(args)) is False
+        assert spawned == []
+
+
 def test_every_other_start_keeps_its_console():
     cases = [
         (FakeConsole(owner=100), {}),                             # the console host: hide-early hid it
         (FakeConsole(owner=7, cls=TERMINAL), {}),                 # PowerShell in Windows Terminal
         (FakeConsole(hwnd=None, cls=TERMINAL), {}),               # no console at all
         (FakeConsole(owner=100, cls=TERMINAL), {"frozen": False}),   # a checkout or pipx: nothing is hidden
+        (FakeConsole(owner=100, cls=TERMINAL), {"frozen": None}),    # this test run itself: not a release
         (FakeConsole(owner=100, cls=TERMINAL), {"environ": {"CAST_TV_DETACHED": "1"}}),   # the copy itself
         (FakeConsole(owner=100, cls=TERMINAL), {"platform": "linux"}),
     ]
@@ -668,3 +696,32 @@ def test_missing_bundled_font_config_keeps_the_environment(monkeypatch):
     env = {}
     assert platform.use_bundled_font_config(env, lambda path: False) is None
     assert env == {}
+
+
+# ------------------------------------------------------------ under Nuitka
+def _nuitka_sys(plat, data):
+    """The ``sys`` a Nuitka onefile child sees: no ``frozen``, no ``_MEIPASS``, ``__compiled__`` on main."""
+    compiled = types.SimpleNamespace(onefile=True, containing_dir="/opt", original_argv0="/opt/cast-tv-linux-x64")
+    main = types.SimpleNamespace(__compiled__=compiled, __file__=data + "/entry.py")
+    return types.SimpleNamespace(platform=plat, modules={"__main__": main})
+
+
+def test_nuitka_linux_release_uses_bundled_font_config(monkeypatch, tmp_path):
+    data = tmp_path / "cache" / "cast-tv" / "0.6.0-gh1.1"
+    path = data / "fontconfig" / "fonts.conf"
+    path.parent.mkdir(parents=True)
+    path.write_text("<fontconfig/>", encoding="utf-8")
+    monkeypatch.setattr(platform, "sys", _nuitka_sys("linux", str(data)))
+    env = {}
+    assert platform.use_bundled_font_config(env) == str(path)
+    assert env == {"FONTCONFIG_FILE": str(path), "FONTCONFIG_PATH": str(path.parent)}
+    monkeypatch.setattr(platform, "sys", _nuitka_sys("win32", str(data)))
+    assert platform.use_bundled_font_config({}) is None
+
+
+def test_nuitka_linux_release_gets_the_system_ca_bundle(monkeypatch):
+    monkeypatch.setattr(platform, "sys", _nuitka_sys("linux", "/cache/cast-tv/0.6.0-gh1.1"))
+    monkeypatch.setattr(platform, "ssl", types.SimpleNamespace(get_default_verify_paths=lambda: UBUNTU_OPENSSL))
+    env = {}
+    assert platform.use_system_ca_bundle(env, FEDORA_FILES.__contains__) == "/etc/ssl/certs/ca-certificates.crt"
+    assert env == {"SSL_CERT_FILE": "/etc/ssl/certs/ca-certificates.crt"}

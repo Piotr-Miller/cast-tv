@@ -31,6 +31,8 @@ import threading
 import time
 from types import SimpleNamespace
 
+from castlib import bundle
+
 
 def firewall_hint(port: int) -> str:
     """The one command that opens the media port on this platform."""
@@ -489,7 +491,7 @@ def _spawn_detached(args, env):
 
 
 def leave_terminal_tab(native=None, platform=None, pids=None, frozen=None, environ=None,
-                       spawn=None, argv=None, executable=None) -> bool:
+                       spawn=None, argv=None, executable=None, kind=None) -> bool:
     """Windows release, double-clicked, its new console in Windows Terminal: start again without one; True means exit now.
 
     Windows 11 hands a new console to Windows Terminal unless its default
@@ -499,23 +501,28 @@ def leave_terminal_tab(native=None, platform=None, pids=None, frozen=None, envir
     2026-11-04). The copy runs with ``CAST_TV_DETACHED`` and a console without a window;
     this one exits, and the tab closes with it. A terminal launch (the
     console is not ours), the console host (hidden already), a checkout or a
-    pipx install (``sys.frozen`` unset: nothing is hidden) and the copy
-    itself go on as before.
+    pipx install (not a release: nothing is hidden) and the copy itself go on
+    as before. The copy is the file the user started (``bundle.started_file()``,
+    not a Nuitka build's unpacked copy), as a new onefile instance
+    (``bundle.relaunch_env()``); a file that cannot be found stays in the tab.
     """
     if (platform or sys.platform) != "win32":
         return False
     environ = os.environ if environ is None else environ
-    if not (getattr(sys, "frozen", False) if frozen is None else frozen) or environ.get(DETACHED):
+    kind = bundle.resolve_kind(kind, frozen)
+    if kind is None or environ.get(DETACHED):
         return False
     try:
         native = native or Win32Console()
         hwnd = _own_console(native, pids or (os.getpid(), os.getppid()))
         if hwnd is None or native.window_class(hwnd) != PSEUDO_CONSOLE:
             return False
-        env = dict(environ)
+        executable = executable or bundle.started_file(kind)
+        if not executable:
+            return False
+        env = bundle.relaunch_env(environ, kind)   # a new onefile instance, not a child of this one's unpacked copy
         env[DETACHED] = "1"
-        env["PYINSTALLER_RESET_ENVIRONMENT"] = "1"   # a new onefile instance, not a child of this one's unpacked copy
-        (spawn or _spawn_detached)([executable or sys.executable] + list(sys.argv[1:] if argv is None else argv), env)
+        (spawn or _spawn_detached)([executable] + list(sys.argv[1:] if argv is None else argv), env)
         return True
     except Exception:
         return False
@@ -792,21 +799,21 @@ CA_BUNDLES = (
 
 
 def use_bundled_font_config(environ=None, exists=os.path.isfile) -> str | None:
-    """The frozen Linux font parser uses its own compatible rules, while discovering host fonts.
+    """The Linux release's font parser (either packager) uses its own compatible rules, while discovering host fonts.
 
     Host configuration can use syntax newer than the bundled Fontconfig. Keep
     native libraries together and use the shipped, self-contained configuration;
     an explicit FONTCONFIG_FILE or FONTCONFIG_PATH still wins.
     """
-    if not sys.platform.startswith("linux") or not getattr(sys, "frozen", False):
+    if not sys.platform.startswith("linux") or bundle.kind(sys) is None:
         return None
     environ = os.environ if environ is None else environ
     if "FONTCONFIG_FILE" in environ or "FONTCONFIG_PATH" in environ:
         return None
-    bundle = getattr(sys, "_MEIPASS", None)
-    if not bundle:
+    data = bundle.data_dir(sys_module=sys)
+    if not data:
         return None
-    directory = os.path.join(bundle, "fontconfig")
+    directory = os.path.join(data, "fontconfig")
     path = os.path.join(directory, "fonts.conf")
     if not exists(path):
         return None
@@ -821,18 +828,18 @@ def use_system_ca_bundle(environ=None, exists=os.path.exists) -> str | None:
     The binary is built on Ubuntu and carries its OpenSSL, which looks under ``/usr/lib/ssl``;
     Fedora has no such directory, so every HTTPS request failed with CERTIFICATE_VERIFY_FAILED.
     Nothing changes when the user already set ``SSL_CERT_FILE`` or ``SSL_CERT_DIR``, outside
-    the frozen Linux build, or when OpenSSL's own default path exists.
+    the Linux release (either packager), or when OpenSSL's own default path exists.
     """
     environ = os.environ if environ is None else environ
-    if not sys.platform.startswith("linux") or not getattr(sys, "frozen", False):
+    if not sys.platform.startswith("linux") or bundle.kind(sys) is None:
         return None
     if environ.get("SSL_CERT_FILE") or environ.get("SSL_CERT_DIR"):
         return None
     paths = ssl.get_default_verify_paths()
     if exists(paths.openssl_cafile) or exists(paths.openssl_capath):
         return None
-    for bundle in CA_BUNDLES:
-        if exists(bundle):
-            environ["SSL_CERT_FILE"] = bundle
-            return bundle
+    for ca_file in CA_BUNDLES:
+        if exists(ca_file):
+            environ["SSL_CERT_FILE"] = ca_file
+            return ca_file
     return None

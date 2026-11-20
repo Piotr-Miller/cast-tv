@@ -122,7 +122,7 @@ def test_cast_replaced_from_the_ui_keeps_serving(cli_env, tmp_path, capsys):
     result = []
     t = threading.Thread(target=lambda: result.append(cli.cast(str(clip), tv="127.0.0.1", port=_free_port())))
     t.start()
-    wait_for(lambda: servers and servers[0].app is not None and servers[0].app.current is not None
+    wait_for(lambda: servers and getattr(servers[0].app, "current", None) is not None
              and servers[0].app.current.sent.is_set())
     app = servers[0].app
     first = app.current
@@ -633,7 +633,7 @@ def test_version_names_the_client(monkeypatch, tmp_path, capsys):
     assert cli.main_tv(["--version"]) == 0
     assert capsys.readouterr().out.splitlines() == ["cast-tv " + castlib.__version__, "Google Photos client: none",
                                                     "GoPro window: CAST_TV_BROWSER=" + str(exe),
-                                                    "Window: edgechromium"]
+                                                    "Window: edgechromium", "Cache: none"]
     monkeypatch.setattr(_builtin_client, "CLIENT_ID", "id")
     monkeypatch.setattr(_builtin_client, "CLIENT_SECRET", "secret")
     cli.main_tv(["--version"])
@@ -641,6 +641,19 @@ def test_version_names_the_client(monkeypatch, tmp_path, capsys):
     monkeypatch.setenv("GOOGLE_CLIENT_JSON", str(tmp_path / "mine.json"))
     cli.main_tv(["--version"])
     assert capsys.readouterr().out.splitlines()[1] == "Google Photos client: from " + str(tmp_path / "mine.json")
+
+
+def test_version_names_the_cache_folder(monkeypatch, capsys):
+    """A Nuitka release names its build folder on the last line; anything else says ``Cache: none``."""
+    from castlib import bundle, window
+    monkeypatch.setattr(window, "describe", lambda: "Window: edgechromium")
+    folder = os.path.join("cache-root", "cast-tv", "0.6.0-gh12.1")
+    monkeypatch.setattr(bundle, "cache_dir", lambda *a, **kw: folder)
+    assert cli.main_tv(["--version"]) == 0
+    assert capsys.readouterr().out.splitlines()[-1] == "Cache: " + folder
+    monkeypatch.setattr(bundle, "cache_dir", lambda *a, **kw: None)
+    cli.main_tv(["--version"])
+    assert capsys.readouterr().out.splitlines()[-1] == "Cache: none"
 
 
 def test_version_names_the_gopro_window(monkeypatch, tmp_path, capsys):
@@ -698,3 +711,44 @@ def test_window_check_flag_runs_the_probe_only(monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "--window-check" not in out and "--self-check" not in out
     assert "which engine the cast-tv window would use" in out
+
+
+# ------------------------------------------------------- old cache folders
+class _Thread:
+    started = []
+
+    def __init__(self, target, name, daemon):
+        self.target, self.name, self.daemon = target, name, daemon
+
+    def start(self):
+        _Thread.started.append(self)
+
+
+def test_pruning_runs_in_the_background_only_for_nuitka(monkeypatch):
+    pruned = []
+    monkeypatch.setattr(cli.bundle, "prune_caches", lambda folder: pruned.append(folder))
+    _Thread.started = []
+    assert cli.prune_old_caches("pyinstaller", "/c", thread=_Thread) is None
+    assert cli.prune_old_caches(None, "/c", thread=_Thread) is None          # this test run: no release
+    assert pruned == [] and _Thread.started == []
+    worker = cli.prune_old_caches("nuitka", "/cache/cast-tv/0.6.0-gh1.1", thread=_Thread)
+    assert worker.daemon and worker.name == "cast-tv-prune"
+    assert pruned == []                                                      # not on the caller's thread
+    worker.target()
+    assert pruned == ["/cache/cast-tv/0.6.0-gh1.1"]
+
+
+def test_a_pruning_failure_never_ends_cast_tv(monkeypatch):
+    def boom(folder):
+        raise RuntimeError("disk gone")
+    monkeypatch.setattr(cli.bundle, "prune_caches", boom)
+    worker = cli.prune_old_caches("nuitka", "/cache/cast-tv/0.6.0-gh1.1", thread=_Thread)
+    worker.target()                                                          # swallowed
+
+
+def test_pruning_starts_once_the_window_shows(monkeypatch, capsys):
+    calls = []
+    monkeypatch.setattr(cli, "prune_old_caches", lambda: calls.append(1))
+    cli._on_shown()
+    assert calls == [1]
+    assert cli.WINDOW_ENDS in capsys.readouterr().out
