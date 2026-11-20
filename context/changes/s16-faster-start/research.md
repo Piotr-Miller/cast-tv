@@ -408,3 +408,37 @@ responded. The owner also confirmed rows 5.1 and 5.5 from the results and the de
 linux-nuitka-watched.json:
 {"size": 154884312, "sha256": "40e2900a4e884626da072ef4b70aee6d9dd6dda17e8d6e3c066369ed5776a022", "version": ["cast-tv 0.5.0", "Google Photos client: from /home/piotrmiller/.config/cast-tv/google-client.json", "GoPro window: /usr/bin/google-chrome", "Window: qtwebengine", "Cache: /home/piotrmiller/.cache/cast-tv/0.5.0-gh44812632302.1"], "system": "Linux 7.3.4-300.fc45.x86_64", "mode": "warm", "runs": [1.8493890762329102], "median": 1.8493890762329102}
 ```
+
+## Phase 6: the published files against the measured ones (row 6.4, 2026-11-20)
+
+Phase 6 (fe88a52) builds, smoke-tests and would publish only the Nuitka files, under the release
+names. PR #111's release run 44821655658 at fe88a52 was green (both builds and smoke tests; test
+run 44821655716 green). Its files, downloaded with `gh run download 44821655658 -n <artifact>`:
+
+- `cast-tv-linux-x64`: 154,876,120 B, SHA-256
+  `589725070ad5bbc9ae63d0469519b1f79b27e8324d7d6e8a468a2224617921de`.
+- `cast-tv-windows-x64.exe`: 18,296,320 B, SHA-256
+  `4718832ca88d7973886e06884992ed5936593e0a11cfad86860d8da90df7514e`; build-info: Nuitka 4.3.5,
+  Python 3.12.10, pip-freeze hash `c2e1b45611244254619800be980f3777d03b9bcd620b1259977f7dbb1dab6d1f`.
+
+**Linux: equal apart from names.** Its build-info against the file measured on Fedora (run
+44812632302 at eed2a5b) differs only in the identity and cache folder (`0.5.0-gh44821655658.1`),
+the commit (the PR's merge ref, d0c7842 against c35ddc9) and two options that carry those names:
+`--onefile-tempdir-spec=…/0.5.0-gh44821655658.1` and `--output-filename=cast-tv-linux-x64` (was
+`-nuitka`). The Nuitka version (4.3.5), the Python version (3.12.16), the pip-freeze hash
+(`a3a163f1…`) and every other option are equal. The code:
+
+```
+git diff --stat eed2a5b..fe88a52 -- castlib packaging/build_nuitka.py packaging/entry.py packaging/fonts.conf pyproject.toml
+ packaging/build_nuitka.py | 8 ++++----
+```
+
+Those four lines are the docstring and the `--out` help text (the example name and the deleted
+spec); `main` has not moved since eed2a5b. So Fedora's rows 5.1, 5.3 and 5.5 hold for the
+published Linux file and are re-confirmed at this revision, not measured again.
+
+**Windows: measured again.** The Windows rows 5.2 and 5.6 were measured on run 44630376210 at
+7a7eb32, before eed2a5b changed `castlib/processes.py`, so the Windows file is not equal in code;
+it is measured on this run's `cast-tv-windows-x64.exe` and a PyInstaller exe of the same source,
+in the one Windows visit (owner decision 2026-11-20).
+
