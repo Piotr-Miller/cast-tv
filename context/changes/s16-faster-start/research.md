@@ -447,3 +447,54 @@ build-info comparison is written down with the measurement.
 
 The owner re-confirmed rows 5.1 and 5.5 for the published Linux file from this equivalence
 ("potwierdzam 5.1 5.5", 2026-11-20); 5.3 stayed current.
+
+## Phase 7 on Fedora (2026-11-20)
+
+The Fedora desktop (Fedora 45, KDE Plasma 6.8 on Wayland). The file is Phase 6's
+`cast-tv-linux-x64` of run 44821655658 (154,876,120 B, SHA-256 `589725070ad5…`), in
+`~/Downloads/s16-run-44821655658/linux`. Claude drove the window through Qt WebEngine's DevTools
+(`QTWEBENGINE_REMOTE_DEBUGGING`) and KWin scripts, read the TV's state over UPnP
+(`GetTransportInfo` at 192.168.50.142:9197) and ended instances with the ownership-checked
+`POST /api/quit`; the owner watched the TV and the menu. The Windows parts of the "Both" rows wait
+for the one Windows visit.
+
+- **7.11, an interrupted first start.** The build folder deleted; the file started and killed with
+  `kill -9` after 1 s, leaving a partial folder of 324 MiB and no process. Started again: the Ready
+  mark (`ui_ready_at`, `shown_at`) after about 3 s, the window normal.
+- **7.13, the cache size.** `du`: 522 MiB, 545,895,086 B apparent, for
+  `~/.cache/cast-tv/0.5.0-gh44821655658.1`; README says "about 550 MB on Linux".
+- **7.5, a second start.** The window minimized by a KWin script; the file started again printed
+  `cast-tv is already running: http://127.0.0.1:8895/ui/` and `Its window is in front.`, exited 0
+  after 1.7 s, and a Spectacle capture of the active window showed cast-tv in front.
+- **7.10, retention, on the PR's three builds** (owner decision 2026-11-20): folders
+  `0.5.0-gh44630376210.1`, `0.5.0-gh44812632302.1`, `0.5.0-gh44821655658.1`, each started once.
+  1. The oldest's `.cast-tv-started` set 8 days back (`touch -d '8 days ago'`), the newest started:
+     the oldest folder was gone after about 4 s; the other two remained.
+  2. The oldest build started again (its folder unpacked anew) and left running, its marker set
+     8 days back, then the newest started on `-p 8896`: its start marker was rewritten at the
+     window's show (22:57:59, so the pruning ran), and after 30 s all three folders remained.
+- **7.8, HEIC, lists, Fontconfig.** `shelf-christmas-decoration.heic` from OneDrive → Pictures
+  cast; the TV reported `PLAYING`, the UI "on screen"; the owner: "stoi prosto" (upright). The
+  OneDrive tab listed its folders (signed in), the Google Photos tab connected ("nothing picked
+  yet", the picker offered). The log of that run has no `Fontconfig` line.
+- **7.9, the QR code.** The window's **QR code** decoded (OpenCV) to `http://192.168.50.198:8895/ui/`;
+  headless Chrome with a phone user agent opened it from the LAN address: the UI with the TV
+  button, the source tabs and the now-playing bar, no phone panel, no **Add to menu**, no Quit. Not
+  scanned with a real phone.
+- **7.4, stopping the TV.** `Przejazd - SuperCars.mp4` from OneDrive → Dokumenty → Videos playing
+  (`PLAYING`, 0:00:17 of 0:02:59):
+  - the window closed by a KWin `closeWindow()` (as X): the process ended within 1 s, the TV
+    `STOPPED`, the log `Stopped.`;
+  - started again, the video playing, `kill <pid>` of the started file: the process ended within
+    1 s, the TV `STOPPED`, no cast-tv or QtWebEngine process left, so no window.
+- **7.7, the menu.** **Add to menu**: "Added: find cast-tv in the applications menu.";
+  `cast-tv.desktop` with `Exec=` the started file (not the cache folder), `Icon=cast-tv`,
+  `Terminal=false`. The file moved to `moved/` and started there: **Update menu entry (points to
+  another file)**, which after a click became **Remove from menu**, with `Exec=` the new path.
+  The owner, Meta key, `cast`: the cast-tv tile with its icon, and Enter opened the window
+  ("pokazała się ikona cast-tv i później otworzyła się apka"); that process had no terminal (no
+  tty, parent systemd). **Remove from menu**: "Removed from the menu.", the file gone.
+
+**A finding outside S-16:** while the video played, the now-playing bar still showed the
+**HEIC → JPEG** badge of the photo cast before it. S-16 does not change that part of the UI; it is
+left for a change of its own.
