@@ -685,7 +685,7 @@ research.md. Real sign-in and TV checks stay pending until a person sees them.
 
 #### Manual
 
-- [ ] 1.7 Windows: startup_time.py on a PyInstaller exe of this phase's commit (owner decision 2026-11-21: run 44812632302's, at eed2a5b), 5 warm runs, one watched
+- [x] 1.7 Windows: startup_time.py on a PyInstaller exe of this phase's commit (owner decision 2026-11-21: run 44812632302's, at eed2a5b), 5 warm runs, one watched — accepted at 27556cc7f39ceaeda83143851d4d0ad323ee9bfd
 
 ### Phase 2: Code that runs under either packager
 
@@ -717,11 +717,11 @@ research.md. Real sign-in and TV checks stay pending until a person sees them.
 #### Manual
 
 - [x] 5.1 Fedora: 5 cold + 5 warm runs of each file, medians recorded — accepted at b863e34a7bc7829ae0c149fb359c1dae9b6843e8
-- [ ] 5.2 Windows 11: 5 cold + 5 warm runs of each file, medians recorded
+- [x] 5.2 Windows 11: 5 cold + 5 warm runs of each file, medians recorded — accepted at 27556cc7f39ceaeda83143851d4d0ad323ee9bfd
 - [x] 5.3 Fedora: one run watched, the window visibly ready at the mark — accepted at 30cc68882c642047335a29eba9bed0a1863d56e1
 - [x] 5.4 Windows 11: one run watched, the window visibly ready at the mark — accepted at 67084d10952c3d4e7f3902d6ececac8e367d1488
 - [x] 5.5 Linux bar met, or the owner's decision after a miss recorded — accepted at eff390b8c7e9660f25b740cec714c40443dbf8ea
-- [ ] 5.6 Windows bar met, or the owner's decision after a miss recorded
+- [x] 5.6 Windows bar met, or the owner's decision after a miss recorded — accepted at 27556cc7f39ceaeda83143851d4d0ad323ee9bfd
 
 ### Phase 6: Switch the release to Nuitka
 
@@ -733,7 +733,7 @@ research.md. Real sign-in and TV checks stay pending until a person sees them.
 
 #### Manual
 
-- [ ] 6.4 The published files recorded as equivalent to the measured ones, rows 5.1-5.6 re-confirmed, or measured again
+- [x] 6.4 The published files recorded as equivalent to the measured ones, rows 5.1-5.6 re-confirmed, or measured again — accepted at 27556cc7f39ceaeda83143851d4d0ad323ee9bfd
 
 ### Phase 7: The accepted behaviour on the Nuitka files
 
