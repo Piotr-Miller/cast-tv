@@ -537,3 +537,31 @@ warm: Nuitka median 3.16 s, PyInstaller median 4.31 s, ratio 0.734 (limit 0.75):
 
 Every run finished; all six commands exited 0. **The Windows bar is met again (row 5.6)**: warm
 0.734 against 0.75 (0.727 on 2026-11-20), cold clearly faster than PyInstaller this time.
+
+**Row 6.4 on Windows: equal apart from names.** Run 44821655658's `cast-tv-windows-x64.exe`
+(SHA-256 `4718832c…`, the value above) against the Nuitka exe just measured (run 44812632302):
+their build-info differs only in the identity and cache folder (`0.5.0-gh44821655658.1`), the
+commit (d0c7842, the PR's merge ref, against c35ddc9) and the two options that carry those names,
+`--onefile-tempdir-spec=…/0.5.0-gh44821655658.1` and `--output-filename=cast-tv-windows-x64.exe`
+(was `-nuitka.exe`). Nuitka 4.3.5, Python 3.12.10, the pip-freeze hash (`c2e1b456…`) and every
+other option are equal; the code diff is the one above. So rows 5.2, 5.4 and 5.6 hold for the
+published Windows file.
+
+## Row 1.7 on run 44812632302 (2026-11-21)
+
+Phase 6 deleted `packaging/cast-tv.spec`, so row 1.7 uses run 44812632302's PyInstaller exe
+(built at eed2a5b, every castlib change of Phases 1-5; 26,142,111 B, SHA-256 `e57170dd…`, above)
+by owner decision. Its 5 warm runs are row 5.2's PyInstaller warm series of the same file:
+4.31 / 4.28 / 4.17 / 6.70 / 5.23 s, median 4.31 s (2026-11-19: 4.28 s). The watched run, from an
+unelevated Git Bash:
+
+```
+.venv/Scripts/python packaging/startup_time.py <pyinstaller exe> --mode warm --runs 1 --hold 15 --out win-pyi-watched.json
+```
+
+"ready after 3.91 s: the window stays open 15 s". The owner watched and confirmed ("Wszytsko sie
+zgadza"): the TV button and the GoPro / OneDrive / Google Photos tabs were on screen when the time
+printed, and a tab click responded.
+
+The owner accepted rows 1.7, 5.2, 5.6 and 6.4 from these observations ("Wszytsko sie zgadza",
+2026-11-21).

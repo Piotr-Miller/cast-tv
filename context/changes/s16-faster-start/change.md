@@ -36,3 +36,4 @@ archived_at: null
 2026-11-20: owner decision — row 7.10 uses the PR's three existing Nuitka builds (runs 44630376210, 44812632302, 44821655658) instead of paid reruns; plan.md Phase 7, Manual Verification.
 2026-11-20: reopened 5.1 — was accepted at eff390b8c7e9660f25b740cec714c40443dbf8ea; changed: surface declaration.
 2026-11-20: rows 5.1, 7.7 and 7.8 accepted at b863e34a7bc7829ae0c149fb359c1dae9b6843e8 (owner: "potwierdzam 5.1 7.7 7.8"): Fedora measurements; the menu entry added, started from Meta, updated after a move and removed; HEIC upright, OneDrive and Google Photos lists, no Fontconfig line; research.md, "Phase 7 on Fedora".
+2026-11-21: owner decision — row 1.7 uses run 44812632302's PyInstaller exe (built at eed2a5b, every castlib change of Phases 1-5), because Phase 6 deleted `packaging/cast-tv.spec`; its 5 warm runs are row 5.2's PyInstaller warm series of the same file; research.md, "Row 1.7 on run 44812632302".
