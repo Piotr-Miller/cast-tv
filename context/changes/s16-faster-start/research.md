@@ -501,3 +501,39 @@ left for a change of its own.
 
 The owner accepted rows 5.1, 7.7 and 7.8 from these observations ("potwierdzam 5.1 7.7 7.8",
 2026-11-20).
+
+## Phase 5 on Windows 11 again: rows 5.2 and 5.6 at eed2a5b (2026-11-21)
+
+eed2a5b reopened 5.2 and 5.6. The same laptop, now with the Windows artifacts of PR #111's release
+run 44812632302 (commit c35ddc9, after eed2a5b), downloaded into
+`%USERPROFILE%\Downloads\s16-run-44812632302`:
+
+- Nuitka `cast-tv-windows-x64-nuitka.exe`: 18,296,320 B, SHA-256
+  `02b87068918f8bbd38761a8b8b831bf955b1ea2c8b60468981a94d22f9c7975d`. Build-info: identity
+  `0.5.0-gh44812632302.1`, Nuitka 4.3.5, Python 3.12.10, pip-freeze hash
+  `c2e1b45611244254619800be980f3777d03b9bcd620b1259977f7dbb1dab6d1f`.
+- PyInstaller `cast-tv-windows-x64.exe`: 26,142,111 B, SHA-256
+  `e57170ddc7307a73c64c7e732cede925f82ccc355244fab18956d0dacd1ce315`.
+
+**A first attempt (22:00) does not count.** Windows' servicing process `TiWorker` was evaluating
+package applicability in the background (CBS.log, `EvaluateApplicability`; no update installed)
+and held one core the whole time. The runs spread widely (Nuitka cold 3.38-9.20 s, PyInstaller
+warm 5.29-8.87 s against 3.95 s on 2026-11-20); cold compared 1.155, FAIL. Its files are kept in
+`attempt1-noisy\`. Claude waited until `TiWorker` had exited and no process used more than about
+2 % CPU, then ran the same six commands as on 2026-11-20 (22:40), the owner leaving the laptop
+alone:
+
+| Windows 11 | runs (s) | median |
+| --- | --- | --- |
+| Nuitka cold | 2.68 / 2.81 / 4.68 / 3.29 / 3.94 | 3.29 s |
+| Nuitka warm | 2.41 / 3.32 / 3.48 / 3.16 / 2.72 | 3.16 s |
+| PyInstaller cold | 4.26 / 5.22 / 3.91 / 3.61 / 3.98 | 3.98 s |
+| PyInstaller warm | 4.31 / 4.28 / 4.17 / 6.70 / 5.23 | 4.31 s |
+
+```
+cold: Nuitka median 3.29 s, PyInstaller median 3.98 s, ratio 0.828 (limit 1.00): PASS
+warm: Nuitka median 3.16 s, PyInstaller median 4.31 s, ratio 0.734 (limit 0.75): PASS
+```
+
+Every run finished; all six commands exited 0. **The Windows bar is met again (row 5.6)**: warm
+0.734 against 0.75 (0.727 on 2026-11-20), cold clearly faster than PyInstaller this time.
