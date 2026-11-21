@@ -19,7 +19,7 @@ soon as it is done, with the date and, for a merge or a recorded row, the PR or 
   - **Phase 6 (fe88a52):** `release.yml` builds, smoke-tests and publishes only Nuitka under the
     old names; `packaging/cast-tv.spec` deleted; README describes the cache (about 550 MB on Linux,
     80 MB on Windows). Release run 44821655658 green.
-  - **Accepted:** 5.1, 5.3, 5.4, 5.5, 7.7, 7.8. **Open, all on Windows:** 1.7, 5.2, 5.6, 6.4 and the
+  - **Accepted:** 1.7, 5.1-5.6, 6.4, 7.7, 7.8. **Open, all on Windows:** the
     Windows parts of 7.1-7.6 and 7.9-7.13 (their Fedora parts passed, research.md "Phase 7 on
     Fedora").
   - **Finding outside S-16:** while a video plays, the now-playing bar still shows the
@@ -85,6 +85,8 @@ soon as it is done, with the date and, for a merge or a recorded row, the PR or 
    - 1.7: its plan text asks for a PyInstaller exe built with the spec, which Phase 6 deleted; the
      proposal is run 44812632302's PyInstaller exe (eed2a5b, every castlib change of Phases 1-5).
      Your decision there.
+   - Done 2026-11-21: 1.7, 5.2, 5.6 and 6.4 accepted at 27556cc (cold 0.828, warm 0.734; a first
+     attempt during Windows servicing (`TiWorker`) was discarded).
    - Phase 7 on run 44821655658's exe; 7.10 uses the three Windows builds of runs 44630376210
      (already in `%USERPROFILE%\Downloads\s16-run-44630376210`), 44812632302 and 44821655658.
 - [ ] 12. After the visit: `/rune-impl-review s16-faster-start phase 6` (Codex), PR #111 ready for
