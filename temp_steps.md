@@ -19,7 +19,7 @@ soon as it is done, with the date and, for a merge or a recorded row, the PR or 
   - **Phase 6 (fe88a52):** `release.yml` builds, smoke-tests and publishes only Nuitka under the
     old names; `packaging/cast-tv.spec` deleted; README describes the cache (about 550 MB on Linux,
     80 MB on Windows). Release run 44821655658 green.
-  - **Accepted:** 1.7, 5.1-5.6, 6.4, 7.7, 7.8. **Open, all on Windows:** the
+  - **Accepted:** 1.7, 5.1-5.6, 6.4, 7.7, 7.8. **Open:** none (2026-11-22); before that, on Windows: the
     Windows parts of 7.1-7.6 and 7.9-7.13 (their Fedora parts passed, research.md "Phase 7 on
     Fedora").
   - **Finding outside S-16:** while a video plays, the now-playing bar still shows the
@@ -68,7 +68,7 @@ soon as it is done, with the date and, for a merge or a recorded row, the PR or 
 - [x] 10. Phase 7 on Fedora — 2026-11-20, 78184a5: 7.4, 7.5, 7.7-7.11 and 7.13 observed
    (research.md, "Phase 7 on Fedora"). 5.1, 7.7 and 7.8 accepted at b863e34; the "Both"
    rows wait for their Windows parts.
-- [ ] 11. **One Windows 11 visit (reboot into Windows; Claude drives, you watch the TV and answer
+- [x] 11. **One Windows 11 visit (reboot into Windows; Claude drives, you watch the TV and answer
    the firewall):** rows 1.7, 5.2, 5.6, 6.4 (Windows part), 7.1-7.6 and 7.9-7.13 (Windows parts).
    In PowerShell, with every cast-tv closed:
    ```powershell
@@ -88,8 +88,8 @@ soon as it is done, with the date and, for a merge or a recorded row, the PR or 
    - Done 2026-11-21: 1.7, 5.2, 5.6 and 6.4 accepted at 27556cc (cold 0.828, warm 0.734; a first
      attempt during Windows servicing (`TiWorker`) was discarded).
    - Done 2026-11-22: Phase 7 on Windows observed (research.md, "Phase 7 on Windows 11"); 7.4's
-     sign-out not repeated (owner decision, observed in S-12). Waiting for the owner to accept
-     7.1-7.6 and 7.9-7.13.
+     sign-out not repeated (owner decision, observed in S-12). 7.1-7.6 and 7.9-7.13 accepted at
+     41e97ef; every Progress row of plan.md is ticked.
    - Phase 7 on run 44821655658's exe; 7.10 uses the three Windows builds of runs 44630376210
      (already in `%USERPROFILE%\Downloads\s16-run-44630376210`), 44812632302 and 44821655658.
 - [ ] 12. After the visit: `/rune-impl-review s16-faster-start phase 6` (Codex), PR #111 ready for
