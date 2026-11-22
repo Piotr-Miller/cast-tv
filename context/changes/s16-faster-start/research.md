@@ -627,3 +627,18 @@ so per row.
   sprawdzaliśmy to, wylogowanie przerywa film"; it was observed in S-12 on the PyInstaller file).
 
 The owner accepted rows 7.1-7.6 and 7.9-7.13 from these observations and the Fedora parts in "Phase 7 on Fedora" ("potwierdzam 7.1-7.6 7.9-7.13", 2026-11-22).
+
+## Rows 1.7 and 7.13 after the Phase 6 review (2026-11-22)
+
+The Phase 6 review (`reviews/impl-review-phase-6-fe88a52.md`, APPROVED) found F1: README promised
+cleanup "at every start" and one folder per version. 3a63909 rewrote the three README passages
+(one folder per build, cleanup after the desktop window opens, subject to its safety checks),
+which reopened 7.13 (its surface includes README.md). The same commit removed the deleted
+`packaging/cast-tv.spec` from row 1.7's surface, which reopened 1.7.
+
+- **7.13:** the measured sizes are unchanged and still match the README's one remaining figure,
+  "about 550 MB on Linux, 80 MB on Windows" (README.md:36): Fedora 545,895,086 B (522 MiB),
+  Windows 79,895,478 B (76.2 MiB), per build folder. The new wording "one folder per build" is
+  what 7.10 observed: each of the three identities had its own folder.
+- **1.7:** `git diff 27556cc 3a63909 -- castlib packaging/smoke.py packaging/startup_time.py` is
+  empty, so the observation in "Row 1.7 on run 44812632302" is about the current code.
