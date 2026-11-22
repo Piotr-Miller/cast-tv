@@ -3,7 +3,7 @@ change_id: s16-faster-start
 title: "A faster-starting release file (Nuitka, cached onefile)"
 status: implementing
 created: 2026-11-18
-updated: 2026-11-20
+updated: 2026-11-22
 archived_at: null
 ---
 
@@ -40,3 +40,5 @@ archived_at: null
 2026-11-21: rows 1.7, 5.2, 5.6 and 6.4 accepted at 27556cc7f39ceaeda83143851d4d0ad323ee9bfd (owner: "Wszytsko sie zgadza"): Windows 11 measured again on run 44812632302 (cold 0.828, warm 0.734), run 44821655658's exe equal to it apart from names, the PyInstaller watched run ready after 3.91 s; research.md, "Phase 5 on Windows 11 again" and "Row 1.7 on run 44812632302".
 2026-11-22: owner decision — row 7.4's Windows sign-out is not repeated on the Nuitka file ("już raz sprawdzaliśmy to, wylogowanie przerywa film"; observed in S-12); X is covered by 7.1; research.md, "Phase 7 on Windows 11".
 2026-11-22: rows 7.1-7.6 and 7.9-7.13 accepted at 41e97ef3ad249c2156914458d6794a2bb88078a1 (owner: "potwierdzam 7.1-7.6 7.9-7.13"): Phase 7 on Windows 11 and on Fedora; research.md, "Phase 7 on Windows 11" and "Phase 7 on Fedora".
+2026-11-22: reopened 7.13 — was accepted at 41e97ef3ad249c2156914458d6794a2bb88078a1; changed: README.md (Phase 6 review F1).
+2026-11-22: reopened 1.7 — was accepted at 27556cc7f39ceaeda83143851d4d0ad323ee9bfd; changed: surface declaration (the deleted `packaging/cast-tv.spec` removed, the owner decision of 2026-11-21 written into the Manual Verification text; Phase 6 review note).

@@ -278,7 +278,7 @@ result files against the bar.
 
 #### Manual Verification:
 
-- Windows: `startup_time.py` on a PyInstaller exe built from this phase's commit (`pyinstaller packaging/cast-tv.spec`, its SHA-256 recorded). 5 warm runs finish. The owner watches one run: the window shows the TV button and the source tabs, and a tab click responds at the moment the terminal prints that run's time. — surface: castlib/, packaging/startup_time.py, packaging/smoke.py, packaging/cast-tv.spec
+- Windows: `startup_time.py` on a PyInstaller exe built from this phase's commit (`pyinstaller packaging/cast-tv.spec`, its SHA-256 recorded; owner decision 2026-11-21, after Phase 6 deleted the spec: run 44812632302's PyInstaller exe, built at eed2a5b). 5 warm runs finish. The owner watches one run: the window shows the TV button and the source tabs, and a tab click responds at the moment the terminal prints that run's time. — surface: castlib/, packaging/startup_time.py, packaging/smoke.py
 
 **Implementation Note**: Manual checks are acceptance. A pending manual check is reported, not a
 blocker for the next phase.
@@ -685,7 +685,7 @@ research.md. Real sign-in and TV checks stay pending until a person sees them.
 
 #### Manual
 
-- [x] 1.7 Windows: startup_time.py on a PyInstaller exe of this phase's commit (owner decision 2026-11-21: run 44812632302's, at eed2a5b), 5 warm runs, one watched — accepted at 27556cc7f39ceaeda83143851d4d0ad323ee9bfd
+- [ ] 1.7 Windows: startup_time.py on a PyInstaller exe of this phase's commit (owner decision 2026-11-21: run 44812632302's, at eed2a5b), 5 warm runs, one watched
 
 ### Phase 2: Code that runs under either packager
 
@@ -751,4 +751,4 @@ research.md. Real sign-in and TV checks stay pending until a person sees them.
 - [x] 7.10 Both: only the current and previous cache folders remain past the age guard; a running build's folder is kept — accepted at 41e97ef3ad249c2156914458d6794a2bb88078a1
 - [x] 7.11 Both: a cold start killed during unpacking, then started again, opens normally — accepted at 41e97ef3ad249c2156914458d6794a2bb88078a1
 - [x] 7.12 Windows: the firewall prompt for a new build recorded — accepted at 41e97ef3ad249c2156914458d6794a2bb88078a1
-- [x] 7.13 Both: the cache size per build recorded and matching README — accepted at 41e97ef3ad249c2156914458d6794a2bb88078a1
+- [ ] 7.13 Both: the cache size per build recorded and matching README

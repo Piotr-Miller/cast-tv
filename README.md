@@ -32,10 +32,9 @@ laptop's disk (or through the laptop from the cloud), and the remote drives seek
 - **Linux** (x86-64, glibc 2.35 or newer, e.g. Fedora): `cast-tv-linux-x64`, then
   `chmod +x cast-tv-linux-x64 && ./cast-tv-linux-x64`; it opens in its own window.
 
-The first start of a new version unpacks the file into a folder named by that version (about
-550 MB on Linux, 80 MB on Windows; see [Where files live](#where-files-live)); later starts reuse
-it and open sooner. cast-tv removes old versions' folders by itself, see
-[Limitations](#limitations).
+The first start of a new build unpacks the file into a folder unique to that build (about
+550 MB on Linux, 80 MB on Windows). Later starts reuse it and open sooner. See
+[Where files live](#where-files-live) for the path and [Limitations](#limitations) for cleanup.
 
 Keep the file where it is, then click **Add to Start menu** (Windows) or **Add to menu** (Linux)
 in the window: cast-tv appears in Start or in the applications overview with its icon, and starts
@@ -292,7 +291,7 @@ are served as they are. GIF, raw and other stills the TV cannot show are not lis
 | the gopro.com window's browser profile | `~/.config/cast-tv/gopro-browser` | `%APPDATA%\cast-tv\gopro-browser` |
 | that profile's HTTP cache | `~/.cache/cast-tv/gopro-browser-cache` | `%LOCALAPPDATA%\cast-tv\Cache\gopro-browser-cache` |
 | listing cache (metadata only) | `~/.cache/cast-tv` | `%LOCALAPPDATA%\cast-tv\Cache` |
-| the release file's unpacked copy, one folder per version | `~/.cache/cast-tv/<version>-gh<build>` | `%LOCALAPPDATA%\cast-tv\<version>-gh<build>` |
+| the release file's unpacked copy, one folder per build | `~/.cache/cast-tv/<version>-gh<run>.<attempt>` | `%LOCALAPPDATA%\cast-tv\<version>-gh<run>.<attempt>` |
 | converted photos, per process | `/tmp/cast-tv-photos-*` | `%TEMP%\cast-tv-photos-*` |
 | downloaded Google videos, per process | `/var/tmp/cast-tv-videos-*` | `%TEMP%\cast-tv-videos-*` |
 
@@ -351,13 +350,12 @@ replaces, not a client GoPro has sanctioned - and GoPro can end that on its side
 How long a captured session lasts is not known; nothing here promises a lifetime, and once one
 is observed it is recorded with its date.
 
-**The release keeps unpacked versions on disk.** Each version of the release file unpacks once
-into its own folder (about 550 MB on Linux, 80 MB on Windows), so a new version's first start
-takes a moment longer than the next ones. At every start cast-tv keeps the current and the
-previous version's folders, and any other that was started in the last 7 days or is still
-running; it removes the rest. Any of them can be deleted by hand while cast-tv is not running.
-On Windows a new version is a new file to the firewall, which may ask again to allow it on
-private networks.
+**The release keeps unpacked builds on disk.** After the desktop window opens, cast-tv tries to
+remove older build folders. It keeps the current build, the most recently used other build, and
+any build used in the last 7 days or still running. It leaves a folder in place if it cannot
+verify that removal is safe or cannot remove it. You can delete build folders by hand while
+cast-tv is fully closed. On Windows the firewall may ask again to allow a new build on private
+networks because the unpacked executable has a new path.
 
 **Local folders** are not browsable from the UI (anything on the LAN could list them); local files
 are cast from the command line, and then show up in the UI for that session.
