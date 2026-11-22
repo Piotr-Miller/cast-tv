@@ -590,8 +590,8 @@ so per row.
 - **7.3, the forced fallback.** Claude started the file with `CAST_TV_WINDOW_FAIL=1`; the owner saw
   the browser tab with the UI and the console in a new Windows Terminal window (the default
   terminal, so the console is a `PseudoConsoleWindow`), titled with the cache exe's path. Claude
-  cast the video through `/api/cast` (TV `PLAYING`); the owner closed that console window, and
-  both processes ended (port 8895 refused).
+  cast the video through `/api/cast` (TV `PLAYING`); the owner closed that console window: the TV
+  stopped (owner: "tak") and both processes ended (port 8895 refused).
 - **7.5, a second start.** The window covered by another one (owner); a second start exited 0
   and the owner saw the existing window come to the front ("tak wyskoczyło"); the first
   instance's two processes stayed.
@@ -601,7 +601,8 @@ so per row.
   window appeared. The file moved to `moved\` and started there: `current: false` (the window's
   **Update menu entry** state); `install` pointed the `.lnk` at `moved\…`, `current: true`;
   `remove`: the `.lnk` gone, `installed: false`. Not seen by a person: the Start search's Best
-  match and the button labels; pinning is not scriptable on Windows.
+  match and the button labels. Pinning, by the owner: the taskbar button pinned, the window closed,
+  the pin opened it again, then unpinned ("ok").
 - **7.10, retention, on the PR's three builds.** Folders `0.5.0-gh44630376210.1`,
   `0.5.0-gh44812632302.1`, `0.5.0-gh44821655658.1`, each started before.
   1. The oldest's `.cast-tv-started` set 8 days back, the newest started: the oldest folder was
@@ -619,3 +620,7 @@ so per row.
   again (56 files).
 - **7.13, the cache size.** 79,895,478 B (76.2 MiB) in 56 files for `0.5.0-gh44821655658.1`;
   README says "80 MB on Windows".
+- **7.9, the QR code.** The owner scanned the window's **Open on your phone** QR code with the
+  phone: the UI opened there with no phone panel and no Quit control ("ok").
+- **7.4, X.** Covered by 7.1 (X with the video playing: the TV stopped, no process left). The
+  sign-out part is next.
