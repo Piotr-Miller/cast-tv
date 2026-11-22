@@ -3,7 +3,7 @@ project: cast-tv
 version: 1
 status: active
 created: 2026-09-19
-updated: 2026-11-18
+updated: 2026-11-22
 prd_version: 1
 main_goal: personal-use-then-share
 top_blocker: time
@@ -48,7 +48,7 @@ conversion and the cast supervisor. Delivered with `cloud-source-ui` (PR #1, 202
 | S-13 | s13-gopro-auth | connect GoPro without copying a token by hand | S-03 | FR-010 | done |
 | S-14 | (proposed) | cast to Google TV and Chromecast devices, not only DLNA TVs | S-02 | — | proposed |
 | S-15 | s15-share-link-album | cast an album from a share link | S-09 | FR-012 | parked (2026-10-15): the picker covers the owner's own albums |
-| S-16 | (proposed) | start the release file faster (and smaller, if it can be), especially on Linux | S-12 | NFR platforms | proposed |
+| S-16 | s16-faster-start | start the release file faster (and smaller, if it can be), especially on Linux | S-12 | NFR platforms | done |
 
 ## Streams
 
@@ -217,6 +217,9 @@ plan. The ideas under each are starting points, not findings.
 ### S-16: A faster-starting release file
 
 - **Phase:** phase:post-mvp
+- **Change:** `context/archive/2026-11-18-s16-faster-start/`
+- **Change ID:** s16-faster-start
+- **Status:** done
 - **Owner's words:** (2026-11-05, after reading about `scriptc`, which compiles TypeScript to
   native executables) "maybe is similar tool for python scripts for desktop win and linux apps"
 - **Starting point:** the S-12 release is a PyInstaller onefile that unpacks itself on every
@@ -269,3 +272,4 @@ None open. (Archiving `cloud-source-ui` was answered on 2026-09-20, #32.)
   2026-10-14 → `context/archive/2026-10-13-s09-share-link-photos/`. Lesson: -.
 - **S-13: connect GoPro without copying a token by hand** — Archived 2026-10-26 → `context/archive/2026-09-20-s13-gopro-auth/`. Lesson: —.
 - **S-12: run cast-tv as a desktop window on Windows and Linux, not only a browser tab** — Archived 2026-11-18 → `context/archive/2026-10-15-s12-desktop-window/`. Lesson: —.
+- **S-16: start the release file faster (and smaller, if it can be), especially on Linux** — Archived 2026-11-22 → `context/archive/2026-11-18-s16-faster-start/`. The release is a Nuitka onefile cached per build: warm start 0.706 (Fedora) and 0.734 (Windows) of PyInstaller's. Lesson: —.
