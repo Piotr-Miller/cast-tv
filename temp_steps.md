@@ -92,7 +92,8 @@ soon as it is done, with the date and, for a merge or a recorded row, the PR or 
      41e97ef; every Progress row of plan.md is ticked.
    - Phase 7 on run 44821655658's exe; 7.10 uses the three Windows builds of runs 44630376210
      (already in `%USERPROFILE%\Downloads\s16-run-44630376210`), 44812632302 and 44821655658.
-- [ ] 12. After the visit: `/rune-impl-review s16-faster-start phase 6` (Codex), PR #111 ready for
+- [ ] 12. (2026-11-22: the Phase 6 review APPROVED, F1 fixed in 3a63909; 1.7 and 7.13 accepted again
+   at 4c2cfb7.) After the visit: `/rune-impl-review s16-faster-start phase 6` (Codex), PR #111 ready for
    review, you merge, then the release tag.
 
 ## How to resume with Claude

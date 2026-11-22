@@ -42,3 +42,4 @@ archived_at: null
 2026-11-22: rows 7.1-7.6 and 7.9-7.13 accepted at 41e97ef3ad249c2156914458d6794a2bb88078a1 (owner: "potwierdzam 7.1-7.6 7.9-7.13"): Phase 7 on Windows 11 and on Fedora; research.md, "Phase 7 on Windows 11" and "Phase 7 on Fedora".
 2026-11-22: reopened 7.13 — was accepted at 41e97ef3ad249c2156914458d6794a2bb88078a1; changed: README.md (Phase 6 review F1).
 2026-11-22: reopened 1.7 — was accepted at 27556cc7f39ceaeda83143851d4d0ad323ee9bfd; changed: surface declaration (the deleted `packaging/cast-tv.spec` removed, the owner decision of 2026-11-21 written into the Manual Verification text; Phase 6 review note).
+2026-11-22: rows 1.7 and 7.13 accepted at 4c2cfb70f58fb65dd14d24a75205d46c7ab5f08d (owner: "potwierdzam 1.7 7.13"): unchanged code under 1.7's corrected surface; the cache sizes against the rewritten README; research.md, "Rows 1.7 and 7.13 after the Phase 6 review".

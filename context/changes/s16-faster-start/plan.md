@@ -685,7 +685,7 @@ research.md. Real sign-in and TV checks stay pending until a person sees them.
 
 #### Manual
 
-- [ ] 1.7 Windows: startup_time.py on a PyInstaller exe of this phase's commit (owner decision 2026-11-21: run 44812632302's, at eed2a5b), 5 warm runs, one watched
+- [x] 1.7 Windows: startup_time.py on a PyInstaller exe of this phase's commit (owner decision 2026-11-21: run 44812632302's, at eed2a5b), 5 warm runs, one watched — accepted at 4c2cfb70f58fb65dd14d24a75205d46c7ab5f08d
 
 ### Phase 2: Code that runs under either packager
 
@@ -751,4 +751,4 @@ research.md. Real sign-in and TV checks stay pending until a person sees them.
 - [x] 7.10 Both: only the current and previous cache folders remain past the age guard; a running build's folder is kept — accepted at 41e97ef3ad249c2156914458d6794a2bb88078a1
 - [x] 7.11 Both: a cold start killed during unpacking, then started again, opens normally — accepted at 41e97ef3ad249c2156914458d6794a2bb88078a1
 - [x] 7.12 Windows: the firewall prompt for a new build recorded — accepted at 41e97ef3ad249c2156914458d6794a2bb88078a1
-- [ ] 7.13 Both: the cache size per build recorded and matching README
+- [x] 7.13 Both: the cache size per build recorded and matching README — accepted at 4c2cfb70f58fb65dd14d24a75205d46c7ab5f08d
