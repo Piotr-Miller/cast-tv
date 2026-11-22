@@ -502,7 +502,7 @@ PASS/FAIL, with the run ID, the SHA-256 of the files and their build-info.
 
 **Implementation Note**: If either bar is missed, stop after this phase and report to the owner.
 Phases 6 and 7 do not start without the owner's decision.
-(owner decision 2026-11-20) Phase 6 starts with rows 5.2 and 5.6 reopened by eed2a5b (a Linux-only change to `castlib/processes.py`): Fedora and Windows 11 are a dual boot, so Windows is measured once, on Phase 6's PR files, for 5.2, 5.6 and 6.4 together.
+(owner decision 2026-11-20) Phase 6 starts with rows 5.2 and 5.6 reopened by 9b1ced7 (a Linux-only change to `castlib/processes.py`): Fedora and Windows 11 are a dual boot, so Windows is measured once, on Phase 6's PR files, for 5.2, 5.6 and 6.4 together.
 
 ---
 
@@ -676,79 +676,79 @@ research.md. Real sign-in and TV checks stay pending until a person sees them.
 
 #### Automated
 
-- [x] 1.1 Ready mark and status fields (test_api) — a558115
-- [x] 1.2 UI Ready cases (test_ui) — a558115
-- [x] 1.3 Lister and script (test_processes, test_startup_time) — a558115
-- [x] 1.4 node --check castlib/ui/app.js — a558115
-- [x] 1.5 pyflakes — a558115
-- [x] 1.6 Full suite — a558115
+- [x] 1.1 Ready mark and status fields (test_api) — e0ad84a
+- [x] 1.2 UI Ready cases (test_ui) — e0ad84a
+- [x] 1.3 Lister and script (test_processes, test_startup_time) — e0ad84a
+- [x] 1.4 node --check castlib/ui/app.js — e0ad84a
+- [x] 1.5 pyflakes — e0ad84a
+- [x] 1.6 Full suite — e0ad84a
 
 #### Manual
 
-- [x] 1.7 Windows: startup_time.py on a PyInstaller exe of this phase's commit (owner decision 2026-11-21: run 44812632302's, at eed2a5b), 5 warm runs, one watched — accepted at 4c2cfb70f58fb65dd14d24a75205d46c7ab5f08d
+- [x] 1.7 Windows: startup_time.py on a PyInstaller exe of this phase's commit (owner decision 2026-11-21: run 44812632302's, at eed2a5b), 5 warm runs, one watched — accepted at f3fb96c7f79bd6830cda924ad98c7abf04f473fb
 
 ### Phase 2: Code that runs under either packager
 
 #### Automated
 
-- [x] 2.1 test_bundle — 8278f85
-- [x] 2.2 Callers under all three kinds (test_platform, test_shortcut, test_window) — 8278f85
-- [x] 2.3 pyflakes — 8278f85
-- [x] 2.4 Full suite — 8278f85
+- [x] 2.1 test_bundle — dbb1b52
+- [x] 2.2 Callers under all three kinds (test_platform, test_shortcut, test_window) — dbb1b52
+- [x] 2.3 pyflakes — dbb1b52
+- [x] 2.4 Full suite — dbb1b52
 
 ### Phase 3: Old cache folders
 
 #### Automated
 
-- [x] 3.1 Pruning cases (test_bundle) — ed90da9
-- [x] 3.2 pyflakes — ed90da9
-- [x] 3.3 Full suite — ed90da9
+- [x] 3.1 Pruning cases (test_bundle) — be8eef9
+- [x] 3.2 pyflakes — be8eef9
+- [x] 3.3 Full suite — be8eef9
 
 ### Phase 4: Nuitka builds next to PyInstaller
 
 #### Automated
 
-- [x] 4.1 test_smoke, test_build_nuitka, test_cli — 7a7eb32
-- [x] 4.2 pyflakes — 7a7eb32
-- [x] 4.3 The PR's release workflow builds and smoke-tests four files — 7a7eb32
+- [x] 4.1 test_smoke, test_build_nuitka, test_cli — 658da78
+- [x] 4.2 pyflakes — 658da78
+- [x] 4.3 The PR's release workflow builds and smoke-tests four files — 658da78
 
 ### Phase 5: Measure on the owner's machines and decide
 
 #### Manual
 
-- [x] 5.1 Fedora: 5 cold + 5 warm runs of each file, medians recorded — accepted at b863e34a7bc7829ae0c149fb359c1dae9b6843e8
-- [x] 5.2 Windows 11: 5 cold + 5 warm runs of each file, medians recorded — accepted at 27556cc7f39ceaeda83143851d4d0ad323ee9bfd
-- [x] 5.3 Fedora: one run watched, the window visibly ready at the mark — accepted at 30cc68882c642047335a29eba9bed0a1863d56e1
-- [x] 5.4 Windows 11: one run watched, the window visibly ready at the mark — accepted at 67084d10952c3d4e7f3902d6ececac8e367d1488
-- [x] 5.5 Linux bar met, or the owner's decision after a miss recorded — accepted at eff390b8c7e9660f25b740cec714c40443dbf8ea
-- [x] 5.6 Windows bar met, or the owner's decision after a miss recorded — accepted at 27556cc7f39ceaeda83143851d4d0ad323ee9bfd
+- [x] 5.1 Fedora: 5 cold + 5 warm runs of each file, medians recorded — accepted at 824a487da0f0b8c966d2ddcb5b5679b4b1af5657
+- [x] 5.2 Windows 11: 5 cold + 5 warm runs of each file, medians recorded — accepted at 9ad76e4c2d822f984936a0e2521a33492ea3fcc3
+- [x] 5.3 Fedora: one run watched, the window visibly ready at the mark — accepted at 3d990ec6ccb0d8070d681cc0acf2c46559817e03
+- [x] 5.4 Windows 11: one run watched, the window visibly ready at the mark — accepted at 06a16b9f6ae98b7a5509c9e9edc538e18ff76f35
+- [x] 5.5 Linux bar met, or the owner's decision after a miss recorded — accepted at 6d52911465ac4f0ba6a330cb62dda92eda558401
+- [x] 5.6 Windows bar met, or the owner's decision after a miss recorded — accepted at 9ad76e4c2d822f984936a0e2521a33492ea3fcc3
 
 ### Phase 6: Switch the release to Nuitka
 
 #### Automated
 
-- [x] 6.1 test_smoke, test_build_nuitka — fe88a52
-- [x] 6.2 Full suite — fe88a52
-- [x] 6.3 The PR's release workflow green with the two Nuitka files under the release names — fe88a52
+- [x] 6.1 test_smoke, test_build_nuitka — 93ca5b7
+- [x] 6.2 Full suite — 93ca5b7
+- [x] 6.3 The PR's release workflow green with the two Nuitka files under the release names — 93ca5b7
 
 #### Manual
 
-- [x] 6.4 The published files recorded as equivalent to the measured ones, rows 5.1-5.6 re-confirmed, or measured again — accepted at 27556cc7f39ceaeda83143851d4d0ad323ee9bfd
+- [x] 6.4 The published files recorded as equivalent to the measured ones, rows 5.1-5.6 re-confirmed, or measured again — accepted at 9ad76e4c2d822f984936a0e2521a33492ea3fcc3
 
 ### Phase 7: The accepted behaviour on the Nuitka files
 
 #### Manual
 
-- [x] 7.1 Windows double-click: only the window, closing it stops the TV — accepted at 41e97ef3ad249c2156914458d6794a2bb88078a1
-- [x] 7.2 Windows from PowerShell: output there, window opens, Ctrl+C stops both — accepted at 41e97ef3ad249c2156914458d6794a2bb88078a1
-- [x] 7.3 Windows: a forced fallback shows the console again — accepted at 41e97ef3ad249c2156914458d6794a2bb88078a1
-- [x] 7.4 Both: X, Windows sign-out and Linux kill stop the TV and end the process — accepted at 41e97ef3ad249c2156914458d6794a2bb88078a1
-- [x] 7.5 Both: a second launch brings the window to the front — accepted at 41e97ef3ad249c2156914458d6794a2bb88078a1
-- [x] 7.6 Windows: Start menu entry, pinning, Update after a move, Remove — accepted at 41e97ef3ad249c2156914458d6794a2bb88078a1
-- [x] 7.7 Fedora: menu entry, Update after a move, Remove — accepted at b863e34a7bc7829ae0c149fb359c1dae9b6843e8
-- [x] 7.8 Fedora: HEIC upright, HTTPS lists load, no Fontconfig diagnostics — accepted at b863e34a7bc7829ae0c149fb359c1dae9b6843e8
-- [x] 7.9 Both: the phone panel's QR opens the UI on the phone — accepted at 41e97ef3ad249c2156914458d6794a2bb88078a1
-- [x] 7.10 Both: only the current and previous cache folders remain past the age guard; a running build's folder is kept — accepted at 41e97ef3ad249c2156914458d6794a2bb88078a1
-- [x] 7.11 Both: a cold start killed during unpacking, then started again, opens normally — accepted at 41e97ef3ad249c2156914458d6794a2bb88078a1
-- [x] 7.12 Windows: the firewall prompt for a new build recorded — accepted at 41e97ef3ad249c2156914458d6794a2bb88078a1
-- [x] 7.13 Both: the cache size per build recorded and matching README — accepted at 4c2cfb70f58fb65dd14d24a75205d46c7ab5f08d
+- [x] 7.1 Windows double-click: only the window, closing it stops the TV — accepted at 878cc8f66700b5e13e7bc8b7e5b5be384adb2fb2
+- [x] 7.2 Windows from PowerShell: output there, window opens, Ctrl+C stops both — accepted at 878cc8f66700b5e13e7bc8b7e5b5be384adb2fb2
+- [x] 7.3 Windows: a forced fallback shows the console again — accepted at 878cc8f66700b5e13e7bc8b7e5b5be384adb2fb2
+- [x] 7.4 Both: X, Windows sign-out and Linux kill stop the TV and end the process — accepted at 878cc8f66700b5e13e7bc8b7e5b5be384adb2fb2
+- [x] 7.5 Both: a second launch brings the window to the front — accepted at 878cc8f66700b5e13e7bc8b7e5b5be384adb2fb2
+- [x] 7.6 Windows: Start menu entry, pinning, Update after a move, Remove — accepted at 878cc8f66700b5e13e7bc8b7e5b5be384adb2fb2
+- [x] 7.7 Fedora: menu entry, Update after a move, Remove — accepted at 824a487da0f0b8c966d2ddcb5b5679b4b1af5657
+- [x] 7.8 Fedora: HEIC upright, HTTPS lists load, no Fontconfig diagnostics — accepted at 824a487da0f0b8c966d2ddcb5b5679b4b1af5657
+- [x] 7.9 Both: the phone panel's QR opens the UI on the phone — accepted at 878cc8f66700b5e13e7bc8b7e5b5be384adb2fb2
+- [x] 7.10 Both: only the current and previous cache folders remain past the age guard; a running build's folder is kept — accepted at 878cc8f66700b5e13e7bc8b7e5b5be384adb2fb2
+- [x] 7.11 Both: a cold start killed during unpacking, then started again, opens normally — accepted at 878cc8f66700b5e13e7bc8b7e5b5be384adb2fb2
+- [x] 7.12 Windows: the firewall prompt for a new build recorded — accepted at 878cc8f66700b5e13e7bc8b7e5b5be384adb2fb2
+- [x] 7.13 Both: the cache size per build recorded and matching README — accepted at f3fb96c7f79bd6830cda924ad98c7abf04f473fb
