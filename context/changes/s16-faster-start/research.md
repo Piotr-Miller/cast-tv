@@ -565,3 +565,57 @@ printed, and a tab click responded.
 
 The owner accepted rows 1.7, 5.2, 5.6 and 6.4 from these observations ("Wszytsko sie zgadza",
 2026-11-21).
+
+## Phase 7 on Windows 11 (2026-11-22)
+
+The same laptop, an unelevated session. The file is PR #111's release run 44821655658's
+`cast-tv-windows-x64.exe` (identity `0.5.0-gh44821655658.1`, row 6.4), in
+`%USERPROFILE%\Downloads\s16-run-44821655658`, later in its `moved\` subfolder. Where the owner
+asked Claude to do a step ("rob to za mnie"), Claude drove it through the window's local API
+(`/api/shortcut`, `/api/quit`, `/api/cast`) and process listings instead of the button, and says
+so per row.
+
+- **7.12, the firewall prompt.** The first start of this identity (a double-click, 12:25) showed
+  the Windows Defender Firewall prompt; the owner allowed it. The rule it made is for the
+  **unpacked exe in the cache**, `…\AppData\Local\cast-tv\0.5.0-gh44821655658.1\cast-tv-windows-x64.exe`
+  (inbound, Allow, Private + Public), like the two earlier Nuitka identities' rules; PyInstaller's
+  rules name the downloaded file. So every new version prompts once, and moving the downloaded
+  file does not (no prompt after the move below; `firewall_blocked` empty).
+- **7.1, Explorer.** A console flashed briefly; then only the cast-tv window, no Windows Terminal
+  tab on the taskbar (owner). `Przejazd - SuperCars.mp4` cast, X: the TV stopped and no cast-tv
+  process was left (owner: "wszystko ok"; `Get-Process` empty).
+- **7.2, PowerShell.** `& .\cast-tv-windows-x64.exe`: the addresses printed, the window opened;
+  Ctrl+C in that window printed `Stopped.`, closed the window and returned the prompt (owner:
+  "tak było"); no process left.
+- **7.3, the forced fallback.** Claude started the file with `CAST_TV_WINDOW_FAIL=1`; the owner saw
+  the browser tab with the UI and the console in a new Windows Terminal window (the default
+  terminal, so the console is a `PseudoConsoleWindow`), titled with the cache exe's path. Claude
+  cast the video through `/api/cast` (TV `PLAYING`); the owner closed that console window, and
+  both processes ended (port 8895 refused).
+- **7.5, a second start.** The window covered by another one (owner); a second start exited 0
+  and the owner saw the existing window come to the front ("tak wyskoczyło"); the first
+  instance's two processes stayed.
+- **7.6, the Start menu, by API.** `install`: `cast-tv.lnk` in the user's Start Menu Programs,
+  target and icon the **started file** in `Downloads\…` (not the cache exe), `current: true`.
+  Quit, then the `.lnk` opened through the shell: the window "cast-tv" opened and no terminal
+  window appeared. The file moved to `moved\` and started there: `current: false` (the window's
+  **Update menu entry** state); `install` pointed the `.lnk` at `moved\…`, `current: true`;
+  `remove`: the `.lnk` gone, `installed: false`. Not seen by a person: the Start search's Best
+  match and the button labels; pinning is not scriptable on Windows.
+- **7.10, retention, on the PR's three builds.** Folders `0.5.0-gh44630376210.1`,
+  `0.5.0-gh44812632302.1`, `0.5.0-gh44821655658.1`, each started before.
+  1. The oldest's `.cast-tv-started` set 8 days back, the newest started: the oldest folder was
+     gone after 2.1 s; the other two remained.
+  2. The oldest build started again (its folder unpacked anew) and left running, its marker set
+     8 days back, then the newest started with `-p 8896`: its marker was rewritten 2 s after the
+     start (the pruning ran), and after 30 s all three folders remained.
+  The `0.5.0` and `Cache` entries under the folder (no marker) were left alone.
+- **7.11, an interrupted first start.** The build folder deleted; the file started. Killing "the
+  process you started" after 1 s did not interrupt anything on Windows: by then the unpack (76 MiB)
+  was complete and the started process had already relaunched itself (the detach from the
+  console), so the PID was gone. Instead Claude killed every cast-tv process repeatedly from the
+  moment the folder held more than 5 MiB (316 ms): a partial folder of 26.8 MiB, 17 files, no
+  process. Started again: the Ready mark after 3.1 s, the window "cast-tv"; the folder complete
+  again (56 files).
+- **7.13, the cache size.** 79,895,478 B (76.2 MiB) in 56 files for `0.5.0-gh44821655658.1`;
+  README says "80 MB on Windows".
