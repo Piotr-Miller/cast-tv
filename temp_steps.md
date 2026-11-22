@@ -87,6 +87,10 @@ soon as it is done, with the date and, for a merge or a recorded row, the PR or 
      Your decision there.
    - Done 2026-11-21: 1.7, 5.2, 5.6 and 6.4 accepted at 27556cc (cold 0.828, warm 0.734; a first
      attempt during Windows servicing (`TiWorker`) was discarded).
+   - Done 2026-11-22: Phase 7 on Windows observed except 7.4's sign-out (research.md, "Phase 7 on
+     Windows 11"; 36c6971 and the next commit). **On resuming after the sign-out:** ask the owner
+     whether the TV had stopped after Start → account → Sign out and signing in again; record it
+     under 7.4 in research.md, then ask the owner to accept 7.1-7.6 and 7.9-7.13.
    - Phase 7 on run 44821655658's exe; 7.10 uses the three Windows builds of runs 44630376210
      (already in `%USERPROFILE%\Downloads\s16-run-44630376210`), 44812632302 and 44821655658.
 - [ ] 12. After the visit: `/rune-impl-review s16-faster-start phase 6` (Codex), PR #111 ready for
