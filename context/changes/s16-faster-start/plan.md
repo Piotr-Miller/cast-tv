@@ -739,16 +739,16 @@ research.md. Real sign-in and TV checks stay pending until a person sees them.
 
 #### Manual
 
-- [ ] 7.1 Windows double-click: only the window, closing it stops the TV
-- [ ] 7.2 Windows from PowerShell: output there, window opens, Ctrl+C stops both
-- [ ] 7.3 Windows: a forced fallback shows the console again
-- [ ] 7.4 Both: X, Windows sign-out and Linux kill stop the TV and end the process
-- [ ] 7.5 Both: a second launch brings the window to the front
-- [ ] 7.6 Windows: Start menu entry, pinning, Update after a move, Remove
+- [x] 7.1 Windows double-click: only the window, closing it stops the TV — accepted at 41e97ef3ad249c2156914458d6794a2bb88078a1
+- [x] 7.2 Windows from PowerShell: output there, window opens, Ctrl+C stops both — accepted at 41e97ef3ad249c2156914458d6794a2bb88078a1
+- [x] 7.3 Windows: a forced fallback shows the console again — accepted at 41e97ef3ad249c2156914458d6794a2bb88078a1
+- [x] 7.4 Both: X, Windows sign-out and Linux kill stop the TV and end the process — accepted at 41e97ef3ad249c2156914458d6794a2bb88078a1
+- [x] 7.5 Both: a second launch brings the window to the front — accepted at 41e97ef3ad249c2156914458d6794a2bb88078a1
+- [x] 7.6 Windows: Start menu entry, pinning, Update after a move, Remove — accepted at 41e97ef3ad249c2156914458d6794a2bb88078a1
 - [x] 7.7 Fedora: menu entry, Update after a move, Remove — accepted at b863e34a7bc7829ae0c149fb359c1dae9b6843e8
 - [x] 7.8 Fedora: HEIC upright, HTTPS lists load, no Fontconfig diagnostics — accepted at b863e34a7bc7829ae0c149fb359c1dae9b6843e8
-- [ ] 7.9 Both: the phone panel's QR opens the UI on the phone
-- [ ] 7.10 Both: only the current and previous cache folders remain past the age guard; a running build's folder is kept
-- [ ] 7.11 Both: a cold start killed during unpacking, then started again, opens normally
-- [ ] 7.12 Windows: the firewall prompt for a new build recorded
-- [ ] 7.13 Both: the cache size per build recorded and matching README
+- [x] 7.9 Both: the phone panel's QR opens the UI on the phone — accepted at 41e97ef3ad249c2156914458d6794a2bb88078a1
+- [x] 7.10 Both: only the current and previous cache folders remain past the age guard; a running build's folder is kept — accepted at 41e97ef3ad249c2156914458d6794a2bb88078a1
+- [x] 7.11 Both: a cold start killed during unpacking, then started again, opens normally — accepted at 41e97ef3ad249c2156914458d6794a2bb88078a1
+- [x] 7.12 Windows: the firewall prompt for a new build recorded — accepted at 41e97ef3ad249c2156914458d6794a2bb88078a1
+- [x] 7.13 Both: the cache size per build recorded and matching README — accepted at 41e97ef3ad249c2156914458d6794a2bb88078a1
