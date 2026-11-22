@@ -1,10 +1,11 @@
 ---
 change_id: s16-faster-start
 title: "A faster-starting release file (Nuitka, cached onefile)"
-status: implementing
+status: archived
+outcome: completed
 created: 2026-11-18
 updated: 2026-11-22
-archived_at: null
+archived_at: 2026-11-22T20:31:34Z
 ---
 
 ## Notes
