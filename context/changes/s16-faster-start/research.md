@@ -625,3 +625,5 @@ so per row.
 - **7.4, X.** Covered by 7.1 (X with the video playing: the TV stopped, no process left). The
   sign-out part was not repeated on the Nuitka file (owner decision 2026-11-22: "już raz
   sprawdzaliśmy to, wylogowanie przerywa film"; it was observed in S-12 on the PyInstaller file).
+
+The owner accepted rows 7.1-7.6 and 7.9-7.13 from these observations and the Fedora parts in "Phase 7 on Fedora" ("potwierdzam 7.1-7.6 7.9-7.13", 2026-11-22).
