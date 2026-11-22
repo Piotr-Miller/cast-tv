@@ -623,4 +623,5 @@ so per row.
 - **7.9, the QR code.** The owner scanned the window's **Open on your phone** QR code with the
   phone: the UI opened there with no phone panel and no Quit control ("ok").
 - **7.4, X.** Covered by 7.1 (X with the video playing: the TV stopped, no process left). The
-  sign-out part is next.
+  sign-out part was not repeated on the Nuitka file (owner decision 2026-11-22: "już raz
+  sprawdzaliśmy to, wylogowanie przerywa film"; it was observed in S-12 on the PyInstaller file).
