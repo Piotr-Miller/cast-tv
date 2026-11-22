@@ -642,3 +642,5 @@ which reopened 7.13 (its surface includes README.md). The same commit removed th
   what 7.10 observed: each of the three identities had its own folder.
 - **1.7:** `git diff 27556cc 3a63909 -- castlib packaging/smoke.py packaging/startup_time.py` is
   empty, so the observation in "Row 1.7 on run 44812632302" is about the current code.
+
+The owner accepted rows 1.7 and 7.13 again from these observations ("potwierdzam 1.7 7.13", 2026-11-22).
