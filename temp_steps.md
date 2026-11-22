@@ -6,7 +6,7 @@ soon as it is done, with the date and, for a merge or a recorded row, the PR or 
 ## Where it stands
 
 - **S-16, a faster-starting release file:** merged as PR #111 (rebase, main fc89537) on
-  2026-11-22 and archived → `context/archive/2026-11-18-s16-faster-start/` (650262d). The
+  2026-11-22 and archived → `context/archive/2026-11-18-s16-faster-start/` (9ae180b). The
   release is a Nuitka onefile that unpacks once per build into `~/.cache/cast-tv/<version>-gh<run>.<attempt>`
   (Windows: `%LOCALAPPDATA%\cast-tv\...`). Warm start against PyInstaller: 0.706 on Fedora,
   0.734 on Windows 11 (bar 0.75); cold 0.633 and 0.828 (bar 1.00). All 21 manual rows accepted.
@@ -27,9 +27,9 @@ soon as it is done, with the date and, for a merge or a recorded row, the PR or 
 
 ## Next
 
-- [ ] 1. Merge the PR of branch `s16-after-merge` (S-16's SHAs rewritten from main, the archive,
-   roadmap S-16 → done, this file).
-- [ ] 2. The release: the owner picks the version (0.6.0 proposed, a new packager). Claude opens a
+- [x] 1. Merge the PR of branch `s16-after-merge` (S-16's SHAs rewritten from main, the archive,
+   roadmap S-16 → done, this file). — 2026-11-22, PR #112.
+- [ ] 2. The release: the owner picked 0.6.0 (2026-11-22). Claude opens a
    PR `chore(release): cast-tv <version>` that sets `castlib/__init__.py`; the owner merges it;
    then the tag `v<version>` on main, whose release run publishes the files.
 - [ ] 3. After the release: download both files from the GitHub release and start each once on
