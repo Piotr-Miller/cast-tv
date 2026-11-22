@@ -133,11 +133,11 @@ open. `/rune-plan` can now weigh these numbers against the open items above.
 
 ## Row 1.7: the Ready mark on Windows 11 (2026-11-18)
 
-The home Windows 11 laptop (`DESKTOP-35JAM1C`). A PyInstaller exe built from a558115 (Phase 1's
-commit; the castlib code is unchanged at 5155ad8) with `pyinstaller --noconfirm packaging\cast-tv.spec`
+The home Windows 11 laptop (`DESKTOP-35JAM1C`). A PyInstaller exe built from e0ad84a (Phase 1's
+commit; the castlib code is unchanged at 463c368) with `pyinstaller --noconfirm packaging\cast-tv.spec`
 in the spike's venv (PyInstaller 6.22.3, Python 3.14.5): 26,225,168 bytes, SHA-256
 `AC4FC324C18FCC1AF1B310DA6E4A5B18B8DF4405A3942884288E3B90168C6AA0`. Claude ran, from the
-checkout's venv at 5155ad8:
+checkout's venv at 463c368:
 
 ```
 python packaging\startup_time.py <exe> --mode warm --runs 5 --out p1-warm.json
@@ -151,7 +151,7 @@ python packaging\startup_time.py <exe> --mode warm --runs 1 --hold 15 --out p1-w
 - Found: `--hold` also held the unmeasured priming start (the window stayed open after 4.17 s as
   well). It does not change any time; the priming start is never measured.
 
-Row 1.7 is accepted at fc780beb1660330a543a6c0bf9fd41036f840f2c (the docs commit over 5155ad8; same code).
+Row 1.7 is accepted at 894b53ee099cf19b0903d46ddb7682db943f9695 (the docs commit over 463c368; same code).
 
 ## Phase 1 implementation review and fixes (2026-11-19)
 
@@ -194,7 +194,7 @@ After the Phase 1 review (F7), `castlib/processes.py` decided ownership by the u
 `OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION)`. Every listing was therefore incomplete:
 `startup_time.py` refused at PID 4, and Phase 3 would never prune on Windows.
 
-Experiment (Claude, unelevated Python 3.14.5 probe; the exe is the PyInstaller build of a558115,
+Experiment (Claude, unelevated Python 3.14.5 probe; the exe is the PyInstaller build of e0ad84a,
 SHA-256 `AC4FC324…6AA0`):
 
 - cast-tv started normally (`--no-browser -p 8897`): both processes (bootloader 32188, child 29764)
@@ -210,8 +210,8 @@ incomplete. Other API errors stay incomplete. With this rule the unelevated list
 
 ## Row 1.7 again, after the Phase 1 review fixes (2026-11-19)
 
-Row 1.7 was reopened by the review fixes (99287e6). Same laptop. A PyInstaller exe built from
-a32a0ea (the fixes, the Windows ownership rule 3e67ec8 and the unheld priming start), same venv
+Row 1.7 was reopened by the review fixes (a6452ce). Same laptop. A PyInstaller exe built from
+37f8800 (the fixes, the Windows ownership rule 920bff8 and the unheld priming start), same venv
 and command as before: 26,226,959 bytes, SHA-256
 `5AD64532F501123EC122C6A670735531262C12F9D7BE01DD5143417DF2E44D26`. Claude ran from an ordinary,
 unelevated PowerShell (no refusal: the ownership rule works without elevation):
@@ -225,12 +225,12 @@ python packaging\startup_time.py <exe> --mode warm --runs 1 --hold 15 --out p1b-
 - The watched run: "ready after 4.17 s: the window stays open 15 s"; the priming start was no
   longer held. The owner watched and accepted ("akceptuję"): the TV button and the GoPro / OneDrive
   / Google Photos tabs were on screen when the time printed, and a tab click responded.
-Row 1.7 is accepted at 185f2062837a293ab9b02b5dfbd00ed4d1cd21d6 (the docs commit over a32a0ea; same code).
+Row 1.7 is accepted at 841d889deb84713fc389fe90e1724c027374a218 (the docs commit over 37f8800; same code).
 
 ## Phase 5 on Windows 11: rows 5.2, 5.4 and 5.6 (2026-11-20)
 
 The home laptop (Windows 11, the same one as row 1.7). The files are the two Windows artifacts of
-PR #111's release run 44630376210 at 7a7eb32 (Phase 4 review APPROVED), downloaded with
+PR #111's release run 44630376210 at 658da78 (Phase 4 review APPROVED), downloaded with
 `gh run download 44630376210 -n <artifact> -D <dir>` into `%USERPROFILE%\Downloads\s16-run-44630376210`:
 
 - Nuitka `cast-tv-windows-x64-nuitka.exe`: 18,300,416 B, SHA-256
@@ -325,7 +325,7 @@ the change, `running_images()` on this desktop listed 120 processes.
 ## Phase 5 on Fedora: rows 5.1 and 5.5, the Linux bar missed (2026-11-20)
 
 The Fedora desktop (Fedora 45, kernel 7.3.4, KDE Plasma on Wayland, Intel Core i7-8665U, 8
-threads). The files are the two Linux artifacts of PR #111's release run 44812632302 at eed2a5b
+threads). The files are the two Linux artifacts of PR #111's release run 44812632302 at 9b1ced7
 (the fix above; build-info `commit` c35ddc9 is the PR's merge ref), downloaded with
 `gh run download 44812632302 -n <artifact> -D ~/Downloads/s16-run-44812632302/<nuitka|pyi>`:
 
@@ -411,8 +411,8 @@ linux-nuitka-watched.json:
 
 ## Phase 6: the published files against the measured ones (row 6.4, 2026-11-20)
 
-Phase 6 (fe88a52) builds, smoke-tests and would publish only the Nuitka files, under the release
-names. PR #111's release run 44821655658 at fe88a52 was green (both builds and smoke tests; test
+Phase 6 (93ca5b7) builds, smoke-tests and would publish only the Nuitka files, under the release
+names. PR #111's release run 44821655658 at 93ca5b7 was green (both builds and smoke tests; test
 run 44821655716 green). Its files, downloaded with `gh run download 44821655658 -n <artifact>`:
 
 - `cast-tv-linux-x64`: 154,876,120 B, SHA-256
@@ -422,25 +422,25 @@ run 44821655716 green). Its files, downloaded with `gh run download 44821655658 
   Python 3.12.10, pip-freeze hash `c2e1b45611244254619800be980f3777d03b9bcd620b1259977f7dbb1dab6d1f`.
 
 **Linux: equal apart from names.** Its build-info against the file measured on Fedora (run
-44812632302 at eed2a5b) differs only in the identity and cache folder (`0.5.0-gh44821655658.1`),
+44812632302 at 9b1ced7) differs only in the identity and cache folder (`0.5.0-gh44821655658.1`),
 the commit (the PR's merge ref, d0c7842 against c35ddc9) and two options that carry those names:
 `--onefile-tempdir-spec=…/0.5.0-gh44821655658.1` and `--output-filename=cast-tv-linux-x64` (was
 `-nuitka`). The Nuitka version (4.3.5), the Python version (3.12.16), the pip-freeze hash
 (`a3a163f1…`) and every other option are equal. The code:
 
 ```
-git diff --stat eed2a5b..fe88a52 -- castlib packaging/build_nuitka.py packaging/entry.py packaging/fonts.conf pyproject.toml
+git diff --stat 9b1ced7..93ca5b7 -- castlib packaging/build_nuitka.py packaging/entry.py packaging/fonts.conf pyproject.toml
  packaging/build_nuitka.py | 8 ++++----
 ```
 
 Those four lines are the docstring and the `--out` help text (the example name and the deleted
-spec); `main` has not moved since eed2a5b. So Fedora's rows 5.1, 5.3 and 5.5 hold for the
+spec); `main` has not moved since 9b1ced7. So Fedora's rows 5.1, 5.3 and 5.5 hold for the
 published Linux file and are re-confirmed at this revision, not measured again.
 
 **Windows: measured again.** The Windows rows 5.2 and 5.6 were measured on run 44630376210 at
-7a7eb32, before eed2a5b changed `castlib/processes.py`, so they are measured again in the one
+658da78, before 9b1ced7 changed `castlib/processes.py`, so they are measured again in the one
 Windows visit (owner decision 2026-11-20). Phase 6 builds no PyInstaller file any more, so the pair
-is run 44812632302's two Windows files at eed2a5b: its Nuitka exe is to this run's
+is run 44812632302's two Windows files at 9b1ced7: its Nuitka exe is to this run's
 `cast-tv-windows-x64.exe` what the Linux file above is to this one (the same diff), and the
 build-info comparison is written down with the measurement.
 
@@ -502,10 +502,10 @@ left for a change of its own.
 The owner accepted rows 5.1, 7.7 and 7.8 from these observations ("potwierdzam 5.1 7.7 7.8",
 2026-11-20).
 
-## Phase 5 on Windows 11 again: rows 5.2 and 5.6 at eed2a5b (2026-11-21)
+## Phase 5 on Windows 11 again: rows 5.2 and 5.6 at 9b1ced7 (2026-11-21)
 
-eed2a5b reopened 5.2 and 5.6. The same laptop, now with the Windows artifacts of PR #111's release
-run 44812632302 (commit c35ddc9, after eed2a5b), downloaded into
+9b1ced7 reopened 5.2 and 5.6. The same laptop, now with the Windows artifacts of PR #111's release
+run 44812632302 (commit c35ddc9, after 9b1ced7), downloaded into
 `%USERPROFILE%\Downloads\s16-run-44812632302`:
 
 - Nuitka `cast-tv-windows-x64-nuitka.exe`: 18,296,320 B, SHA-256
@@ -550,7 +550,7 @@ published Windows file.
 ## Row 1.7 on run 44812632302 (2026-11-21)
 
 Phase 6 deleted `packaging/cast-tv.spec`, so row 1.7 uses run 44812632302's PyInstaller exe
-(built at eed2a5b, every castlib change of Phases 1-5; 26,142,111 B, SHA-256 `e57170dd…`, above)
+(built at 9b1ced7, every castlib change of Phases 1-5; 26,142,111 B, SHA-256 `e57170dd…`, above)
 by owner decision. Its 5 warm runs are row 5.2's PyInstaller warm series of the same file:
 4.31 / 4.28 / 4.17 / 6.70 / 5.23 s, median 4.31 s (2026-11-19: 4.28 s). The watched run, from an
 unelevated Git Bash:
@@ -631,7 +631,7 @@ The owner accepted rows 7.1-7.6 and 7.9-7.13 from these observations and the Fed
 ## Rows 1.7 and 7.13 after the Phase 6 review (2026-11-22)
 
 The Phase 6 review (`reviews/impl-review-phase-6-fe88a52.md`, APPROVED) found F1: README promised
-cleanup "at every start" and one folder per version. 3a63909 rewrote the three README passages
+cleanup "at every start" and one folder per version. 21bb5a8 rewrote the three README passages
 (one folder per build, cleanup after the desktop window opens, subject to its safety checks),
 which reopened 7.13 (its surface includes README.md). The same commit removed the deleted
 `packaging/cast-tv.spec` from row 1.7's surface, which reopened 1.7.
@@ -640,7 +640,7 @@ which reopened 7.13 (its surface includes README.md). The same commit removed th
   "about 550 MB on Linux, 80 MB on Windows" (README.md:36): Fedora 545,895,086 B (522 MiB),
   Windows 79,895,478 B (76.2 MiB), per build folder. The new wording "one folder per build" is
   what 7.10 observed: each of the three identities had its own folder.
-- **1.7:** `git diff 27556cc 3a63909 -- castlib packaging/smoke.py packaging/startup_time.py` is
+- **1.7:** `git diff 9ad76e4 21bb5a8 -- castlib packaging/smoke.py packaging/startup_time.py` is
   empty, so the observation in "Row 1.7 on run 44812632302" is about the current code.
 
 The owner accepted rows 1.7 and 7.13 again from these observations ("potwierdzam 1.7 7.13", 2026-11-22).

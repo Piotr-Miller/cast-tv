@@ -5,9 +5,9 @@
 - **Scope**: Phase 1 (phases 1–7)
 - **Session**: fresh
 - **Base**: a85f59d036cbdaea669977ae312028b774b7d5a5 (explicit)
-- **Head**: 0707daca1a5262a34486a8d4543beff62fc3af0e
+- **Head**: 1e20a08a4a8844f0fc16c49912b978e1b4b53116
 - **Worktree**: excluded (clean at review start)
-- **Checks ran at**: 0707daca1a5262a34486a8d4543beff62fc3af0e
+- **Checks ran at**: 1e20a08a4a8844f0fc16c49912b978e1b4b53116
 - **Manual acceptance**: 1 of 1 confirmed (1.7 current)
 - **Date**: 2026-11-19
 - **Verdict**: REJECTED
@@ -111,9 +111,9 @@
 ## Review Notes
 
 - **Bookkeeping in diff**: context/changes/s16-faster-start/change.md, plan-brief.md, plan.md, research.md, reviews/plan-review.md (all under that change folder).
-- **Boundary**: implementation a558115, watched-run support 5155ad8, observation fc780be and acceptance 7d33c1b reviewed. 0707dac changes only temp_steps.md; that owner handoff file is excluded from the implementation scope. No later phase is implemented.
-- **Context**: canonical plan is active; the only active plan was read fully. Fetched remote branches; origin/main and origin/s16-faster-start; gh pr list and branch run list are empty. All 6 of 6 lessons were read and considered; manual observation and poll-owned state are directly relevant. Phase 1 Automated 1.1–1.6 have ancestor SHA a558115; no unsuffixed or malformed n/a rows.
-- **Acceptance**: skill acceptance-state script exits 0; 1.7 is current at fc780beb1660330a543a6c0bf9fd41036f840f2c. research.md records date, Windows 11 device, instrumented PyInstaller SHA-256, five warm values, median and owner's observed tab response. Pending rows in later phases are outside this review's denominator. Analysis did not alter Progress.
+- **Boundary**: implementation e0ad84a, watched-run support 463c368, observation 894b53e and acceptance 54c84ea reviewed. 1e20a08 changes only temp_steps.md; that owner handoff file is excluded from the implementation scope. No later phase is implemented.
+- **Context**: canonical plan is active; the only active plan was read fully. Fetched remote branches; origin/main and origin/s16-faster-start; gh pr list and branch run list are empty. All 6 of 6 lessons were read and considered; manual observation and poll-owned state are directly relevant. Phase 1 Automated 1.1–1.6 have ancestor SHA e0ad84a; no unsuffixed or malformed n/a rows.
+- **Acceptance**: skill acceptance-state script exits 0; 1.7 is current at 894b53ee099cf19b0903d46ddb7682db943f9695. research.md records date, Windows 11 device, instrumented PyInstaller SHA-256, five warm values, median and owner's observed tab response. Pending rows in later phases are outside this review's denominator. Analysis did not alter Progress.
 - **Checks at recorded head**: repository .venv Python 3.14.5; Node 24.15.0 available. `python -m pytest tests/test_api.py -q`: exit 0, 24 passed in 7.50s. `python -m pytest tests/test_ui.py -q`: exit 0, 27 passed in 5.65s. `python -m pytest tests/test_processes.py tests/test_startup_time.py -q`: exit 0, 31 passed, 1 skipped in 0.45s (Linux owner case on Windows). `node --check castlib/ui/app.js`: exit 0, no output. `python -m pyflakes castlib tests packaging`: exit 0, no output. `python -m pytest`: exit 1, 3 failed, 562 passed, 6 skipped in 120.55s; F6 names failures. Commands captured stdout/stderr in separate temporary log files and preserved exit status, without command pipelines. Baseline comparison checkout was removed.
 - **Matched contracts**: assigned successful host status gates one-shot marking; failed/delayed status and host=False suppress it; actual production scheduling is $nextTick plus two frames and does not await errors. HOST_ONLY remains POST/loopback and no LAN timestamp metadata is exposed. App first timestamps use its existing lock. Window wrapper keeps the once-only shown callback and CLI shown message. No unintended product behavior change beyond F1 was found. Linux owner logic fails closed on same-owner refusal; the read-only safety pass additionally checked a nondumpable same-user process under WSL. Explicit Windows other-session access refusals remain the intended policy; this is a session policy, not cross-session SID ownership.
 - **Script**: preflight precedes priming and every measured run; validated cold paths are direct build folders; max(ui_ready_at, shown_at)-launch is correct. BUILD_ID/cache helpers are necessary Phase 1 support for shared validation, not premature Phase 2 implementation. Ownership-checked smoke.stop is reused. Known --hold on priming is documented and deferred to Phase 4; no finding and no requested correction here. Invalid user arguments such as zero runs were not added as speculative findings.
@@ -126,10 +126,10 @@
 
 - **Scope**: Phase 1 (phases 1–7)
 - **Session**: fresh (this conversation did not run rune-implement; these fixes were applied during review triage)
-- **Base**: 0707daca1a5262a34486a8d4543beff62fc3af0e (previous round)
-- **Head**: 0707daca1a5262a34486a8d4543beff62fc3af0e
+- **Base**: 1e20a08a4a8844f0fc16c49912b978e1b4b53116 (previous round)
+- **Head**: 1e20a08a4a8844f0fc16c49912b978e1b4b53116
 - **Worktree**: included(castlib/processes.py, castlib/ui/app.js, packaging/startup_time.py, tests/test_api.py, tests/test_cli.py, tests/test_onedrive.py, tests/test_processes.py, tests/test_startup_time.py, tests/test_ui.py, tests/ui_driver.js, context/changes/s16-faster-start/change.md, context/changes/s16-faster-start/plan.md, context/changes/s16-faster-start/research.md, context/changes/s16-faster-start/reviews/impl-review-phase-1-0707dac.md, temp_steps.md)
-- **Checks ran at**: 0707daca1a5262a34486a8d4543beff62fc3af0e plus the included worktree fixes; documentation/decision updates after checks do not change tested code.
+- **Checks ran at**: 1e20a08a4a8844f0fc16c49912b978e1b4b53116 plus the included worktree fixes; documentation/decision updates after checks do not change tested code.
 - **Manual acceptance**: 0 of 1 confirmed — pending: 1.7
 - **Verdict**: APPROVED (local code review; manual acceptance and PR release validation remain pending)
 - **Findings**: 0 critical, 0 warnings, 0 observations

@@ -4,10 +4,10 @@
 - **Plan**: context/changes/s16-faster-start/plan.md
 - **Scope**: Phase 3 (phases 1–7)
 - **Session**: fresh
-- **Base**: c213876766510cdb5b3e033fc8dcc5ef28a94398 (previous phase, including its review fixes)
-- **Head**: ed90da9076246a9154c6e1986ab947ab4a3ea941
+- **Base**: f7e1cfbc8400c7e5adceecc0a268d845582e10ca (previous phase, including its review fixes)
+- **Head**: be8eef98819d025fa71be528338101d07169b1eb
 - **Worktree**: included(context/changes/s16-faster-start/plan.md) — existing Phase 3 SHA write-back only; no excluded changes
-- **Checks ran at**: ed90da9076246a9154c6e1986ab947ab4a3ea941
+- **Checks ran at**: be8eef98819d025fa71be528338101d07169b1eb
 - **Manual acceptance**: none planned for Phase 3
 - **Date**: 2026-11-19
 - **Verdict**: NEEDS ATTENTION

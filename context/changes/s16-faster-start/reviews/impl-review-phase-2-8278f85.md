@@ -4,10 +4,10 @@
 - **Plan**: context/changes/s16-faster-start/plan.md
 - **Scope**: Phase 2 (phases 1–7)
 - **Session**: fresh
-- **Base**: 962581cadb04ed3c7bd0a72d1a778268567d885e (previous phase's final accepted state, including its review fixes)
-- **Head**: 8278f85099877c74a196d0adf920e4dea780a33d
+- **Base**: adb54e44b5dee18a4959fe1ad5f8092fa87d3ca6 (previous phase's final accepted state, including its review fixes)
+- **Head**: dbb1b529677514d0a7d76159a6d002cc66598b6b
 - **Worktree**: included(context/changes/s16-faster-start/plan.md)
-- **Checks ran at**: 8278f85099877c74a196d0adf920e4dea780a33d, before triage edits
+- **Checks ran at**: dbb1b529677514d0a7d76159a6d002cc66598b6b, before triage edits
 - **Manual acceptance**: none planned for Phase 2
 - **Date**: 2026-11-19
 - **Verdict**: NEEDS ATTENTION
