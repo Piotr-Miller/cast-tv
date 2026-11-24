@@ -1,7 +1,7 @@
 ---
 change_id: s17-nextcloud
 title: "Cast photos and videos from a Nextcloud server"
-status: implementing
+status: implemented
 created: 2026-11-24
 updated: 2026-11-24
 archived_at: null
