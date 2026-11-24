@@ -15,8 +15,10 @@ soon as it is done, with the date and, for a merge or a recorded row, the PR or 
   `f99bd2b3…`). v0.5.0 was the last PyInstaller release.
 - **Users will notice:** a new version's first start unpacks (about 550 MB on Linux, 80 MB on
   Windows), and Windows' firewall asks once per new build (its rule names the unpacked exe).
-- **Finding outside S-16:** while a video plays, the now-playing bar still shows the
-  **HEIC → JPEG** badge of the photo cast before it; for a change of its own.
+- **The HEIC-badge finding is withdrawn (2026-11-24):** the "HEIC → JPEG" badge seen during a
+  video on 2026-11-20 was read over CDP with `textContent`, which includes hidden elements. Re-run
+  on main (HEIC photo, then `Przejazd - SuperCars.mp4`): `/api/status` gives `converted: false`
+  for the video, the badge has `display: none`, and `innerText` shows no badge. No bug; nothing to fix.
 - **Fedora and Windows 11 are a dual boot on one laptop:** every switch is a reboot.
 - **CI notice:** `ubuntu-latest` moves to Ubuntu 26 (the `test` job); the Linux build is pinned to
   `ubuntu-22.04`.
@@ -41,8 +43,8 @@ soon as it is done, with the date and, for a merge or a recorded row, the PR or 
    window ready after 2.7 s, OneDrive listed, `Przejazd - SuperCars.mp4` PLAYING on the TV,
    Quit stopped the TV (STOPPED) and freed port 8895. GoPro shows "expired" (a 61-day-old
    session; sign in again from the GoPro tab), not a build issue.
-- [ ] 4. The owner picks the next roadmap item (S-14 Google TV / Chromecast is proposed), or the
-   HEIC-badge finding.
+- [ ] 4. The owner picks the next roadmap item (S-14 Google TV / Chromecast is proposed). The
+   HEIC-badge finding turned out to be no bug (above).
 
 ## How to resume with Claude
 
