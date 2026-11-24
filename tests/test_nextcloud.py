@@ -6,6 +6,7 @@ preview endpoint. The fixture XML is in the shapes the spike recorded
 (``context/changes/s17-nextcloud/research.md``).
 """
 import base64
+from concurrent.futures import ThreadPoolExecutor
 import http.server
 import json
 import os
@@ -877,8 +878,9 @@ def test_connect_and_browse_over_the_api(app, fake):
     from tests.test_api import _json
     _, _, s = _json(app.base_url, "GET", "/api/status")
     assert s["sources"]["nextcloud"] == {"state": "disconnected", "detail": {"stored": False}}
-    status, _, d = _json(app.base_url, "POST", "/api/sources/nextcloud/connect", {"server": "https://pat@cloud.test"})
-    assert status == 400 and d["error"]["code"] == "bad_address"
+    for address in ("https://pat@cloud.test", "https://[broken", "https://host\uff1a443"):
+        status, _, d = _json(app.base_url, "POST", "/api/sources/nextcloud/connect", {"server": address})
+        assert status == 400 and d["error"]["code"] == "bad_address"
     status, _, d = _json(app.base_url, "POST", "/api/sources/nextcloud/connect", {"server": fake.base})
     assert status == 200 and d["step"] == "login" and d["detail"]["login_url"].startswith(fake.base)
 
@@ -964,3 +966,178 @@ def test_password_never_exposed(app, fake, capfd, monkeypatch):
 def test_registered_in_the_app(app):
     assert isinstance(app.sources["nextcloud"], NextcloudSource)
     assert app.sources["nextcloud"].name == "nextcloud"
+
+
+@pytest.mark.parametrize("action", ["cancel", "disconnect", "close"])
+def test_pending_login_start_can_be_cancelled(fake, monkeypatch, action):
+    src = NextcloudSource()
+    entered, release = threading.Event(), threading.Event()
+    original = loginflow.start
+
+    def delayed(base):
+        flow = original(base)
+        entered.set()
+        assert release.wait(5)
+        return flow
+
+    monkeypatch.setattr(loginflow, "start", delayed)
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        future = pool.submit(src.connect, {"server": fake.base})
+        try:
+            assert entered.wait(5)
+            if action == "cancel":
+                src.connect({"cancel": True})
+            else:
+                getattr(src, action)()
+        finally:
+            release.set()
+        with pytest.raises(AuthError) as err:
+            future.result(timeout=5)
+    assert err.value.code == "cancelled"
+    assert src.status()["state"] == "disconnected" and not src._store.exists()
+    assert len(fake.of("POST")) == 1                          # the abandoned start never starts polling
+
+
+@pytest.mark.parametrize("method", ["PROPFIND", "SEARCH"])
+@pytest.mark.parametrize("replacement", ["disconnect", "sign_in"])
+def test_late_dav_answer_cannot_publish_old_account(fake, monkeypatch, method, replacement):
+    src = NextcloudSource()
+    _sign_in(src, fake)
+    entered, release = threading.Event(), threading.Event()
+    original = loginflow.call
+
+    def delayed(verb, *args, **kwargs):
+        answer = original(verb, *args, **kwargs)
+        if verb == method:
+            entered.set()
+            assert release.wait(5)
+        return answer
+
+    monkeypatch.setattr(loginflow, "call", delayed)
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        future = pool.submit(src.list, "Pictures") if method == "PROPFIND" else pool.submit(src.resolve, "9001")
+        try:
+            assert entered.wait(5)
+            src.disconnect()
+            if replacement == "sign_in":
+                fake.user_id = "other"
+                _sign_in(src, fake)
+        finally:
+            release.set()
+        with pytest.raises(AuthError) as err:
+            future.result(timeout=5)
+    assert err.value.code == "cancelled"
+    assert not src._files and not src._snapshots
+    if replacement == "sign_in":
+        assert src._store.load()["user_id"] == "other"
+
+
+def test_resolved_media_does_not_rebind_to_a_new_account(fake):
+    src = NextcloudSource()
+    _sign_in(src, fake)
+    src.list("Pictures")
+    item = src.resolve("102")
+    src.disconnect()
+    fake.user_id = "other"
+    _sign_in(src, fake)
+    with pytest.raises(AuthError) as err:
+        item.resolve()
+    assert err.value.code == "cancelled"
+
+
+def test_preview_does_not_mix_a_cached_record_with_a_new_account(fake, monkeypatch):
+    src = NextcloudSource()
+    _sign_in(src, fake)
+    src.list("Pictures")
+    original = src._file
+
+    def switched(file_id):
+        rec = original(file_id)
+        src.disconnect()
+        fake.user_id = "other"
+        _sign_in(src, fake)
+        return rec
+
+    monkeypatch.setattr(src, "_file", switched)
+    with pytest.raises(AuthError) as err:
+        src.thumb("101")
+    assert err.value.code == "cancelled"
+
+
+@pytest.mark.parametrize("replacement", ["disconnect", "sign_in"])
+def test_late_verification_cannot_restore_old_credentials(fake, monkeypatch, replacement):
+    src = NextcloudSource()
+    _sign_in(src, fake)
+    entered, release = threading.Event(), threading.Event()
+    original, first = loginflow.user, True
+
+    def delayed(*args):
+        nonlocal first
+        who = original(*args)
+        if first:
+            first = False
+            who["id"] = "corrected-old-id"
+            entered.set()
+            assert release.wait(5)
+        return who
+
+    monkeypatch.setattr(loginflow, "user", delayed)
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        future = pool.submit(src.connect, {})
+        try:
+            assert entered.wait(5)
+            src.disconnect()
+            if replacement == "sign_in":
+                fake.user_id = "other"
+                _sign_in(src, fake)
+        finally:
+            release.set()
+        future.result(timeout=5)
+    record = src._store.load()
+    if replacement == "sign_in":
+        assert record["user_id"] == "other" and src.status()["state"] == "connected"
+    else:
+        assert record is None and src.status()["state"] == "disconnected"
+
+
+def test_slow_disconnect_does_not_erase_a_new_sign_in(fake, monkeypatch):
+    src = NextcloudSource()
+    _sign_in(src, fake)
+    entered, release = threading.Event(), threading.Event()
+    original = loginflow.revoke
+
+    def delayed(*args):
+        entered.set()
+        assert release.wait(5)
+        return original(*args)
+
+    monkeypatch.setattr(loginflow, "revoke", delayed)
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        future = pool.submit(src.disconnect)
+        try:
+            assert entered.wait(5)
+            fake.user_id = "other"
+            _sign_in(src, fake)
+        finally:
+            release.set()
+        future.result(timeout=5)
+    assert src._store.load()["user_id"] == "other" and src.status()["state"] == "connected"
+    assert src.status()["detail"].get("revoke_error") is None
+
+
+@pytest.mark.parametrize("address", ["https://[broken", "https://host\uff1a443", "https://[invalid]"])
+def test_malformed_authority_is_a_validation_error(address):
+    with pytest.raises(ConfigError) as err:
+        loginflow.normalise(address)
+    assert err.value.code == "bad_address" and err.value.message
+    assert not loginflow.same_origin(loginflow.normalise("https://host"), address)
+
+
+@pytest.mark.parametrize("kinds", [("dir", "dir"), ("dir", "file"), ("file", "dir")])
+def test_first_file_id_wins_for_folders_and_files(fake, kinds):
+    fake.folders[""] = multistatus([(name, kind, "51", "image/jpeg", None, False)
+                                     for name, kind in zip(("first", "second"), kinds)])
+    src = NextcloudSource()
+    _sign_in(src, fake)
+    listing = src.list()
+    assert [e.name for e in listing.folders + listing.items] == ["first"]

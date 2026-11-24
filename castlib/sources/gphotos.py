@@ -219,6 +219,7 @@ class GPhotosSource:
         self._flow_lock = threading.Lock()       # one consent flow is started at a time
         self._store = TokenStore(TOKEN_NAME)
         self._gen = 0
+        self._flow_epoch = 0
         self.open_browser = True                 # the app's --no-browser turns this off
         self._client: dict | None = None
         self._flow: dict | None = None           # the consent in progress: {auth_url, expires_at, attempt, flow}
@@ -293,13 +294,13 @@ class GPhotosSource:
         with self._flow_lock:
             with self._lock:
                 self._check_open()
-                running, gen = self._flow, self._gen
+                running, gen, epoch = self._flow, self._gen, self._flow_epoch
             if running is None:
                 flow = loopback.start(client, SCOPES, browser=self.open_browser)
                 record = {"auth_url": flow.auth_url, "expires_at": time.time() + loopback.CONSENT_TIMEOUT,
                           "attempt": 1, "flow": flow}
                 with self._lock:
-                    stale = self._gen != gen or self._closed
+                    stale = self._gen != gen or self._flow_epoch != epoch or self._closed
                     if not stale:
                         self._flow, self._flow_error = record, None
                 if stale:                        # disconnected or closed while the listener opened
@@ -358,6 +359,7 @@ class GPhotosSource:
 
     def _cancel_flow(self) -> None:
         with self._lock:
+            self._flow_epoch += 1
             record, self._flow = self._flow, None
         if record is not None:
             record["flow"].cancel()

@@ -147,6 +147,7 @@ class NextcloudSource:
         self._flow_lock = threading.Lock()
         self._store = AppPasswordStore(NAME)
         self._gen = 0
+        self._flow_epoch = 0                     # also invalidates starts still waiting for their first answer
         self._flow: dict | None = None            # the login in progress: {base, login_url, expires_at}
         self._flow_stop: threading.Event | None = None
         self._flow_error: dict | None = None
@@ -161,8 +162,7 @@ class NextcloudSource:
     # ------------------------------------------------------- credential
     def _credential(self) -> tuple[dict, loginflow.Base, int]:
         with self._lock:
-            gen = self._gen
-        record = self._store.load()
+            gen, record = self._gen, self._store.load()
         if record is None:
             raise AuthError("no_token", "Not signed in.", source=NAME)
         try:
@@ -171,6 +171,11 @@ class NextcloudSource:
             raise AuthError("no_token", "The stored Nextcloud address is unusable. Connect again.",
                             source=NAME) from None
         return record, base, gen
+
+    def _check_generation(self, gen: int) -> None:
+        """Reject an old account's result; caller holds _lock."""
+        if gen != self._gen:
+            raise AuthError("cancelled", "The Nextcloud connection changed. Try again.", source=NAME)
 
     def _mark_expired(self, err: AuthError, gen: int) -> None:
         with self._lock:
@@ -209,14 +214,17 @@ class NextcloudSource:
             if running is not None and running["base"] == base:
                 return dict(self.status(), step="login")
             self._cancel_flow()
+            with self._lock:
+                epoch, gen = self._flow_epoch, self._gen
             flow = loginflow.start(base)
             stop = threading.Event()
             record = {"base": base, "login_url": flow["login"], "expires_at": flow["expires_at"]}
             with self._lock:
+                if epoch != self._flow_epoch or gen != self._gen:
+                    raise AuthError("cancelled", "The sign-in was cancelled while it was starting.", source=NAME)
                 self._flow, self._flow_stop = record, stop
                 self._flow_error = self._revoke_error = None
                 self._last_server = base.url
-                gen = self._gen
             threading.Thread(target=self._wait_for_password, args=(flow, record, stop, gen),
                              name="nextcloud-loginflow", daemon=True).start()
         return dict(self.status(), step="login")
@@ -274,9 +282,14 @@ class NextcloudSource:
         except Exception:
             pass
 
+    def _cancel_flow_locked(self):
+        self._flow_epoch += 1
+        stop, self._flow, self._flow_stop = self._flow_stop, None, None
+        return stop
+
     def _cancel_flow(self) -> None:
         with self._lock:
-            stop, self._flow, self._flow_stop = self._flow_stop, None, None
+            stop = self._cancel_flow_locked()
         if stop is not None:
             stop.set()
 
@@ -288,7 +301,7 @@ class NextcloudSource:
         with self._lock:
             flow, flow_error, revoke_error = self._flow, self._flow_error, self._revoke_error
             expired, verified, error, last = self._expired_at, self._verified_at, self._error, self._last_server
-        record = self._store.load()
+            record = self._store.load()
         if flow is not None:
             return {"state": "connecting", "detail": {
                 "stored": record is not None, "step": "login", "login_url": flow["login_url"],
@@ -327,41 +340,47 @@ class NextcloudSource:
             return self._start_flow(loginflow.normalise(server))
         with self._lock:
             running, expired = self._flow is not None, self._expired_at is not None
+            record, gen, epoch = self._store.load(), self._gen, self._flow_epoch
         if running:
             return dict(self.status(), step="login")
-        record = self._store.load()
         if record is None:
             raise ConfigError("no_server", "Type the address of your Nextcloud server, then press Connect.",
                               source=NAME)
         base = loginflow.normalise(record["server"])
         if expired:
             return self._start_flow(base)
-        with self._lock:
-            gen = self._gen
         try:
             who = loginflow.user(base, record["login"], record["password"])
         except AuthError as e:
             self._mark_expired(e, gen)
             raise
         with self._lock:
-            if self._gen == gen:
+            if self._gen == gen and self._flow_epoch == epoch:
+                if who["id"] != record["user_id"]:
+                    self._store.save(dict(record, user_id=who["id"]))
                 self._gen += 1
                 self._verified_at, self._expired_at, self._error = time.time(), None, None
                 self._flow_error = self._revoke_error = None
-        if who["id"] != record["user_id"]:
-            self._store.save(dict(record, user_id=who["id"]))
+                self._files.clear()
+                self._snapshots.clear()
         return self.status()
 
     def disconnect(self) -> None:
-        """Revoke the app password on the server (best effort), then forget it here whatever the answer."""
-        self._cancel_flow()
+        """Detach locally at once; revoke the detached password without touching a later sign-in."""
         with self._lock:
+            stop = self._cancel_flow_locked()
             self._gen += 1
+            gen, epoch = self._gen, self._flow_epoch
+            record = self._store.load()
+            self._store.clear()
             self._verified_at = self._expired_at = self._error = self._flow_error = None
             self._revoke_error = None
             self._files.clear()
             self._snapshots.clear()
-        record = self._store.load()
+            if record is not None:
+                self._last_server = record["server"]
+        if stop is not None:
+            stop.set()
         problem = None
         if record is not None:
             try:
@@ -373,11 +392,9 @@ class NextcloudSource:
                 problem = {"code": "revoke_failed", "message":
                            "The Nextcloud server did not confirm that cast-tv's app password was removed; "
                            "cast-tv may still be listed under Settings -> Security on the server."}
-        self._store.clear()
         with self._lock:
-            self._revoke_error = problem
-            if record is not None:
-                self._last_server = record["server"]
+            if gen == self._gen and epoch == self._flow_epoch:
+                self._revoke_error = problem
 
     # ----------------------------------------------------------- listing
     def _records(self, record: dict, base: loginflow.Base, answer: list[dict]) -> list[tuple[str, dict]]:
@@ -437,38 +454,44 @@ class NextcloudSource:
         data = self._dav("PROPFIND", self._url(record, base, rel, folder=True), {"Depth": "1"},
                          PROPFIND, record, gen)
         answer = self._records(record, base, multistatus(parse_xml(data)))
-        folders, files, seen = [], [], set()
+        folders, files, records, seen = [], [], [], set()
         for path, props in answer:
             if path == rel:
                 continue                         # the collection's own response
             if path.rsplit("/", 1)[0] != rel and (rel or "/" in path):
                 continue                         # not a direct child
+            file_id = props.get("{%s}fileid" % OC) or ""
+            if ID_RE.fullmatch(file_id):
+                if file_id in seen:
+                    continue
+                seen.add(file_id)
             if props.get("{%s}resourcetype" % DAV):
                 folders.append(Folder(id=path, name=path.rsplit("/", 1)[-1]))
                 continue
             rec = self._file_record(path, props)
-            if rec is None or rec["id"] in seen:
+            if rec is None:
                 continue
-            seen.add(rec["id"])
             kind = self._kind(rec)
             if kind is None:
                 note_hidden_kind(NAME, rec["mime"] or "no type")
                 continue
-            with self._lock:
-                self._remember(rec)
+            records.append(rec)
             files.append(self._entry(rec, kind))
         folders.sort(key=lambda f: f.name.casefold())
         files.sort(key=lambda e: e.name.casefold())
         with self._lock:
-            if gen == self._gen:
-                self._snapshots[rel] = (folders, files)
-                self._snapshots.move_to_end(rel)
-                while len(self._snapshots) > SNAPSHOTS:
-                    self._snapshots.popitem(last=False)
+            self._check_generation(gen)
+            for rec in records:
+                self._remember(rec)
+            self._snapshots[rel] = (folders, files)
+            self._snapshots.move_to_end(rel)
+            while len(self._snapshots) > SNAPSHOTS:
+                self._snapshots.popitem(last=False)
         return folders, files
 
     def list(self, path=None, page=None) -> Listing:
         rel = check_path(path)
+        _, _, gen = self._credential()
         offset = 0
         if page not in (None, ""):
             if not isinstance(page, str) or not PAGE_RE.fullmatch(page):
@@ -477,12 +500,15 @@ class NextcloudSource:
         snap = None
         if offset:
             with self._lock:
+                self._check_generation(gen)
                 snap = self._snapshots.get(rel)
         folders, files = snap if snap is not None else self._snapshot(rel)
         chunk = files[offset:offset + PAGE_SIZE]
         end = offset + PAGE_SIZE
-        return Listing(items=list(chunk), folders=list(folders) if offset == 0 else [],
-                       next=str(end) if end < len(files) else None, crumbs=self._crumbs(rel))
+        with self._lock:
+            self._check_generation(gen)
+            return Listing(items=list(chunk), folders=list(folders) if offset == 0 else [],
+                           next=str(end) if end < len(files) else None, crumbs=self._crumbs(rel))
 
     @staticmethod
     def _crumbs(rel: str) -> list[dict]:
@@ -512,8 +538,11 @@ class NextcloudSource:
             rec = self._file_record(path, props)
             if rec is not None and rec["id"] == file_id:
                 with self._lock:
+                    self._check_generation(gen)
                     self._remember(rec)
-                return rec
+                    return rec
+        with self._lock:
+            self._check_generation(gen)
         return None
 
     def _file(self, file_id: str) -> dict | None:
@@ -528,7 +557,10 @@ class NextcloudSource:
         """An unregistered item whose ``resolve`` gives the file's WebDAV URL with the app password."""
         if not isinstance(source_id, str) or not ID_RE.fullmatch(source_id):
             raise NotMedia("bad_id", "Not a Nextcloud file id.", source=NAME, item=str(source_id)[:64])
+        _, _, gen = self._credential()
         rec = self._file(source_id)
+        with self._lock:
+            self._check_generation(gen)
         kind = self._kind(rec) if rec is not None else None
         if kind is None:
             raise NotMedia("unknown_item", "That item is not a photo or video on this Nextcloud.",
@@ -538,8 +570,10 @@ class NextcloudSource:
 
         def fresh() -> Upstream:
             record, base, _ = source._credential()
-            return Upstream(source._url(record, base, rel),
-                            {"Authorization": loginflow.basic(record["login"], record["password"])})
+            with source._lock:
+                source._check_generation(gen)
+                return Upstream(source._url(record, base, rel),
+                                {"Authorization": loginflow.basic(record["login"], record["password"])})
 
         return MediaItem(kind=kind, title=rec["name"], mime=rec["mime"], source=NAME, source_id=source_id,
                          version=rec["etag"] or "%s:%s" % (rec["modified"] or "", rec["size"] or ""),
@@ -549,9 +583,11 @@ class NextcloudSource:
         """The server's preview of a photo (HEIC included) when ``nc:has-preview`` says it has one."""
         if not isinstance(source_id, str) or not ID_RE.fullmatch(source_id):
             return None
+        record, base, gen = self._credential()
         rec = self._file(source_id)
-        if rec is None or not rec["preview"]:
-            return None
-        record, base, _ = self._credential()
-        return Upstream(base.url + PREVIEW % source_id,
-                        {"Authorization": loginflow.basic(record["login"], record["password"])})
+        with self._lock:
+            self._check_generation(gen)
+            if rec is None or not rec["preview"]:
+                return None
+            return Upstream(base.url + PREVIEW % source_id,
+                            {"Authorization": loginflow.basic(record["login"], record["password"])})

@@ -70,7 +70,10 @@ def normalise(address) -> Base:
         raise _refuse("A server address cannot contain spaces or control characters.")
     if "://" not in text:
         text = "https://" + text
-    parts = urllib.parse.urlsplit(text)
+    try:
+        parts = urllib.parse.urlsplit(text)
+    except ValueError:
+        raise _refuse("That is not a server address cast-tv can read.") from None
     scheme = parts.scheme.lower()
     if scheme not in SCHEMES:
         if scheme == "http":

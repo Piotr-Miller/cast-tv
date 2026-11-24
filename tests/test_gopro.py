@@ -315,13 +315,22 @@ def test_answer_after_disconnect_changes_nothing(fake):
             held.set()
             release.wait(5)
     fake.before_answer = hold
-    t = threading.Thread(target=lambda: src.list())
+    errors = []
+
+    def run():
+        try:
+            src.list()
+        except AuthError as err:
+            errors.append(err.code)
+
+    t = threading.Thread(target=run)
     t.start()
     assert held.wait(5)
     fake.before_answer = None
     src.disconnect()
     release.set()
     t.join(5)
+    assert errors == ["cancelled"] and not src._raw
     assert src.status() == {"state": "disconnected", "detail": {"stored": False}}
 
 

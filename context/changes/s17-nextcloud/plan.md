@@ -475,10 +475,10 @@ None: a new file in `config_dir()`; existing sources keep their data. Their tabs
 
 #### Automated
 
-- [x] 1.1 The Nextcloud tests pass
-- [x] 1.2 The whole suite passes
-- [x] 1.3 pyflakes is clean
-- [ ] 1.4 The release build and smoke test pass on the pull request
+- [x] 1.1 The Nextcloud tests pass — e931d9e
+- [x] 1.2 The whole suite passes — e931d9e
+- [x] 1.3 pyflakes is clean — e931d9e
+- [x] 1.4 The release build and smoke test pass on the pull request — e931d9e
 
 ### Phase 2: Probe a refused remote film through cast-tv's own address
 

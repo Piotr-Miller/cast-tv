@@ -221,6 +221,7 @@ class OneDriveSource:
         self._flow_lock = threading.Lock()       # one device flow is started at a time
         self._store = TokenStore(TOKEN_NAME)
         self._gen = 0
+        self._flow_epoch = 0
         self._flow: dict | None = None           # the device flow in progress, or None
         self._flow_stop: threading.Event | None = None
         self._flow_error: dict | None = None     # why the last flow ended without a token
@@ -247,21 +248,32 @@ class OneDriveSource:
         with self._lock:
             gen = self._gen
         try:
-            return self._store.get_access_token(self._refresh, force=force), gen
+            tok = self._store.get_access_token(self._refresh, force=force)
+            with self._lock:
+                if gen != self._gen:
+                    current = self._store.load()
+                    if current is None:
+                        raise AuthError("no_token", "Not signed in.", source="onedrive")
+                    if current.get("access_token") != tok:
+                        self._check_generation(gen)
+                    gen = self._gen              # TokenStore adopted the newer sign-in while refresh waited
+                return tok, gen
         except AuthError as e:
             self._mark_expired(e, gen)
             raise
 
-    def _call(self, fn):
+    def _call(self, fn, *, with_gen: bool = False):
         """Run ``fn(access_token)``; a 401 from Graph refreshes the token once and retries."""
         tok, gen = self._token()
         try:
-            return fn(tok)
+            result = fn(tok)
+            return (result, gen) if with_gen else result
         except _Unauthorized:
             pass
         tok, gen = self._token(force=True)
         try:
-            return fn(tok)
+            result = fn(tok)
+            return (result, gen) if with_gen else result
         except _Unauthorized:
             err = AuthError("graph_unauthorized",
                             "OneDrive refused the sign-in even after a refresh. Connect again.",
@@ -269,13 +281,20 @@ class OneDriveSource:
             self._mark_expired(err, gen)
             raise err
 
-    def _adopt(self, user: dict | None) -> None:
+    def _check_generation(self, gen: int) -> None:
+        """Caller holds _lock; an old account must not publish results."""
+        if gen != self._gen:
+            raise AuthError("cancelled", "The OneDrive connection changed. Try again.", source="onedrive")
+
+    def _adopt(self, user: dict | None, gen: int, epoch: int) -> None:
         """A verified credential: new generation, connected, the account remembered."""
         with self._lock:
+            if gen != self._gen or epoch != self._flow_epoch:
+                return
+            self._store.set_account(user)
             self._gen += 1
             self._verified_at, self._expired_at, self._error = time.time(), None, None
             self._flow_error = None
-        self._store.set_account(user)
 
     def _me(self, token: str) -> dict | None:
         data = graph_get(GRAPH + "/me?$select=" + ME_SELECT, token)
@@ -287,15 +306,17 @@ class OneDriveSource:
         cid = client_id()
         with self._flow_lock:
             with self._lock:
-                running = self._flow
+                running, gen, epoch = self._flow, self._gen, self._flow_epoch
             if running is None:
                 flow = devicecode.start(cid, SCOPES, TENANT)
                 stop = threading.Event()
                 record = {"user_code": flow["user_code"], "verification_uri": flow["verification_uri"],
                           "expires_at": time.time() + flow["expires_in"], "message": flow["message"]}
                 with self._lock:
+                    if gen != self._gen or epoch != self._flow_epoch:
+                        raise AuthError("cancelled", "The sign-in was cancelled while it was starting.",
+                                        source="onedrive")
                     self._flow, self._flow_stop, self._flow_error = record, stop, None
-                    gen = self._gen
                 threading.Thread(target=self._wait_for_token, args=(cid, flow, record, stop, gen),
                                  name="onedrive-devicecode", daemon=True).start()
         return dict(self.status(), step="code")
@@ -338,11 +359,16 @@ class OneDriveSource:
         with self._lock:
             if self._gen != gen:
                 return
-        self._store.set_account(user)
+            self._store.set_account(user)
+
+    def _cancel_flow_locked(self):
+        self._flow_epoch += 1
+        stop, self._flow, self._flow_stop = self._flow_stop, None, None
+        return stop
 
     def _cancel_flow(self) -> None:
         with self._lock:
-            stop, self._flow, self._flow_stop = self._flow_stop, None, None
+            stop = self._cancel_flow_locked()
         if stop is not None:
             stop.set()
 
@@ -390,24 +416,27 @@ class OneDriveSource:
             return self.status()
         with self._lock:
             running, expired = self._flow is not None, self._expired_at is not None
+            gen, epoch = self._gen, self._flow_epoch
         if running:
             return dict(self.status(), step="code")   # the same code, not a second flow
         if self._store.exists() and not expired and not params.get("fresh"):
             user = self._call(self._me)
-            self._adopt(user)
+            self._adopt(user, gen, epoch)
             return self.status()
         return self._start_flow()
 
     def disconnect(self) -> None:
         """Forget the sign-in: the file, the account, any flow in progress."""
-        self._cancel_flow()
         with self._lock:
+            stop = self._cancel_flow_locked()
             self._gen += 1
             self._verified_at = self._expired_at = self._error = self._flow_error = None
             self._raw.clear()
             self._thumbs.clear()
             self._parents.clear()
             self._store.clear()
+        if stop is not None:
+            stop.set()
 
     def _folder_id(self, path) -> str | None:
         if path is None or path == "":
@@ -427,7 +456,7 @@ class OneDriveSource:
             url = page
         else:
             url = _children_url(folder_id)
-        data = self._call(lambda tok: graph_get(url, tok))
+        data, gen = self._call(lambda tok: graph_get(url, tok), with_gen=True)
         values = data.get("value")
         if not isinstance(values, list):
             raise UpstreamError("graph_shape", "Unfamiliar answer from OneDrive (keys: %s)."
@@ -444,6 +473,7 @@ class OneDriveSource:
                 folders.append(Folder(id=item_id, name=name,
                                       count=count if isinstance(count, int) else None))
                 with self._lock:
+                    self._check_generation(gen)
                     self._parents[item_id] = (folder_id, name)
                 continue
             kind = kind_from_facets("onedrive", item)
@@ -453,12 +483,15 @@ class OneDriveSource:
                     note_hidden_kind("onedrive", mime or name)   # a still the TV is not sent (GIF, raw)
                 continue
             with self._lock:
+                self._check_generation(gen)
                 self._remember(item_id, item, now)
             items.append(entry_for(item, kind))
         nxt = data.get("@odata.nextLink")
-        return Listing(items=items, folders=folders,
-                       next=nxt if isinstance(nxt, str) and nxt else None,
-                       crumbs=self._crumbs(folder_id))
+        crumbs = self._crumbs(folder_id)
+        with self._lock:
+            self._check_generation(gen)
+            return Listing(items=items, folders=folders,
+                           next=nxt if isinstance(nxt, str) and nxt else None, crumbs=crumbs)
 
     def _crumbs(self, folder_id: str | None) -> list[dict]:
         """``[{id, name}]`` from the drive root down to ``folder_id``; unknown folders are looked up."""
@@ -482,14 +515,15 @@ class OneDriveSource:
 
     def _lookup_folder(self, folder_id: str) -> tuple[str | None, str] | None:
         try:
-            item = self._call(lambda tok: graph_get(
-                "%s/me/drive/items/%s?$select=id,name,parentReference" % (GRAPH, folder_id), tok))
+            item, gen = self._call(lambda tok: graph_get(
+                "%s/me/drive/items/%s?$select=id,name,parentReference" % (GRAPH, folder_id), tok), with_gen=True)
         except UpstreamError:
             return None
         ref = item.get("parentReference") or {}
         parent = None if (ref.get("path") or "/drive/root:") == "/drive/root:" else ref.get("id")
         known = (str(parent) if parent else None, item.get("name") or folder_id)
         with self._lock:
+            self._check_generation(gen)
             self._parents[folder_id] = known
         return known
 
@@ -511,12 +545,13 @@ class OneDriveSource:
         if raw is not None:
             return raw
         try:
-            raw = self._call(lambda tok: graph_get(_item_url(item_id), tok))
+            raw, gen = self._call(lambda tok: graph_get(_item_url(item_id), tok), with_gen=True)
         except UpstreamError:
             return None                          # 404 and the like: not an item of this drive
         if not isinstance(raw, dict) or str(raw.get("id")) != item_id:
             return None
         with self._lock:
+            self._check_generation(gen)
             self._remember(item_id, raw, time.time())
         return raw
 
@@ -525,7 +560,11 @@ class OneDriveSource:
         if not good_id(source_id):
             raise NotMedia("bad_id", "Not a OneDrive item id.", source="onedrive",
                            item=str(source_id)[:64])
+        with self._lock:
+            gen = self._gen
         raw = self._raw_of(source_id)
+        with self._lock:
+            self._check_generation(gen)
         kind = kind_from_facets("onedrive", raw) if raw is not None else None
         if kind is None:
             raise NotMedia("unknown_item", "That item is not a photo or video in this OneDrive.",
@@ -535,7 +574,11 @@ class OneDriveSource:
         url = _download_url_url(source_id)
 
         def fresh() -> Upstream:
+            with source._lock:
+                source._check_generation(gen)
             data = source._call(lambda tok: graph_get(url, tok))
+            with source._lock:
+                source._check_generation(gen)
             address = data.get("@microsoft.graph.downloadUrl")
             if not address:
                 raise UpstreamError("no_download_url", "OneDrive gave no download address for %s."
@@ -551,14 +594,18 @@ class OneDriveSource:
         """The ``large`` thumbnail: the listing's address while it is young, else a fresh one from Graph."""
         if not good_id(source_id):
             return None
+        with self._lock:
+            gen = self._gen
         if self._raw_of(source_id) is None:
             return None
         with self._lock:
+            self._check_generation(gen)
             cached = self._thumbs.get(source_id)
         if cached is not None and time.time() - cached[1] < THUMB_FRESH:
             return Upstream(cached[0]) if cached[0] else None
         data = self._call(lambda tok: graph_get(_thumbnails_url(source_id), tok))
         url = thumb_url({"thumbnails": data.get("value") or []})
         with self._lock:
+            self._check_generation(gen)
             self._thumbs[source_id] = (url, time.time())
         return Upstream(url) if url else None

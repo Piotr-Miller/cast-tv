@@ -584,6 +584,11 @@ class GoProSource:
         if self._closed:
             raise ConfigError("source_closed", "GoPro is shutting down.", source="gopro")
 
+    def _check_generation(self, gen: int) -> None:
+        """Caller holds _lock; an old account must not publish results."""
+        if gen != self._gen:
+            raise AuthError("cancelled", "The GoPro connection changed. Try again.", source="gopro")
+
     def _call(self, fn):
         """Run ``fn(token)`` with the session credential.
 
@@ -730,7 +735,9 @@ class GoProSource:
 
     def _raw_of(self, media_id: str) -> dict | None:
         """The listing entry behind an id: this process's listing, the CLI's cached one, else ``/media/{id}``."""
+        _, gen = self._credential()
         with self._lock:
+            self._check_generation(gen)
             raw = self._raw.get(media_id)
         if raw is not None:
             return raw
@@ -748,6 +755,7 @@ class GoProSource:
         if not isinstance(raw, dict) or raw.get("id") != media_id:
             return None
         with self._lock:
+            self._check_generation(gen)
             self._raw[media_id] = raw
         return raw
 
@@ -887,6 +895,7 @@ class GoProSource:
             record["handoff"].cancel()
 
     def list(self, path=None, page=None) -> Listing:
+        _, gen = self._credential()
         if page is None or page == "":
             n = 1
         elif str(page).isdigit() and int(page) >= 1:
@@ -901,9 +910,12 @@ class GoProSource:
                 note_hidden_kind("gopro", m.get("type"))
                 continue
             with self._lock:
+                self._check_generation(gen)
                 self._raw[str(m.get("id"))] = m
             items.append(entry_for(m, kind))
-        return Listing(items=items, next=str(n + 1) if len(media) >= PAGE_SIZE else None)
+        with self._lock:
+            self._check_generation(gen)
+            return Listing(items=items, next=str(n + 1) if len(media) >= PAGE_SIZE else None)
 
     def resolve(self, source_id: str, quality: str = "auto") -> MediaItem:
         """An unregistered item whose ``resolve`` callable ranks the signed variants on every call."""
