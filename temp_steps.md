@@ -1,4 +1,4 @@
-# Next steps (2026-11-22, v0.6.0 released; the Linux file's first start and the next roadmap item)
+# Next steps (2026-11-24, v0.6.0 released and started on both systems; the next roadmap item)
 
 The standing pause note; overwrite it at the next handoff. Claude ticks each step (`- [x]`) as
 soon as it is done, with the date and, for a merge or a recorded row, the PR or commit.
@@ -33,10 +33,14 @@ soon as it is done, with the date and, for a merge or a recorded row, the PR or 
    PR `chore(release): cast-tv <version>` that sets `castlib/__init__.py`; the owner merges it;
    then the tag `v<version>` on main, whose release run publishes the files. — 2026-11-22,
    PR #113, tag v0.6.0 on 550ad8e, release run 45073145251 green.
-- [ ] 3. After the release: download both files from the GitHub release and start each once on
+- [x] 3. After the release: download both files from the GitHub release and start each once on
    its system (the first start of the published build). Windows done 2026-11-22: `--version`
    0.6.0, cache `0.6.0-gh45073145251.1`, the firewall prompt allowed, the window cast to the TV
-   (owner: "zadziałało"). **Left: the Linux file on Fedora.**
+   (owner: "zadziałało"). Linux done 2026-11-24 on Fedora: SHA-256 equal to the release's
+   (`cafefd39…`), `--version` 0.6.0 unpacked 522 MB into `0.6.0-gh45073145251.1` in 1.7 s, the
+   window ready after 2.7 s, OneDrive listed, `Przejazd - SuperCars.mp4` PLAYING on the TV,
+   Quit stopped the TV (STOPPED) and freed port 8895. GoPro shows "expired" (a 61-day-old
+   session; sign in again from the GoPro tab), not a build issue.
 - [ ] 4. The owner picks the next roadmap item (S-14 Google TV / Chromecast is proposed), or the
    HEIC-badge finding.
 
