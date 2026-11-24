@@ -1,8 +1,8 @@
 # cast-tv
 
-Put a video or a photo on a Samsung TV - from a local disk, a GoPro cloud library, OneDrive or
-Google Photos - from Linux or Windows, with no app installed on the TV. A local web UI browses
-the three clouds, and the same process serves the media, so the phone on the couch can pick what
+Put a video or a photo on a Samsung TV - from a local disk, a GoPro cloud library, OneDrive,
+Google Photos or a Nextcloud server - from Linux or Windows, with no app installed on the TV. A
+local web UI browses the four clouds, and the same process serves the media, so the phone on the couch can pick what
 plays on the big screen.
 
 ```bash
@@ -93,9 +93,10 @@ it is the same UI. Started from a terminal, cast-tv prints the addresses there t
   before (remembered), or `-t` / `$CAST_TV`. Several renderers give a dropdown; none gives a
   banner that lists every network interface the search went out on and how many devices
   answered on each, with "search again" and a field for the TV's address.
-- **Three tabs**, each behind its own connection step - GoPro, OneDrive, Google Photos (setup
-  below). Ticking items builds a selection that survives switching tabs, so one slideshow can
-  mix sources.
+- **Four tabs**, each behind its own connection step - GoPro, OneDrive, Google Photos,
+  Nextcloud (setup below). Ticking items builds a selection that survives switching tabs, so one
+  slideshow can mix sources. A connected or expired tab has **Disconnect** (top of its list, or
+  under the button on its sign-in screen), which forgets that sign-in on this computer.
 - **Casting** replaces whatever plays. **Start show** plays the selection in the order it was
   ticked: a photo holds for the interval (8 s by default, adjustable, remembered), a video plays
   to its end. Pause, next, previous and stop are in the slideshow bar.
@@ -186,6 +187,33 @@ the Entra admin centre with *Personal Microsoft accounts* among the supported ac
 add the *Mobile and desktop applications* platform, set **Allow public client flows = Yes**
 (Authentication, Advanced settings), and put its Application (client) ID in
 `$ONEDRIVE_CLIENT_ID`.
+
+### Nextcloud
+
+In the Nextcloud tab, type your server's address (`cloud.example.com`, or with its subfolder,
+`example.com/nextcloud`) and press **Connect**. The tab shows a link with **Copy link**: open it
+on any device - the phone included - sign in to Nextcloud there as you always do (two-factor
+included) and press **Grant access**. Within a few seconds the tab lists your root folders;
+nothing is copied by hand. **Cancel** stops the round; the link stays valid for 20 minutes.
+
+Only **HTTPS** servers are accepted: an `http://` address is refused with a note under the field,
+because the app password would cross the network unencrypted. One server and one account at a
+time: to switch, press **Disconnect**, then type the other address.
+
+cast-tv gets an **app password** of its own, stored as `nextcloud.json` in the config directory
+(below) and sent only to the address you typed. The whole account is browsable by folder; only
+photos and videos are listed. Photo tiles carry the server's preview, HEIC included; films show a
+placeholder, since Nextcloud makes no film thumbnails. Each tile shows the file's **last-modified
+date** on the server (the tooltip says so), which is not always the day it was taken. Films are
+relayed through cast-tv with `Range`, so the TV's remote seeks as usual.
+
+**Removing cast-tv's access.** Press **Disconnect** in the tab: cast-tv asks the server to revoke
+its app password, then deletes `nextcloud.json`. If the server does not confirm (unreachable, or
+an error), the file is still deleted and the tab says the entry may remain; remove it on the
+server under your avatar → **Settings** → **Security** → *Devices & sessions*, where cast-tv's
+entry has a menu with **Revoke**. Revoking it there yourself works too: the next folder you open
+shows a banner over the last list, and **Connect again** signs in to the same server without
+retyping it.
 
 ### Google Photos
 
@@ -295,11 +323,10 @@ are served as they are. GIF, raw and other stills the TV cannot show are not lis
 | converted photos, per process | `/tmp/cast-tv-photos-*` | `%TEMP%\cast-tv-photos-*` |
 | downloaded Google videos, per process | `/var/tmp/cast-tv-videos-*` | `%TEMP%\cast-tv-videos-*` |
 
-Token files are written readable by their owner only (mode 0600 on Linux); the browser profile
-is 0700. There is no "forget" control in the UI: `POST /api/sources/gopro/disconnect` (from this
-machine, e.g. with `curl -X POST http://localhost:8895/api/sources/gopro/disconnect`) forgets
-the token and removes the profile and its cache, and all three can be deleted by hand while
-cast-tv is not running.
+Token files (`nextcloud.json` among them) are written readable by their owner only (mode 0600
+on Linux); the browser profile is 0700. **Disconnect** in a tab forgets its sign-in: on GoPro it
+also removes the browser profile and its cache, on Nextcloud it first asks the server to revoke
+cast-tv's app password. All of them can be deleted by hand while cast-tv is not running.
 
 ## Limitations
 

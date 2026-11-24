@@ -515,7 +515,7 @@ None: a new file in `config_dir()`; existing sources keep their data. Their tabs
 
 #### Automated
 
-- [ ] 4.1 pyflakes is clean
+- [x] 4.1 pyflakes is clean
 
 #### Manual
 

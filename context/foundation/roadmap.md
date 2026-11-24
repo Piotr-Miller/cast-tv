@@ -3,7 +3,7 @@ project: cast-tv
 version: 1
 status: active
 created: 2026-09-19
-updated: 2026-11-22
+updated: 2026-11-24
 prd_version: 1
 main_goal: personal-use-then-share
 top_blocker: time
@@ -49,11 +49,12 @@ conversion and the cast supervisor. Delivered with `cloud-source-ui` (PR #1, 202
 | S-14 | (proposed) | cast to Google TV and Chromecast devices, not only DLNA TVs | S-02 | — | proposed |
 | S-15 | s15-share-link-album | cast an album from a share link | S-09 | FR-012 | parked (2026-10-15): the picker covers the owner's own albums |
 | S-16 | s16-faster-start | start the release file faster (and smaller, if it can be), especially on Linux | S-12 | NFR platforms | done |
+| S-17 | s17-nextcloud | browse a Nextcloud server and cast its photos and videos; disconnect any tab | S-04 | FR-014, FR-015 | in-progress |
 
 ## Streams
 
 - **Casting core** (B-00, F-01, S-01, S-02, S-11, S-14): discovery, the server, the relay, photos, the supervisor.
-- **Sources** (S-03, S-04, S-05, S-09, S-10, S-13, S-15): one tab each, each behind its own connection.
+- **Sources** (S-03, S-04, S-05, S-09, S-10, S-13, S-15, S-17): one tab each, each behind its own connection.
 - **Platforms & install** (S-06, S-07, S-08, S-12): Fedora, Windows 11, the standalone release.
 
 ## Baseline
@@ -235,6 +236,26 @@ plan. The ideas under each are starting points, not findings.
   CPython, no single file), Briefcase (installers, a PRD Non-Goal).
 - **Ideas:** a spike build in CI next to the PyInstaller one, measured by `packaging/smoke.py`;
   switch only if the start is clearly faster and the smoke test passes on both systems.
+
+### S-17: Photos and videos from a Nextcloud server
+
+- **Phase:** phase:post-mvp
+- **Change:** `context/changes/s17-nextcloud/`
+- **Change ID:** s17-nextcloud
+- **Status:** in-progress
+- **Prerequisites:** S-04 (the OneDrive tab is the pattern); **PRD:** FR-014, FR-015.
+- **Owner's decisions (2026-11-24):** Nextcloud and a local-folder source are two separate
+  changes, Nextcloud first; the local-folder change (later, s18) allows only folders the owner
+  adds, browsable only from the window or localhost, never from the phone. Only HTTPS servers;
+  tiles show the last-modified date (Nextcloud only); Disconnect revokes best effort.
+- **Found (2026-11-24, `research.md`):** Login Flow v2 hands over an app password after the
+  person grants access in the browser; `PROPFIND` lists a folder with type, size, date and
+  file id; `/core/preview` answers for JPEG and HEIC, not for films; a film plays through
+  cast-tv's relay with `Range`, while a direct link handed to the TV did not play.
+- **Built (Phases 1-4, PR #117):** the engine and its tests against a scripted Nextcloud, the
+  refusal probe through cast-tv's own media address, the tab with a Disconnect control on every
+  signed-in tab, and these documents. The Fedora and Windows rows of Phase 3 (the real server,
+  the TV, the phone) are still to run.
 
 ## Open Roadmap Questions
 
