@@ -492,10 +492,10 @@ None: a new file in `config_dir()`; existing sources keep their data. Their tabs
 
 #### Automated
 
-- [ ] 3.1 app.js parses
-- [ ] 3.2 The UI tests pass
-- [ ] 3.3 The whole suite passes
-- [ ] 3.4 pyflakes is clean
+- [x] 3.1 app.js parses
+- [x] 3.2 The UI tests pass
+- [x] 3.3 The whole suite passes
+- [x] 3.4 pyflakes is clean
 
 #### Manual
 

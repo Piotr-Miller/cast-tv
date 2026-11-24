@@ -9,6 +9,7 @@ const SOURCES = [
   { name: 'gopro', label: 'GoPro' },
   { name: 'onedrive', label: 'OneDrive' },
   { name: 'gphotos', label: 'Google Photos' },
+  { name: 'nextcloud', label: 'Nextcloud' },
 ];
 const GATES = {
   gopro: {
@@ -37,7 +38,18 @@ const GATES = {
     expired: 'The Google Photos consent expired',
     expiredBody: 'Google no longer accepts the stored consent (revoked, or the test-user token ran out). These are the picks of this session; connect again to keep going.',
   },
+  nextcloud: {
+    title: 'Connect Nextcloud',
+    body: 'Type the address of your Nextcloud server and press Connect. Then open the link on any device — this phone included — sign in to Nextcloud and grant access. Nothing to copy.',
+    cta: 'Connect',
+    address: true,           // the address is typed before a flow; Connect again reuses the stored one
+    note: 'cast-tv gets its own app password, listed under Settings → Security on your Nextcloud server, where it can be revoked.',
+    expired: 'The Nextcloud sign-in is no longer valid',
+    expiredBody: 'The server no longer accepts cast-tv’s app password (revoked under Settings → Security, or removed). This list is what was fetched last; connect again to keep going.',
+  },
 };
+// a list request that answered this way means the sign-in is gone: the status is fetched at once
+const AUTH_CODES = ['token_rejected', 'no_token', 'refresh_rejected', 'graph_unauthorized', 'picker_unauthorized', 'nextcloud_unauthorized'];
 const ACTIVE = ['preparing', 'starting', 'playing', 'paused'];
 
 async function api(method, path, body, opts) {
@@ -73,6 +85,8 @@ function castTv() {
     lists: {},               // per source: { items, next, loaded, loading, error }
     tokenInput: '',
     linkInput: '',
+    serverInput: '',         // the Nextcloud address field, prefilled once from detail.server
+    _serverTouched: false,   // the owner typed in it: the poll never overwrites what they typed
     pickNote: '',            // the outcome of the last pick that did not land (timeout, error)
     linkNote: '',            // why the last pasted share link was refused; the status poll leaves it alone
     quitNote: '',            // what the last Quit answered; the status poll leaves it alone
@@ -128,6 +142,7 @@ function castTv() {
         const s = await api('GET', '/api/status', undefined, { timeout: POLL_TIMEOUT_MS });
         this.watchSources(s);
         this.status = s;
+        this.prefillServer(s);
         this.offline = false;
         if (s.settings && typeof s.settings.interval === 'number') this.interval = s.settings.interval;
         this.watchPicks(s);
@@ -240,6 +255,7 @@ function castTv() {
       if (s.state === 'connecting') {
         const step = s.detail && s.detail.step;
         if (step === 'browser') return 'gopro.com window open…';
+        if (step === 'login') return 'waiting for access…';
         return step === 'code' ? 'enter the code…' : (step === 'consent' ? 'waiting for consent…' : 'connecting…');
       }
       if (s.detail && s.detail.stored) return 'checking…';
@@ -254,7 +270,7 @@ function castTv() {
     // or the waiting line for the gopro.com window on the host
     connecting(name) {
       const s = this.source(name);
-      return !!s && s.state === 'connecting' && !!s.detail && ['code', 'consent', 'browser'].includes(s.detail.step);
+      return !!s && s.state === 'connecting' && !!s.detail && ['code', 'consent', 'browser', 'login'].includes(s.detail.step);
     },
     connectStep(name) {
       const s = this.source(name);
@@ -289,6 +305,48 @@ function castTv() {
       return (e && String(e.message || '').split('\n')[0]) || 'The sign-in is no longer valid. Connect again.';
     },
     cancelConnect(name) { this.connect(name, { cancel: true }); },
+    // Nextcloud: the address field before a flow; never shown while expired (Connect again keeps the server)
+    addressForm(name) { return !!this.gate(name).address && !this.connecting(name) && !this.expired(name); },
+    prefillServer(s) {
+      const n = s.sources && s.sources.nextcloud;
+      const last = n && n.detail && n.detail.server;
+      if (last && !this._serverTouched && !this.serverInput) this.serverInput = last;
+    },
+    copyLogin(name) {                                           // the link itself: Login Flow v2 has no code
+      const s = this.source(name);
+      if (s && s.detail && s.detail.login_url) this.copy(s.detail.login_url, 'link');
+    },
+    connectServer(name) {
+      const server = this.serverInput.trim();
+      if (!server) return;
+      this.connect(name, { server });
+    },
+    // the revoke on Disconnect did not go through: the server may still list cast-tv (from the status)
+    revokeError(name) {
+      const s = this.source(name);
+      const e = s && s.detail && s.detail.revoke_error;
+      return e ? String(e.message || '').split('\n')[0] : '';
+    },
+    // a signed-in tab (connected, or expired over its last list or on its gate) can be disconnected
+    canDisconnect(name) { return this.connected(name) || this.expired(name); },
+    async disconnect(name) {
+      if (this.busy.connect) return;
+      this.busy.connect = true;
+      try {
+        const st = await api('POST', '/api/sources/' + name + '/disconnect');
+        if (st && st.state) this.status.sources = Object.assign({}, this.status.sources, { [name]: st });
+        delete this.lists[name];                                  // the gate shows: listVisible needs a list
+        this.selection = this.selection.filter(it => it.source !== name);
+        delete this._verified[name];
+        this.gateNote[name] = '';
+        this.chooser = null;
+        if (name === 'nextcloud') this._serverTouched = false;
+        await this.refresh();
+      } catch (e) {
+        this.flash(String(e.message || '').split('\n')[0] || 'Disconnect did not go through.');
+      }
+      this.busy.connect = false;
+    },
     gate(name) { return GATES[name] || { title: 'Connect ' + name, body: '', cta: 'Connect', note: '' }; },
     // entering a tab verifies a stored-but-unverified token once, and fetches the list once connected
     enterTab(name) {
@@ -331,15 +389,11 @@ function castTv() {
       const l = this.lists[name];
       return this.connected(name) || !!(l && l.loaded);          // an expired token keeps the last list on screen
     },
+    // the new folder replaces path, items, folders and crumbs only once it answered: a failed open
+    // (an expired sign-in, a dropped connection) leaves the last list and crumbs on screen
     openFolder(name, id) {
-      const l = this.listOf(name);
-      l.path = id || null;
-      l.items = [];
-      l.folders = [];
-      l.next = null;
-      l.loaded = false;
       this.chooser = null;
-      this.loadList(name);
+      return this.loadList(name, false, id || null);
     },
     ensureList(name) {
       const l = this.lists[name];
@@ -348,24 +402,32 @@ function castTv() {
       if (!(this.connected(name) || listed) || (l && (l.loaded || l.loading))) return;
       this.loadList(name);
     },
-    async loadList(name, more) {
+    // path: the folder to open (openFolder); left out, the list's own folder is fetched again
+    async loadList(name, more, path) {
       const l = this.listOf(name);
       if (l.loading) return;
       l.loading = true;
       l.error = '';
+      const target = path === undefined ? l.path : path;
       try {
         const q = [];
-        if (l.path) q.push('path=' + encodeURIComponent(l.path));
+        if (target) q.push('path=' + encodeURIComponent(target));
         if (more && l.next) q.push('page=' + encodeURIComponent(l.next));
         const d = await api('GET', '/api/sources/' + name + '/list' + (q.length ? '?' + q.join('&') : ''));
+        if (this.lists[name] !== l) return;                      // disconnected meanwhile: the answer is for a list that is gone
+        l.path = target;
         l.items = more ? l.items.concat(d.items || []) : (d.items || []);
-        if (!more) l.folders = d.folders || [];
+        // later pages may bring folders too (Nextcloud sends them all on the first): append, once per id
+        const seen = new Set(more ? l.folders.map(f => f.id) : []);
+        const folders = (d.folders || []).filter(f => !seen.has(f.id) && seen.add(f.id));
+        l.folders = more ? l.folders.concat(folders) : folders;
         l.crumbs = d.crumbs || [];
         l.next = d.next || null;
         l.loaded = true;
       } catch (e) {
+        if (this.lists[name] !== l) return;
         l.error = e.message;
-        if (['token_rejected', 'no_token', 'refresh_rejected', 'graph_unauthorized', 'picker_unauthorized'].includes(e.code)) await this.refresh();   // the gate or banner takes over
+        if (AUTH_CODES.includes(e.code)) await this.refresh();   // the gate or banner takes over
       } finally {
         l.loading = false;
       }
@@ -668,7 +730,7 @@ function castTv() {
 
     cardClass(e) {
       if (['tv_fetched_nothing', 'tv_unreachable', 'tv_rejected', 'tv_never_started', 'no_tv'].includes(e.code)) return 'bad';
-      if (['dts_audio', 'token_rejected', 'no_token', 'refresh_rejected', 'graph_unauthorized', 'expired_token',
+      if (['dts_audio', 'token_rejected', 'no_token', 'refresh_rejected', 'graph_unauthorized', 'expired_token', 'nextcloud_unauthorized', 'revoke_failed',
            'authorization_declined', 'bad_verification_code', 'no_client_id', 'picker_unauthorized',
            'consent_timeout', 'consent_declined', 'no_google_client', 'repick_needed',
            'no_browser', 'browser_failed', 'browser_closed', 'browser_timeout', 'window_unavailable'].includes(e.code)) return 'warn';
@@ -682,8 +744,10 @@ function castTv() {
       if (it.size) parts.push(fmtSize(it.size));
       if (it.duration) parts.push(fmtDur(it.duration));
       if (!parts.length && it.mime) parts.push(it.mime);
+      if (it.source === 'nextcloud' && it.date) parts.push(it.date);   // the server's last-modified date (metaTitle)
       return parts.join(' · ');
     },
+    metaTitle(it) { return it.source === 'nextcloud' && it.date ? 'last modified' : ''; },
     fmtDur(sec) { return fmtDur(sec); },
     fmtTime(t) {
       if (!t) return '';
