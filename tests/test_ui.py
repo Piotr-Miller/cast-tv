@@ -655,7 +655,8 @@ def test_disconnect_every_source():
     header = html[html.index("<h2>", html.index('<template x-if="listVisible(tab)">')):]
     header = header[:header.index("</h2>")]
     assert 'x-show="canDisconnect(tab)" @click="disconnect(tab)"' in header
-    assert 'x-show="canDisconnect(tab) && !connecting(tab)"' in _gate_html() and "disconnect(tab)" in _gate_html()
+    assert 'x-show="(canDisconnect(tab) || disconnecting === tab) && !connecting(tab)"' in _gate_html()
+    assert "disconnect(tab)" in _gate_html()
     for name in SIGNED_IN:
         listed = {"answer": {"path": "/api/sources/%s/list" % name, "body": {"items": [_tile(1, name)]}}}
         gone = {"answer": {"path": "/api/sources/%s/disconnect" % name, "body": {"state": "disconnected",
@@ -806,3 +807,48 @@ def test_onedrive_open_folder_unchanged():
     assert root["path"] is None
     assert "GET /api/sources/onedrive/list?path=f1" in out["requests"]
     assert out["requests"][-1].startswith("GET /api/sources/onedrive/list") and "path=" not in out["requests"][-1]
+
+
+def test_nextcloud_unchecked_stored_sign_in_checks_again():
+    """Review F1 (phase 3): a stored sign-in whose check failed (no network at start) is checked again by
+    Connect ({}), never replaced by a fresh flow that would leave the old app password live; and it can
+    be disconnected from the gate."""
+    stored = _nc("disconnected", stored=True, account="Pat (pat)", server="https://cloud.example.test")
+    out = drive_ui([
+        {"status": _sources(nextcloud=stored)}, {"call": "refresh"},
+        {"read": "listVisible", "args": ["nextcloud"]}, {"read": "addressForm", "args": ["nextcloud"]},
+        {"read": "canDisconnect", "args": ["nextcloud"]},
+        {"answer": {"path": "/api/sources/nextcloud/connect", "body": SIGNED_IN["nextcloud"]}},
+        {"call": "connect", "args": ["nextcloud"]},             # the gate's Connect, as the button sends it
+    ])
+    assert out["reads"] == [False, False, True]
+    assert [b for b in out["bodies"] if b[0] == "POST /api/sources/nextcloud/connect"] == [
+        ["POST /api/sources/nextcloud/connect", {}]]
+    gate = _gate_html()
+    assert '<template x-if="!connecting(tab) && !addressForm(tab)">' in gate and "@click=\"connect(tab)\"" in gate
+
+
+def test_disconnect_clears_the_list_before_the_server_answers():
+    """Review F2 (phase 3): the revoke may take up to 30 s; the list goes at once and the gate says
+    Disconnecting… on that tab only, until the answer lands."""
+    gone = _nc("disconnected", server="https://cloud.example.test")
+    out = drive_ui([
+        {"answer": {"path": NC_LIST, "body": {"items": [_tile(1)]}}},
+        {"answer": {"path": "/api/sources/onedrive/list", "body": {"items": [_tile(2, "onedrive")]}}},
+        {"answer": {"path": "/api/sources/nextcloud/disconnect", "body": gone}},
+        {"status": _sources(nextcloud=SIGNED_IN["nextcloud"], onedrive=SIGNED_IN["onedrive"])}, {"call": "refresh"},
+        {"call": "loadList", "args": ["nextcloud"]}, {"call": "loadList", "args": ["onedrive"]},
+        {"call": "toggle", "args": [_tile(1)]},
+        {"hold": "/api/sources/nextcloud/disconnect"},
+        {"start": "disconnect", "args": ["nextcloud"]}, {"wait": True},
+        {"status": _sources(nextcloud=gone, onedrive=SIGNED_IN["onedrive"])}, {"call": "refresh"},
+        {"read": "listVisible", "args": ["nextcloud"]}, {"read": "items", "args": ["nextcloud"]},
+        {"read": "selection"}, {"read": "disconnecting"}, {"read": "listVisible", "args": ["onedrive"]},
+        {"release": "/api/sources/nextcloud/disconnect"},
+        {"read": "disconnecting"}, {"read": "listVisible", "args": ["nextcloud"]},
+    ])
+    visible, items, selection, busy, other, after, still_gate = out["reads"]
+    assert visible is False and items == [] and selection == [] and busy == "nextcloud"
+    assert other is True                                        # another tab's list is untouched
+    assert after == "" and still_gate is False
+    assert "Disconnecting…" in _gate_html()

@@ -83,6 +83,7 @@ function castTv() {
     status: { tv: null, tvs: [], interfaces: [], cast: null, show: null, sources: {}, session: [], errors: 0, settings: { interval: 8 }, firewall_hint: '', firewall_blocked: null, firewall_advice: '', host: false, window: false },
     errors: [],
     lists: {},               // per source: { items, next, loaded, loading, error }
+    disconnecting: '',      // the source whose Disconnect is under way: its gate says so meanwhile
     tokenInput: '',
     linkInput: '',
     serverInput: '',         // the Nextcloud address field, prefilled once from detail.server
@@ -305,8 +306,13 @@ function castTv() {
       return (e && String(e.message || '').split('\n')[0]) || 'The sign-in is no longer valid. Connect again.';
     },
     cancelConnect(name) { this.connect(name, { cancel: true }); },
-    // Nextcloud: the address field before a flow; never shown while expired (Connect again keeps the server)
-    addressForm(name) { return !!this.gate(name).address && !this.connecting(name) && !this.expired(name); },
+    // Nextcloud: the address field before a flow; never while expired or while a sign-in is stored but not
+    // yet checked (Connect posts {} and checks it again: a fresh flow would leave the old app password live)
+    addressForm(name) {
+      const s = this.source(name);
+      const stored = !!s && !!s.detail && !!s.detail.stored;
+      return !!this.gate(name).address && !this.connecting(name) && !this.expired(name) && !stored;
+    },
     prefillServer(s) {
       const n = s.sources && s.sources.nextcloud;
       const last = n && n.detail && n.detail.server;
@@ -327,25 +333,30 @@ function castTv() {
       const e = s && s.detail && s.detail.revoke_error;
       return e ? String(e.message || '').split('\n')[0] : '';
     },
-    // a signed-in tab (connected, or expired over its last list or on its gate) can be disconnected
-    canDisconnect(name) { return this.connected(name) || this.expired(name); },
+    // a signed-in tab (connected, expired, or stored but not yet checked) can be disconnected
+    canDisconnect(name) {
+      const s = this.source(name);
+      return this.connected(name) || this.expired(name) || (!!s && !!s.detail && !!s.detail.stored);
+    },
+    // the list goes at once: the server forgets the credential first and may take a while to revoke it
     async disconnect(name) {
-      if (this.busy.connect) return;
-      this.busy.connect = true;
+      if (this.busy.connect || this.disconnecting) return;
+      this.disconnecting = name;
+      delete this.lists[name];                                    // the gate shows: listVisible needs a list
+      this.selection = this.selection.filter(it => it.source !== name);
+      delete this._verified[name];
+      this.gateNote[name] = '';
+      this.chooser = null;
+      if (name === 'nextcloud') this._serverTouched = false;
       try {
         const st = await api('POST', '/api/sources/' + name + '/disconnect');
         if (st && st.state) this.status.sources = Object.assign({}, this.status.sources, { [name]: st });
-        delete this.lists[name];                                  // the gate shows: listVisible needs a list
-        this.selection = this.selection.filter(it => it.source !== name);
-        delete this._verified[name];
-        this.gateNote[name] = '';
-        this.chooser = null;
-        if (name === 'nextcloud') this._serverTouched = false;
         await this.refresh();
       } catch (e) {
         this.flash(String(e.message || '').split('\n')[0] || 'Disconnect did not go through.');
+        await this.refresh();
       }
-      this.busy.connect = false;
+      this.disconnecting = '';
     },
     gate(name) { return GATES[name] || { title: 'Connect ' + name, body: '', cta: 'Connect', note: '' }; },
     // entering a tab verifies a stored-but-unverified token once, and fetches the list once connected
@@ -386,6 +397,7 @@ function castTv() {
     },
     listVisible(name) {
       if (this.connecting(name)) return false;                   // the gate shows the code, whatever was listed before
+      if (this.disconnecting === name) return false;             // Disconnect is under way: the gate says so
       const l = this.lists[name];
       return this.connected(name) || !!(l && l.loaded);          // an expired token keeps the last list on screen
     },

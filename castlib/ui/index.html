@@ -335,8 +335,8 @@
           </div>
         </template>
         <!-- an expired sign-in with no list: the gate, not the header, offers Disconnect -->
-        <div class="cta" x-show="canDisconnect(tab) && !connecting(tab)" x-cloak>
-          <button class="ghost" @click="disconnect(tab)" :disabled="busy.connect" title="Forget this sign-in on this computer">Disconnect</button>
+        <div class="cta" x-show="(canDisconnect(tab) || disconnecting === tab) && !connecting(tab)" x-cloak>
+          <button class="ghost" @click="disconnect(tab)" :disabled="busy.connect || !!disconnecting" title="Forget this sign-in on this computer" x-text="disconnecting === tab ? 'Disconnecting…' : 'Disconnect'"></button>
         </div>
         <div class="note" x-text="gate(tab).note"></div>
         <div class="later" x-show="gateNote[tab]" x-text="gateNote[tab]"></div>
@@ -383,7 +383,7 @@
         <span class="n" x-text="items(tab).length"></span>
         <button class="ghost tiny" @click="loadList(tab)" :disabled="listOf(tab).loading || expired(tab)" title="Fetch the list again">Refresh</button>
         <span class="age" x-text="headerLine(tab)"></span>
-        <button class="ghost tiny" x-show="canDisconnect(tab)" @click="disconnect(tab)" :disabled="busy.connect" title="Forget this sign-in on this computer">Disconnect</button>
+        <button class="ghost tiny" x-show="canDisconnect(tab)" @click="disconnect(tab)" :disabled="busy.connect || !!disconnecting" title="Forget this sign-in on this computer">Disconnect</button>
       </h2>
       <!-- Google Photos: the pick happens in Google's own picker, on any device; the picks land here -->
       <div class="pickbar" x-show="tab === 'gphotos' && !expired(tab)" x-cloak>
