@@ -332,6 +332,20 @@ def test_flow_other_origin_refused(fake):
     assert not fake.of("GET")                                 # nothing was sent anywhere with a password
 
 
+def test_flow_backslash_userinfo_refused(fake):
+    # urlsplit reads the host after "@"; a browser reads "\\" as "/" and opens evil.test
+    fake.login_url = fake.base.replace("://", "://evil.test\\@") + "/login/v2/flow/x"
+    src = NextcloudSource()
+    with pytest.raises(UpstreamError) as err:
+        src.connect({"server": fake.base})
+    assert err.value.code == "nextcloud_origin"
+    base = loginflow.normalise("cloud.example.com")
+    assert loginflow.same_origin(base, "https://cloud.example.com/login")
+    for url in ("https://evil.test\\@cloud.example.com/login", "https://u@cloud.example.com/login",
+                "https://evil.test\\.cloud.example.com/x", "https://cloud.example.com\t/x"):
+        assert not loginflow.same_origin(base, url), url
+
+
 def test_flow_other_port_refused(fake):
     port = int(fake.base.rsplit(":", 1)[1])
     fake.endpoint = "http://127.0.0.1:%d/index.php/login/v2/poll" % (port + 1)
@@ -448,7 +462,14 @@ def test_connect_server_starts_fresh_flow(fake):
     assert d["step"] == "login" and fake.starts == 4
 
 
+def _flow_threads_done(before):
+    """Wait for the sign-in threads this test started; ``before`` is ``set(threading.enumerate())`` at its start."""
+    wait_for(lambda: not any(t.name == "nextcloud-loginflow" and t.is_alive() and t not in before
+                             for t in threading.enumerate()))
+
+
 def test_late_poll_answer_dropped(fake):
+    before = set(threading.enumerate())
     held, release = threading.Event(), threading.Event()
 
     def hold():
@@ -461,12 +482,12 @@ def test_late_poll_answer_dropped(fake):
     assert held.wait(5)
     src.connect({"cancel": True})                             # cancelled while the answer is on its way
     release.set()
-    wait_for(lambda: fake.issued == 1)
-    import time
-    time.sleep(0.1)
+    _flow_threads_done(before)
+    first = fake.last_password
+    assert fake.issued == 1 and fake.revoked == [first]       # handed over once, so revoked at once
     assert src.status() == {"state": "disconnected", "detail": {"stored": False, "server": fake.base}}
     assert not os.path.exists(_cred_file())
-    # a new flow replaces one whose answer is late: the late answer is dropped too
+    # a Disconnect while a newer flow's answer is late: that answer is dropped and revoked too
     held.clear()
     release.clear()
     src.connect({"server": fake.base})
@@ -474,8 +495,43 @@ def test_late_poll_answer_dropped(fake):
     fake.before_answer = None
     src.disconnect()
     release.set()
-    time.sleep(0.1)
+    _flow_threads_done(before)
+    assert fake.issued == 2 and fake.revoked == [first, fake.last_password]
     assert not src._store.exists() and src.status()["state"] == "disconnected"
+
+
+def test_new_flow_late_answer_revoked(fake):
+    before = set(threading.enumerate())
+    held, release = threading.Event(), threading.Event()
+
+    def hold():
+        held.set()
+        release.wait(5)
+    fake.before_answer = hold
+    fake.script = ["ok"]
+    src = NextcloudSource()
+    src.connect({"server": fake.base})
+    assert held.wait(5)
+    fake.before_answer = None
+    other = "http://localhost:%s" % fake.base.rsplit(":", 1)[1]
+    src.connect({"server": other})                            # a new flow replaces the one being answered
+    release.set()
+    wait_for(lambda: src.status()["state"] == "connected")
+    _flow_threads_done(before)
+    late, kept = sorted(fake.revoked), src._store.load()["password"]
+    assert fake.issued == 2 and len(late) == 1 and late[0] != kept and kept in fake.valid
+
+
+def test_fresh_sign_in_revokes_the_replaced_password(fake):
+    before = set(threading.enumerate())
+    src = NextcloudSource()
+    _sign_in(src, fake)
+    old = fake.last_password
+    src.connect({"server": fake.base})                        # through the API: a stored sign-in replaced
+    wait_for(lambda: src._store.load()["password"] != old)
+    _flow_threads_done(before)
+    assert fake.revoked == [old] and old not in fake.valid
+    assert src._store.load()["password"] == fake.last_password in fake.valid
 
 
 def test_login_name_differs_from_user_id(fake):
@@ -623,6 +679,26 @@ def test_listing_pages(fake):
     other = NextcloudSource()
     other.connect({})
     assert len(other.list("big", "400").items) == 50
+
+
+def test_big_folder_files_found_without_search(fake, monkeypatch):
+    # a folder larger than the LRU: every tile of every page still resolves from the folder's snapshot
+    monkeypatch.setattr(nextcloud, "CACHE_ITEMS", 50)
+    entries = [("huge", "dir", "1", None, None, False)]
+    entries += [("huge/IMG_%06d.jpg" % i, "file", str(20000 + i), "image/jpeg", None, True) for i in range(500)]
+    fake.folders["huge"] = multistatus(entries)
+    src = NextcloudSource()
+    _sign_in(src, fake)
+    first = src.list("huge")
+    assert len(src._files) == 50 and first.items[0].id not in src._files   # page 1 fell out of the LRU
+    for entry in first.items:
+        assert src.thumb(entry.id) is not None
+    assert src.resolve(first.items[0].id).title == "IMG_000000.jpg"
+    last = src.list("huge", "400")
+    assert src.resolve(last.items[-1].id).title == "IMG_000499.jpg"
+    assert fake.searches == []
+    src.list("Documents")
+    assert src.thumb(first.items[1].id) is not None and fake.searches == []   # an older snapshot still counts
 
 
 def test_empty_folder(fake):

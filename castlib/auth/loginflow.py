@@ -104,6 +104,9 @@ def same_origin(base: Base, url) -> bool:
     """Whether ``url`` has the base's scheme, host and effective port (a relative or ``//`` URL never does)."""
     if not isinstance(url, str) or "://" not in url:
         return False
+    authority = re.split(r"[/?#]", url.split("://", 1)[1], maxsplit=1)[0]
+    if re.search(r"[\\@\s\x00-\x1f\x7f]", authority):
+        return False                             # a browser reads "a\@b" as host a; urlsplit reads b
     origin = _origin(url)
     if origin is None:
         return False

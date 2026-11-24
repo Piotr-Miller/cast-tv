@@ -261,19 +261,33 @@ class NextcloudSource:
                 self._quiet_revoke(base, login, password)    # an app password cast-tv cannot use
             return
         with self._lock:
-            if self._gen != gen or self._flow is not record:
-                return                           # cancelled or replaced meanwhile: the answer is dropped
-            account = who["displayname"]
-            self._store.save({"server": base.url, "login": login, "user_id": who["id"],
-                              "password": password,
-                              "account": "%s (%s)" % (account, login) if account and account != login else login})
-            self._flow, self._flow_stop = None, None
-            self._flow_error = self._revoke_error = None
-            self._gen += 1
-            self._verified_at, self._expired_at, self._error = time.time(), None, None
-            self._last_server = base.url
-            self._files.clear()
-            self._snapshots.clear()
+            current = self._gen == gen and self._flow is record
+            replaced = self._store.load() if current else None
+            if current:
+                self._save_sign_in(base, login, password, who)
+        if not current:                          # cancelled or replaced meanwhile: the answer is dropped,
+            self._quiet_revoke(base, login, password)    # and its password, handed over once, revoked
+            return
+        if replaced is not None and replaced["password"] != password:
+            try:                                 # a fresh sign-in over a stored one: the old password goes
+                old = loginflow.normalise(replaced["server"])
+            except ConfigError:
+                return
+            self._quiet_revoke(old, replaced["login"], replaced["password"])
+
+    def _save_sign_in(self, base, login: str, password: str, who: dict) -> None:
+        """Store a granted sign-in and make it current; caller holds _lock."""
+        account = who["displayname"]
+        self._store.save({"server": base.url, "login": login, "user_id": who["id"],
+                          "password": password,
+                          "account": "%s (%s)" % (account, login) if account and account != login else login})
+        self._flow, self._flow_stop = None, None
+        self._flow_error = self._revoke_error = None
+        self._gen += 1
+        self._verified_at, self._expired_at, self._error = time.time(), None, None
+        self._last_server = base.url
+        self._files.clear()
+        self._snapshots.clear()
 
     @staticmethod
     def _quiet_revoke(base, login, password) -> None:
@@ -483,7 +497,7 @@ class NextcloudSource:
             self._check_generation(gen)
             for rec in records:
                 self._remember(rec)
-            self._snapshots[rel] = (folders, files)
+            self._snapshots[rel] = (folders, files, {rec["id"]: rec for rec in records})
             self._snapshots.move_to_end(rel)
             while len(self._snapshots) > SNAPSHOTS:
                 self._snapshots.popitem(last=False)
@@ -502,7 +516,7 @@ class NextcloudSource:
             with self._lock:
                 self._check_generation(gen)
                 snap = self._snapshots.get(rel)
-        folders, files = snap if snap is not None else self._snapshot(rel)
+        folders, files = snap[:2] if snap is not None else self._snapshot(rel)
         chunk = files[offset:offset + PAGE_SIZE]
         end = offset + PAGE_SIZE
         with self._lock:
@@ -546,10 +560,16 @@ class NextcloudSource:
         return None
 
     def _file(self, file_id: str) -> dict | None:
+        """A listed file from the LRU or a kept folder snapshot; ``SEARCH`` only for one never listed here."""
         with self._lock:
             rec = self._files.get(file_id)
+            if rec is None:
+                for _, _, by_id in reversed(self._snapshots.values()):
+                    rec = by_id.get(file_id)
+                    if rec is not None:
+                        break
             if rec is not None:
-                self._files.move_to_end(file_id)
+                self._remember(rec)
                 return rec
         return self._search(file_id)
 

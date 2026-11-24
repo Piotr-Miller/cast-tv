@@ -202,14 +202,14 @@ time: to switch, press **Disconnect**, then type the other address.
 
 cast-tv gets an **app password** of its own, stored as `nextcloud.json` in the config directory
 (below) and sent only to the address you typed. The whole account is browsable by folder; only
-photos and videos are listed. Photo tiles carry the server's preview, HEIC included; films show a
-placeholder, since Nextcloud makes no film thumbnails. Each tile shows the file's **last-modified
+photos and videos are listed. Photo tiles carry the server's preview, HEIC included; films
+usually show a placeholder, since Nextcloud makes film previews only when its admin enabled them. Each tile shows the file's **last-modified
 date** on the server (the tooltip says so), which is not always the day it was taken. Films are
 relayed through cast-tv with `Range`, so the TV's remote seeks as usual.
 
-**Removing cast-tv's access.** Press **Disconnect** in the tab: cast-tv asks the server to revoke
-its app password, then deletes `nextcloud.json`. If the server does not confirm (unreachable, or
-an error), the file is still deleted and the tab says the entry may remain; remove it on the
+**Removing cast-tv's access.** Press **Disconnect** in the tab: cast-tv deletes `nextcloud.json`
+at once, then asks the server to revoke the app password. If the server does not confirm
+(unreachable, or an error), the tab says the entry may remain; remove it on the
 server under your avatar → **Settings** → **Security** → *Devices & sessions*, where cast-tv's
 entry has a menu with **Revoke**. Revoking it there yourself works too: the next folder you open
 shows a banner over the last list, and **Connect again** signs in to the same server without
@@ -325,7 +325,7 @@ are served as they are. GIF, raw and other stills the TV cannot show are not lis
 
 Token files (`nextcloud.json` among them) are written readable by their owner only (mode 0600
 on Linux); the browser profile is 0700. **Disconnect** in a tab forgets its sign-in: on GoPro it
-also removes the browser profile and its cache, on Nextcloud it first asks the server to revoke
+also removes the browser profile and its cache, on Nextcloud it then asks the server to revoke
 cast-tv's app password. All of them can be deleted by hand while cast-tv is not running.
 
 ## Limitations

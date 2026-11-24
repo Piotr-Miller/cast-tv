@@ -140,14 +140,14 @@ or create cloud projects.
 - FR-014: Nextcloud browses the account's files by folder after a Login Flow v2 sign-in in the
   browser (any device, the phone included; nothing copied), which gives cast-tv its own app
   password; HTTPS servers only, one server and one account at a time. Photos and videos are
-  listed, photos with the server's preview (HEIC included), videos with a placeholder (no film
-  thumbnails); each tile shows the file's last-modified date, not a capture date. Films are
+  listed, photos with the server's preview (HEIC included), videos with a placeholder unless the
+  server's admin enabled film previews; each tile shows the file's last-modified date, not a capture date. Films are
   relayed with `Range`. A password revoked on the server turns the tab expired over the last
   list (`s17-nextcloud`, 2026-11-24).
 - FR-015: Every connected or expired tab has a **Disconnect** control that forgets the sign-in
-  on this computer. On Nextcloud it first asks the server to revoke cast-tv's app password, best
-  effort: when the server does not confirm, the local credential is still removed and the tab
-  says the entry may remain under the server's Settings → Security (`s17-nextcloud`).
+  on this computer at once. On Nextcloud it then asks the server to revoke cast-tv's app
+  password, best effort: when the server does not confirm, the tab says the entry may remain
+  under the server's Settings → Security (`s17-nextcloud`).
 
 ### Casting
 - FR-020: Video is served or relayed untouched with `Range`; expiring cloud URLs are re-resolved
