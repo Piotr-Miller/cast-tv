@@ -103,3 +103,58 @@
   - Row 1.4 (external): on PR #117 at 2253d5d, `release.yml` build passed on ubuntu-22.04 (11m39s) and windows-latest (12m4s), `release` was skipped (tag-only), and `test` passed on ubuntu-latest and windows-latest.
 - **Manual rows**: 3.5-3.15 and 4.2 are pending acceptance (acceptance script exit 0, all `pending`). They need the real server, the TV, the phone, Windows and the owner's reading, and the plan leaves them open on purpose. They are not findings. F3 touches row 4.2's surface (README.md, prd.md); a fix lands before that row is run, so nothing needs reopening.
 - Two delegated analysis passes (plan drift; safety, quality and patterns) were run; their findings were re-checked against the code in this session before being recorded.
+
+## Re-review 2 (2026-11-24)
+
+- **Scope**: full — the report's scope
+- **Session**: fresh
+- **Base**: 2253d5dc570540106da9887ec554bb7f7f944d29 (previous round)
+- **Head**: 12823bdf77757f9aee2583c543d46d093bde628e
+- **Worktree**: excluded (clean; nothing to include)
+- **Checks ran at**: 12823bdf77757f9aee2583c543d46d093bde628e (current HEAD)
+- **Manual acceptance**: 0 of 12 confirmed — pending: 3.5, 3.6, 3.7, 3.8, 3.9, 3.10, 3.11, 3.12, 3.13, 3.14, 3.15, 4.2
+- **Verdict**: APPROVED
+- **Findings**: 0 critical, 0 warnings, 2 observations
+- **Closes**: F1, F2, F3, F4, F5
+
+| Dimension | Verdict |
+|-----------|---------|
+| Plan Adherence | PASS |
+| Scope Discipline | PASS |
+| Safety & Quality | WARNING |
+| Architecture | PASS |
+| Pattern Consistency | PASS |
+| Success Criteria | PASS |
+
+### F6 — Two other paths still drop a granted app password without revoking it
+
+- **Severity**: 🔍 OBSERVATION
+- **Impact**: 🏃 LOW — quick decision; fix is obvious and narrowly scoped
+- **Dimension**: Safety & Quality
+- **Location**: castlib/sources/nextcloud.py:259-262; castlib/sources/nextcloud.py:253-255 with castlib/auth/loginflow.py:212-215
+- **Detail**: Siblings of F2 (the same defect class: an app password Login Flow v2 handed over once, then neither stored nor revoked); F2's decision names no siblings. (a) When `loginflow.user()` fails, the password is revoked only if `_end_flow` returns `True`, that is, only while the flow is still current (`:260`). If the owner presses **Cancel**, starts another flow or presses **Disconnect** while that `user()` call is in flight, the answer is dropped unrevoked: the exact F2 window, on the error branch. A probe in a scratch worktree (a `user()` held until Cancel, then raising `UpstreamError`) printed `issued 1 revoked 0 valid 1 state disconnected`. (b) `poll()` raises `nextcloud_origin` after it has received a password when the answer's `server` field is another origin (`loginflow.py:212-215`); `_finish_flow` ends the flow and returns (`:253-255`), so that password stays live too. The poll endpoint is same-origin with the typed base (`loginflow.py:173`), so a revoke sent to the base reaches the server that issued it. **Failure scenario**: (a) the server answers the `ocs/v2.php/cloud/user` call slowly with a 5xx while the owner presses Cancel; the tab is disconnected, `nextcloud.json` absent, and a cast-tv entry remains under Settings → Security that cast-tv can never revoke. Both need an unusual server answer, so this is rarer than F2.
+- **Fix**: In the `user()` failure branch, call `_end_flow` for its side effect and revoke unconditionally; for (b), have `poll()` return the password with the mismatch flagged (or raise an error carrying it) so `_finish_flow` revokes it at `base` before ending the flow. Extend `test_late_poll_answer_dropped` (or a sibling test) with a `user()` that fails after Cancel, and `test_flow_server_field_refused`'s case with `fake.revoked`.
+- **Decision**: FIXED (owner decision 2026-11-24: fix) — (a) a failed `user()` check revokes the password whether or not the flow is still current; `test_failed_account_check_revokes_even_after_cancel`. (b) `loginflow.poll` revokes, at the typed origin that issued it, a password whose answer names another origin; `test_poll_server_other_origin_refused` asserts it. Deliberate breaks (the old condition restored; the poll revoke removed) turned each red; restored, green.
+
+### F7 — The F5 test passes when the replaced password is revoked at the new server
+
+- **Severity**: 🔍 OBSERVATION
+- **Impact**: 🏃 LOW — quick decision; fix is obvious and narrowly scoped
+- **Dimension**: Safety & Quality
+- **Location**: tests/test_nextcloud.py:525-535
+- **Detail**: `test_fresh_sign_in_revokes_the_replaced_password` signs in and re-signs in on the same address, so it cannot tell `old` (the replaced record's server, `nextcloud.py:273`) from `base` (the new flow's server). A deliberate break replacing `old` with `base` in the `_quiet_revoke` call left it green (`1 passed`). The code is right today: a probe signing in on `localhost:<port>` and then replacing it with `127.0.0.1:<port>` saw one `DELETE` with `Host: localhost:<port>` and the old password revoked. **Failure scenario**: a later refactor sends the old password to the new server; against two real servers that `DELETE` answers 401, `_quiet_revoke` swallows it, and the F5 defect (the replaced entry stays live) returns with every test green.
+- **Fix**: Sign in first on `http://localhost:<port>` (as `test_new_flow_late_answer_revoked` does), replace it with `fake.base`, and assert the `DELETE` carried `Host: localhost:<port>`.
+- **Decision**: FIXED (owner decision 2026-11-24: fix) — `test_fresh_sign_in_revokes_the_replaced_password` signs in on `localhost:<port>`, replaces it on `127.0.0.1:<port>` and asserts the one `DELETE` carried `Host: localhost:<port>`. Deliberate break (the old password revoked at the new base) turned it red; restored, green. Gate: pyflakes exit 0; full suite 761 passed, 6 skipped; `git diff --check` exit 0.
+
+- **Notes**:
+  - **Bookkeeping in diff**: context/changes/s17-nextcloud/change.md, context/changes/s17-nextcloud/plan.md (F3's dated note on the Disconnect row), context/changes/s17-nextcloud/reviews/impl-review-2253d5d.md. `change.md` already reads `status: impl_reviewed`, `updated: 2026-11-24`; this round leaves it as it is.
+  - **Lessons**: 6 entries; 1 names impl-review ("A ticked manual row needs a written observation"). No Manual row is ticked, so it has nothing to check. "Look at every branch and PR before building" has no bearing on a review of fixes.
+  - **F1 verified**: `_snapshot` keeps an id → record map of the folder's media records in each of the `SNAPSHOTS = 8` entries (`nextcloud.py:500`); `_file()` looks there newest first after the LRU and before `SEARCH`, under `_lock`, and re-remembers the hit (`:562-574`). Snapshots are cleared on every generation change (sign-in, verify, Disconnect) and `resolve()`/`thumb()` still check the generation after `_file()`, so no record of an old account is served. The map shares the snapshot's record dicts: memory is one dict per kept folder. Deliberate breaks: the lookup removed → `test_big_folder_files_found_without_search` red; only the newest snapshot searched → red (its last assertion).
+  - **F2 verified**: a late poll answer that is no longer current is revoked outside the lock at the flow's own base with its own password (`:268-270`). Deliberate break (that revoke removed) → `test_late_poll_answer_dropped` and `test_new_flow_late_answer_revoked` red. The tests wait for their own `nextcloud-loginflow` threads instead of sleeping, so a slow runner can no longer pass them early. Siblings: see F6.
+  - **F3 verified**: README.md:205-206, :210-212, :328 and prd.md FR-014/FR-015 match the code (forget under the lock, then revoke the captured password; a film preview when `nc:has-preview` is true). No other text in README.md, `context/foundation/`, `castlib/ui/app.js` or `index.html` states the old order or "no film thumbnails". plan.md's Disconnect row carries the dated note. Row 4.2 is still `pending`, so nothing reopens.
+  - **F4 verified**: `same_origin` refuses an authority (up to the first `/`, `?` or `#`) holding `\`, `@`, whitespace or a control character. Its callers are the start answer's `login` and poll `endpoint` (`loginflow.py:173`), the poll answer's `server` (`:212`) and absolute DAV hrefs (`nextcloud.py:423`); none legitimately carries userinfo, and an `@` in a DAV path (an e-mail user id) lies after the first `/`, outside the checked authority. `normalise` already refuses `@` in the typed address. Deliberate break (the check removed) → `test_flow_backslash_userinfo_refused` red.
+  - **F5 verified**: the replaced record is read under the same lock hold that saves the new one, and its password is revoked after the save, outside the lock, at the replaced record's own server with the replaced password, only when it differs from the new one (`:265`, `:271-276`). A **Connect again** on an expired tab now also sends one `DELETE` with the already-rejected password, which answers 401 and is swallowed: harmless. Deliberate break (that revoke removed) → red; the server-confusion break stays green (F7).
+  - **Automated checks** (repository `.venv`, at 12823bd): row 1.1 `python -m pytest tests/test_nextcloud.py` exit 0, 57 passed; rows 1.2, 2.2, 3.3 `python -m pytest` exit 0, 760 passed, 6 skipped; rows 1.3, 2.3, 3.4, 4.1 `python -m pyflakes castlib tests` exit 0; row 2.1 `python -m pytest tests/test_supervisor.py` exit 0, 38 passed; row 3.1 `node --check castlib/ui/app.js` exit 0 (node v24.19.0); row 3.2 `python -m pytest tests/test_ui.py` exit 0, 46 passed. Row 1.4 (the release build on the PR) is unaffected: the fix commit touches nothing in `packaging/` or `.github/workflows/release.yml`.
+  - **Deliberate breaks and probes** ran in a temporary worktree at 12823bd under the scratchpad, removed afterwards; nothing in the repository was edited by them.
+  - **Manual rows**: acceptance script exit 0, all 12 `pending` (3.5-3.15, 4.2); pending on purpose, not findings.
+  - **Mutation check**: skipped; `context/foundation/test-plan.md` and `pyproject.toml` configure no mutation tool.

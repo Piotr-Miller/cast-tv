@@ -257,8 +257,8 @@ class NextcloudSource:
         try:
             who = loginflow.user(base, login, password)
         except CastError as e:
-            if self._end_flow(record, gen, e):
-                self._quiet_revoke(base, login, password)    # an app password cast-tv cannot use
+            self._end_flow(record, gen, e)
+            self._quiet_revoke(base, login, password)        # unusable or no longer wanted: never left live
             return
         with self._lock:
             current = self._gen == gen and self._flow is record

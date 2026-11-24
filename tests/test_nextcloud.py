@@ -373,6 +373,7 @@ def test_poll_server_other_origin_refused(fake):
     assert s["state"] == "disconnected" and s["detail"]["flow_error"]["code"] == "nextcloud_origin"
     assert not os.path.exists(_cred_file())
     assert not fake.of("GET")                                 # the password was never used
+    assert fake.revoked == [fake.last_password]               # but revoked where it was issued
 
 
 def test_href_outside_root_refused(fake):
@@ -525,13 +526,38 @@ def test_new_flow_late_answer_revoked(fake):
 def test_fresh_sign_in_revokes_the_replaced_password(fake):
     before = set(threading.enumerate())
     src = NextcloudSource()
-    _sign_in(src, fake)
+    port = fake.base.rsplit(":", 1)[1]
+    src.connect({"server": "http://localhost:%s" % port})    # the old sign-in on one address ...
+    wait_for(lambda: src.status()["state"] == "connected")
     old = fake.last_password
-    src.connect({"server": fake.base})                        # through the API: a stored sign-in replaced
+    src.connect({"server": fake.base})                        # ... replaced through the API on another
     wait_for(lambda: src._store.load()["password"] != old)
     _flow_threads_done(before)
     assert fake.revoked == [old] and old not in fake.valid
     assert src._store.load()["password"] == fake.last_password in fake.valid
+    deletes = fake.of("DELETE")
+    assert [c["headers"]["Host"] for c in deletes] == ["localhost:%s" % port]   # at the old server
+
+
+def test_failed_account_check_revokes_even_after_cancel(fake, monkeypatch):
+    before = set(threading.enumerate())
+    held, release = threading.Event(), threading.Event()
+    real = loginflow.user
+
+    def slow(*args):
+        held.set()
+        release.wait(5)
+        raise UpstreamError("nextcloud_http", "boom", source="nextcloud")
+    monkeypatch.setattr(loginflow, "user", slow)
+    fake.script = ["ok"]
+    src = NextcloudSource()
+    src.connect({"server": fake.base})
+    assert held.wait(5)
+    src.connect({"cancel": True})                             # cancelled while the account check runs
+    release.set()
+    _flow_threads_done(before)
+    monkeypatch.setattr(loginflow, "user", real)
+    assert fake.revoked == [fake.last_password] and src.status()["state"] == "disconnected"
 
 
 def test_login_name_differs_from_user_id(fake):

@@ -210,6 +210,10 @@ def poll(flow: dict, stop: threading.Event | None = None) -> dict:
             raise UpstreamError("nextcloud_flow", "The server's sign-in answer carried no app password.",
                                 source=SOURCE)
         if not same_origin(base, answer.get("server")):
+            try:                                 # issued by the typed origin, so it is revoked there
+                revoke(base, login, password)
+            except Exception:
+                pass
             raise UpstreamError("nextcloud_origin",
                                 "The server granted access for another host or port than %s; "
                                 "cast-tv does not use it." % base.url, source=SOURCE)
