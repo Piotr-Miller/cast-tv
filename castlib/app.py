@@ -31,6 +31,7 @@ from castlib.sources.gphotos import GPhotosSource
 from castlib.sources.gopro import GoProSource
 from castlib.sources.local import LocalSource
 from castlib.sources.onedrive import OneDriveSource
+from castlib.sources.nextcloud import NextcloudSource
 from castlib.supervisor import Cast, Show
 
 APP_NAME = "cast-tv"
@@ -185,7 +186,7 @@ class App:
         self.settings = Settings()
         self.local = LocalSource()
         self.sources: dict = {"gopro": GoProSource(), "onedrive": OneDriveSource(),
-                              "gphotos": GPhotosSource()}   # name -> Source
+                              "gphotos": GPhotosSource(), "nextcloud": NextcloudSource()}   # name -> Source
         for src in self.sources.values():
             if hasattr(src, "report"):          # a source's own refusal lands in Diagnostics (GoPro's first 401)
                 src.report = self.errors.push

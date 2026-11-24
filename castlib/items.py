@@ -28,7 +28,7 @@ class MediaItem:
     kind: str                 # "video" | "photo" | "audio" | "subtitle"
     title: str
     mime: str
-    source: str               # "local" | "link" | "gopro" | "onedrive" | "gphotos"
+    source: str               # "local" | "link" | "gopro" | "onedrive" | "gphotos" | "nextcloud"
     source_id: str            # identity within the source; (source, source_id) is unique
     version: str | None = None   # etag or id the source gives the bytes; local files use mtime+size
     path: str | None = None   # local file, or None

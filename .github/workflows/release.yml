@@ -12,6 +12,7 @@ on:
     paths:
       - "packaging/**"
       - ".github/workflows/release.yml"
+      - "pyproject.toml"        # a dependency change must build and start in the binary too
 
 jobs:
   build:

@@ -1,0 +1,3 @@
+<?xml version="1.0"?>
+<!DOCTYPE lolz [<!ENTITY lol "lol"><!ENTITY lol2 "&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;">]>
+<d:multistatus xmlns:d="DAV:"><d:response><d:href>/remote.php/dav/files/pat/&lol2;.jpg</d:href></d:response></d:multistatus>
