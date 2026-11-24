@@ -339,12 +339,13 @@ class Cast:
             return self._fetched_nothing()
         reasons: list[str] = []
         if item.kind == "video":
+            # a local or downloaded file is read from disk; a remote one through cast-tv's own
+            # media address, so the relay adds the source's headers (a Nextcloud password, a
+            # bearer) and opener. The URL carries only this run's media token, never a provider
+            # credential. The item is still registered here: _finish retires it afterwards.
             target = item.path
-            if target is None and item.resolve is not None:
-                try:
-                    target = item.resolve().url     # ffprobe reads over HTTP(S), as the CLI always did
-                except Exception:
-                    target = None
+            if target is None and item.resolve is not None and item.id:
+                target = self.app.server.media_url(item)
             if target:
                 self.media_line, reasons = explain_failure(target)
         self.reasons = reasons
