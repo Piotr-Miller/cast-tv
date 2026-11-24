@@ -172,6 +172,27 @@ def test_refusal_probe_reads_media_url(app, monkeypatch, basic_upstream):
     assert c.item.retired_at is not None                      # retired once the probe is done
 
 
+def test_refusal_probe_marked_in_debug_log(app, monkeypatch, basic_upstream, capsys):
+    from castlib import supervisor
+    from castlib.items import Upstream
+    record = []
+    item = _remote_video("102", lambda: Upstream(basic_upstream.base + "/dav/PB014042.MOV",
+                                                 {"Authorization": _BasicUpstream.AUTH}))
+    item.debug = True                                         # as `python -m castlib -d` sets it
+    monkeypatch.setattr(supervisor, "explain_failure", _reading_probe(app, item, record))
+    app.tv_fake.video_script = ["STOPPED"]
+    item.requests = 1
+    c = app.cast(item)
+    assert c.done.wait(5)
+    assert record and record[0]["status"] == 206
+    err = capsys.readouterr().err
+    start = err.index("[probe] ffprobe reads %s through cast-tv's relay" % item.id)
+    end = err.index("[probe] done")
+    relay_lines = [i for i in range(len(err)) if err.startswith("[tv] GET /m/", i)]
+    assert relay_lines and all(start < i < end for i in relay_lines)   # the probe's reads, inside the markers
+    assert "s3cret" not in err
+
+
 def test_refusal_probe_custom_opener_and_refresh(app, monkeypatch, basic_upstream):
     from castlib import supervisor
     from castlib.items import Upstream

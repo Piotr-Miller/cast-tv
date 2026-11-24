@@ -484,9 +484,9 @@ None: a new file in `config_dir()`; existing sources keep their data. Their tabs
 
 #### Automated
 
-- [x] 2.1 The supervisor tests pass
-- [x] 2.2 The whole suite passes
-- [x] 2.3 pyflakes is clean
+- [x] 2.1 The supervisor tests pass — 92b1fc3
+- [x] 2.2 The whole suite passes — 92b1fc3
+- [x] 2.3 pyflakes is clean — 92b1fc3
 
 ### Phase 3: The Nextcloud tab, Disconnect, and the shared list fixes
 
