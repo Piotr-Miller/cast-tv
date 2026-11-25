@@ -204,8 +204,14 @@ cast-tv gets an **app password** of its own, stored as `nextcloud.json` in the c
 (below) and sent only to the address you typed. The whole account is browsable by folder; only
 photos and videos are listed. Photo tiles carry the server's preview, HEIC included; films
 usually show a placeholder, since Nextcloud makes film previews only when its admin enabled them. Each tile shows the file's **last-modified
-date** on the server (the tooltip says so), which is not always the day it was taken. Films are
-relayed through cast-tv with `Range`, so the TV's remote seeks as usual.
+date** on the server (the tooltip says so), which is not always the day it was taken.
+
+A **film is downloaded before casting** (the tile shows `downloading N%`), then the TV reads it
+from this computer's disk and the remote seeks as usual. Relayed straight from the server, a
+camera film of about 134 Mbit/s stopped every few seconds on a laptop on Wi-Fi, which then
+carries the film twice, in from the server and out to the TV; from the disk it played smoothly.
+At the 490 Mbit/s measured from one hosted server, a 490 MB film takes about 8 s to fetch. Downloads go to the same temporary
+folder, under the same limits, as Google Photos' originals (below).
 
 **Removing cast-tv's access.** Press **Disconnect** in the tab: cast-tv deletes `nextcloud.json`
 at once, then asks the server to revoke the app password. If the server does not confirm
@@ -321,7 +327,7 @@ are served as they are. GIF, raw and other stills the TV cannot show are not lis
 | listing cache (metadata only) | `~/.cache/cast-tv` | `%LOCALAPPDATA%\cast-tv\Cache` |
 | the release file's unpacked copy, one folder per build | `~/.cache/cast-tv/<version>-gh<run>.<attempt>` | `%LOCALAPPDATA%\cast-tv\<version>-gh<run>.<attempt>` |
 | converted photos, per process | `/tmp/cast-tv-photos-*` | `%TEMP%\cast-tv-photos-*` |
-| downloaded Google videos, per process | `/var/tmp/cast-tv-videos-*` | `%TEMP%\cast-tv-videos-*` |
+| downloaded Google Photos and Nextcloud videos, per process | `/var/tmp/cast-tv-videos-*` | `%TEMP%\cast-tv-videos-*` |
 
 Token files (`nextcloud.json` among them) are written readable by their owner only (mode 0600
 on Linux); the browser profile is 0700. **Disconnect** in a tab forgets its sign-in: on GoPro it

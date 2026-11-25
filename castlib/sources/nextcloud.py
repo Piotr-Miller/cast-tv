@@ -574,7 +574,8 @@ class NextcloudSource:
         return self._search(file_id)
 
     def resolve(self, source_id: str, quality: str = "auto") -> MediaItem:
-        """An unregistered item whose ``resolve`` gives the file's WebDAV URL with the app password."""
+        """An unregistered item whose ``resolve`` gives the file's WebDAV URL with the app password;
+        a video is marked ``download`` (fetched whole before the TV hears of it, ``castlib.downloads``)."""
         if not isinstance(source_id, str) or not ID_RE.fullmatch(source_id):
             raise NotMedia("bad_id", "Not a Nextcloud file id.", source=NAME, item=str(source_id)[:64])
         _, _, gen = self._credential()
@@ -597,7 +598,8 @@ class NextcloudSource:
 
         return MediaItem(kind=kind, title=rec["name"], mime=rec["mime"], source=NAME, source_id=source_id,
                          version=rec["etag"] or "%s:%s" % (rec["modified"] or "", rec["size"] or ""),
-                         resolve=fresh, size=rec["size"])
+                         resolve=fresh, size=rec["size"],
+                         download=kind == "video")   # a film is fetched whole first: relayed over Wi-Fi it stalled
 
     def thumb(self, source_id: str) -> Upstream | None:
         """The server's preview of a photo (HEIC included) when ``nc:has-preview`` says it has one."""

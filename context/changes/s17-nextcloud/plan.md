@@ -423,6 +423,65 @@ Settings → Security), in the window-and-control form of the other sources.
 
 ---
 
+## Phase 5: Download a Nextcloud film before casting
+
+(owner decision 2026-11-25, after row 3.9: the owner's OM films, HEVC 4K60 at ~134 Mbit/s,
+stall through the relay on the laptop's Wi-Fi and play smoothly from disk; measurements M1-M3 in
+`research.md`.)
+
+### Overview
+
+A Nextcloud film is fetched whole into cast-tv's per-process download directory before the TV
+hears of it, with the mechanism Google Photos' originals already use (`castlib/downloads.py`);
+the TV then reads it from the laptop's disk. Photos are unchanged.
+
+### Changes Required:
+
+#### 1. The source
+
+**File**: `castlib/sources/nextcloud.py`
+
+**Intent**: `resolve()` marks a video `download=True`; a photo stays `download=False`.
+
+**Contract**: the download sends the item's own `Upstream` headers (Basic) through
+`BEARER_SAFE`, as the relay did; the tile shows `downloading N%` while it runs (existing UI).
+
+#### 2. The download's hint
+
+**File**: `castlib/downloads.py`
+
+**Intent**: the "too large" and "no room" errors suggest the "1080p stream" variant only for a
+Google Photos item; for any other source they suggest raising `CAST_TV_DOWNLOAD_MAX_GB`.
+
+#### 3. Tests
+
+**File**: `tests/test_nextcloud.py`
+
+**Contract**: `test_video_downloads_first` (a video resolves with `download=True`, a photo with
+`False`; `downloads.fetch_whole` fetches the film from the scripted server with Basic and the
+file's bytes land on disk), `test_download_hint_names_the_source`.
+
+#### 4. Documents
+
+**Files**: `README.md` (Nextcloud section), `context/foundation/prd.md` (FR-014).
+
+**Intent**: films are downloaded before casting (a wait of about 10 s for a 500 MB OM film on
+this laptop), into the same temporary folder as Google Photos' originals.
+
+### Success Criteria:
+
+#### Automated Verification:
+
+- The Nextcloud tests pass: `python -m pytest tests/test_nextcloud.py`
+- The whole suite passes: `python -m pytest`
+- pyflakes is clean: `python -m pyflakes castlib tests`
+
+#### Manual Verification:
+
+- In the window's Nextcloud tab, in `Pictures / OM Workspace / 2026_11_01 / video`, click the tile's ▶ button (tooltip "Cast now") on `PB014001.MOV`: the tile shows `downloading N%`, then the owner sees picture and hears sound on the Samsung; at about 0:15 the owner presses the remote's forward/seek button once: playback resumes later in the film; it runs to the end **without stopping to buffer**; the terminal shows the TV's ranged GETs answered from the downloaded file — surface: castlib/sources/nextcloud.py, castlib/downloads.py, castlib/supervisor.py
+
+---
+
 ## Testing Strategy
 
 ### Unit Tests:
@@ -503,7 +562,7 @@ None: a new file in `config_dir()`; existing sources keep their data. Their tabs
 - [ ] 3.6 Settings → Security lists cast-tv's app password
 - [ ] 3.7 Browse an OM folder: crumbs, previews, placeholders, dates
 - [ ] 3.8 Cast a HEIC photo from Nextcloud
-- [ ] 3.9 Cast an OM film from Nextcloud through the relay, seek with the remote
+- [-] 3.9 Cast an OM film from Nextcloud through the relay, seek with the remote — n/a: owner decision 2026-11-25: the film stalled through the relay on Wi-Fi (research.md, row 3.9, M1-M3); Nextcloud films are downloaded first (Phase 5), checked by row 5.4
 - [ ] 3.10 A mixed slideshow from Nextcloud
 - [ ] 3.11 Sign-in from the phone
 - [ ] 3.12 A password revoked on the server shows the expired banner over the last list; Connect again
@@ -519,4 +578,16 @@ None: a new file in `config_dir()`; existing sources keep their data. Their tabs
 
 #### Manual
 
-- [x] 4.2 The owner confirms the README and PRD text — accepted at 907f31c8f9fbe7f2f4116bda6d8d61f1dc9911a8
+- [ ] 4.2 The owner confirms the README and PRD text
+
+### Phase 5: Download a Nextcloud film before casting
+
+#### Automated
+
+- [x] 5.1 The Nextcloud tests pass
+- [x] 5.2 The whole suite passes
+- [x] 5.3 pyflakes is clean
+
+#### Manual
+
+- [ ] 5.4 An OM film downloaded first plays on the TV without stalls, seek with the remote

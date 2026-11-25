@@ -49,6 +49,12 @@ RESERVE_SHARE = 0.05               # a write never leaves less free than this sh
 RESERVE_MIN = GIB                  # nor less than this
 MAX_ENV = "CAST_TV_DOWNLOAD_MAX_GB"
 LIGHTER = 'Cast the "1080p stream" variant from its tile instead, or raise %s (GiB).' % MAX_ENV
+RAISE = "Raise %s (GiB) to allow it." % MAX_ENV
+
+
+def _hint(item) -> str:
+    """Only Google Photos offers a lighter variant of a film on its tile."""
+    return LIGHTER if item.source == "gphotos" else RAISE
 RETRY_ON = (401, 403, 404)         # the upstream refused the address it gave us: ask the source once more
 TIMEOUT = 30
 EXTENSIONS = {"video/mp4": ".mp4", "video/quicktime": ".mov", "video/x-matroska": ".mkv",
@@ -111,7 +117,7 @@ def _room(item, directory: str, limits: tuple[int, int, int], got: int, size: in
     file_limit, budget, reserve = limits
     if got + size > file_limit:
         raise ConfigError("too_large", "%s is larger than the %s limit for one download."
-                          % (item.title, net.human(file_limit)), hint=LIGHTER,
+                          % (item.title, net.human(file_limit)), hint=_hint(item),
                           source=item.source, item=item.source_id)
     dropped = False
     while True:
@@ -125,9 +131,9 @@ def _room(item, directory: str, limits: tuple[int, int, int], got: int, size: in
     if held > budget:
         raise ConfigError("download_budget", "Fetching %s would take downloads past their %s budget "
                           "(%s already held)." % (item.title, net.human(budget), net.human(cache.bytes)),
-                          hint=LIGHTER, source=item.source, item=item.source_id)
+                          hint=_hint(item), source=item.source, item=item.source_id)
     raise ConfigError("no_space", "Not enough room to fetch %s: %s free in %s, %s kept in reserve."
-                      % (item.title, net.human(free), directory, net.human(reserve)), hint=LIGHTER,
+                      % (item.title, net.human(free), directory, net.human(reserve)), hint=_hint(item),
                       source=item.source, item=item.source_id)
 
 
@@ -140,7 +146,7 @@ def _write_all(fh, data: bytes) -> None:
 def _write_failed(item, directory: str, got: int, e: OSError) -> ConfigError:
     if e.errno in (errno.ENOSPC, getattr(errno, "EDQUOT", errno.ENOSPC)):
         return ConfigError("no_space", "The disk filled up while fetching %s (%s written to %s)."
-                           % (item.title, net.human(got), directory), hint=LIGHTER,
+                           % (item.title, net.human(got), directory), hint=_hint(item),
                            source=item.source, item=item.source_id)
     return ConfigError("download_write_failed", "Could not write %s to %s: %s" % (item.title, directory, e),
                        source=item.source, item=item.source_id)

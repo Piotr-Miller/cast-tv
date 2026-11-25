@@ -142,8 +142,9 @@ or create cloud projects.
   password; HTTPS servers only, one server and one account at a time. Photos and videos are
   listed, photos with the server's preview (HEIC included), videos with a placeholder unless the
   server's admin enabled film previews; each tile shows the file's last-modified date, not a capture date. Films are
-  relayed with `Range`. A password revoked on the server turns the tab expired over the last
-  list (`s17-nextcloud`, 2026-11-24).
+  downloaded whole before casting, like Google Photos' originals: relayed over the laptop's Wi-Fi,
+  a 134 Mbit/s camera film stalled (2026-11-25). A password revoked on the server turns the tab
+  expired over the last list (`s17-nextcloud`, 2026-11-24).
 - FR-015: Every connected or expired tab has a **Disconnect** control that forgets the sign-in
   on this computer at once. On Nextcloud it then asks the server to revoke cast-tv's app
   password, best effort: when the server does not confirm, the tab says the entry may remain

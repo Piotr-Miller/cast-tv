@@ -916,6 +916,48 @@ def test_resolve_sends_basic_and_range(fake, server):
         item.resolve()                                        # a forgotten password is never sent again
 
 
+@pytest.fixture
+def fresh_downloads(monkeypatch, tmp_path):
+    from castlib import downloads
+    from castlib.photos import _Cache
+    monkeypatch.setattr(downloads, "cache", _Cache(downloads.CACHE_BYTES, downloads.CACHE_ENTRIES))
+    monkeypatch.setattr(downloads, "_holders", {})
+    monkeypatch.setattr(config, "VIDEO_BASE", str(tmp_path))
+    yield downloads
+    config.remove_video_tmp_dir()
+
+
+def test_video_downloads_first(fake, fresh_downloads):
+    # an OM film relayed over the laptop's Wi-Fi stalled (row 3.9): a film is fetched whole first
+    src = NextcloudSource()
+    _sign_in(src, fake)
+    src.list("Pictures")
+    film, photo = src.resolve("103"), src.resolve("106")
+    assert film.download is True and photo.download is False
+    prep = fresh_downloads.fetch_whole(film)
+    body = fake.blobs["Pictures/PB014001.MOV"]
+    assert prep is not None and film.path == prep.path and film.size == len(body)
+    with open(film.path, "rb") as fh:
+        assert fh.read() == body
+    sent = fake.of("GET")[-1]
+    expected = "Basic " + base64.b64encode(("%s:%s" % (LOGIN, fake.last_password)).encode()).decode()
+    assert sent["path"] == ROOT + "Pictures/PB014001.MOV" and sent["headers"]["Authorization"] == expected
+    fresh_downloads.release(film)
+
+
+def test_download_hint_names_the_source(fresh_downloads, monkeypatch):
+    from castlib.items import MediaItem, Upstream
+    monkeypatch.setenv(fresh_downloads.MAX_ENV, "0.000001")      # about 1 KiB: every film is too large
+    for source, lighter in (("nextcloud", False), ("gphotos", True)):
+        item = MediaItem(kind="video", title="big.mov", mime="video/quicktime", source=source, source_id="1",
+                         resolve=lambda: Upstream("http://127.0.0.1:9/x", {}), size=10 ** 6)
+        err = fresh_downloads._room
+        with pytest.raises(ConfigError) as e:
+            err(item, ".", fresh_downloads._limits(config.video_tmp_dir()), 0, 10 ** 6)
+        assert e.value.code == "too_large"
+        assert ("1080p stream" in e.value.hint) is lighter and fresh_downloads.MAX_ENV in e.value.hint
+
+
 def test_unknown_file_id_found_by_search(fake):
     src = NextcloudSource()
     _sign_in(src, fake)
@@ -1036,8 +1078,8 @@ def test_password_never_exposed(app, fake, capfd, monkeypatch):
     answers.append(body.decode("utf-8", "replace"))
     fake.media_status = 500
     status, d = call("POST", "/api/cast", {"source": "nextcloud", "id": "103"})
-    wait_for(lambda: app.current is not None and app.current.as_dict().get("state") in
-             ("failed", "finished", "playing", "stopped"), timeout=5)
+    # a film is downloaded first (Phase 5): the 500 fails the download before anything is registered
+    wait_for(lambda: any(e.get("code") == "download_refused" for e in app.errors.list()), timeout=5)
     item = app.server.registry.items()[-1] if app.server.registry.items() else None
     if item is not None:
         status, _, body, _ = request(app.base_url, "GET", "/m/%s/%s" % (app.server.media_token, item.id),
