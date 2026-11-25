@@ -192,3 +192,105 @@ H.264 film only; row 5.4 proved an OM MOV through the OneDrive relay).
   HTTPS only; the last-modified date, not the date the photo was taken; film previews only when
   the server's admin enabled them; Disconnect removes the password locally first, then tries to
   revoke it on the server, and a missing confirmation shows a message.
+
+### Phase 3 rows on Fedora (2026-11-25)
+
+Setting for every row below: Fedora (KDE Plasma, Wayland), this branch at
+`c91adba`, `python -m castlib -d` started by the agent with Qt DevTools on, the cast-tv window
+driven over DevTools and Chrome by the agent; the owner's hosted Nextcloud (Storage Share,
+Nextcloud 34.0.5; address kept out of the repository); TV: the owner's Samsung 83" OLED
+(192.168.50.142).
+
+- **Row 3.5.** In the window's **Nextcloud** tab the address was typed with `https://` and a
+  trailing `/`; **Connect** showed the gate: "Open this link on any device, sign in to Nextcloud
+  and grant access:", the `…/login/v2/flow/<token>` link, "waiting for access…", "valid 20 min",
+  **Copy link**, **Cancel**. Clicking the link in the window opened the server's login page in
+  Chrome (the system browser; the owner saw it). The owner granted access; the owner saw the tab
+  list the root folders within about 5 s. `/api/status`: `connected`, account
+  `<display name> (<login>)`, `stored: true`; folders `Documents`, `Photos`, `Pictures`,
+  `Templates`. `stat -c %a ~/.config/cast-tv/nextcloud.json` printed `600` (contents not read).
+- **Row 3.6.** Chrome, the server's Settings → Security, "Devices & sessions": one entry named
+  **cast-tv**, last activity "1 minute ago", with the "…" menu; no other cast-tv entry.
+- **Row 3.7.** Window: folders `Pictures`, `OM Workspace`, `2026_11_01` clicked; the crumbs read
+  `Nextcloud / Pictures / OM Workspace / 2026_11_01`. The photo tiles showed the server's preview
+  (`PB014004.JPG` 4.7 MB, preview 768 px wide; the next five 768-1024 px) and the date
+  `2026-11-01`, each date with the tooltip "last modified". In `video`: `PB014001.MOV` (489.1 MB)
+  and `PB014042.MOV` (725.4 MB) with the film placeholder (no image) and `2026-11-01`.
+- **Row 3.8.** Crumb `Pictures`, folder `Test_Pictures`, tile `shelf-christmas-decoration.heic`
+  (1.4 MB, `2026-09-21`), its "Cast now" button: the debug log printed
+  `[tv] HEAD /m/<token>/<id> Range=- -> 0-2004137/2004138` (the converted JPEG); the owner saw
+  the photo upright on the TV. (The same folder holds an `application/octet-stream` file, hidden
+  and logged once: `! nextcloud: hiding an item of unknown kind 'application/octet-stream'`.)
+- **Row 3.9 (not ticked: the film stalls).** Folder `video`, tile `PB014001.MOV` (489.1 MB;
+  `ffprobe` of the synced local copy: 30.53 s, 134.4 Mbit/s, the HEVC Main 10 4K60 / PCM MOV of
+  the verification above), "Cast now". Debug log: `upstream: 200` for the TV's HEAD and plain GET,
+  then `206` for each ranged GET (`bytes=0-`, `100656-`, `7667704-`, `73867513-`, `104835465-`,
+  then the seek: `239256068-`, `441390289-`, …, `506997612-`). The owner: picture and sound; one
+  press of the remote's forward/seek at about 0:15 resumed later in the film with picture and
+  sound; it ran to the end; **but every few seconds the picture stopped, buffered and resumed**.
+  - **Same file as a local file**, right after: `cast-tv -d --no-browser --no-window -t
+    192.168.50.142 -p 8897 <synced copy>`: `PLAYING` to 0:00:29.637 / 0:00:30, `Finished.`; the
+    owner: **smooth**. The TV re-opened a ranged GET about every 2 s.
+  - **Measured from the laptop** through `NextcloudSource.resolve()` (the app password stayed
+    in the process): two 100 MB ranges at 487 and 495 Mbit/s; seven fresh ranged requests at the
+    TV's offsets: 0.15-0.26 s to the response headers, 0.10-0.12 s to the first 256 KB, and the
+    first 8 MB at 187-243 Mbit/s.
+  - **Link:** the laptop is on Wi-Fi only (5 GHz, signal -42 dBm, tx 780 / rx 867 Mbit/s); the
+    relay carries the film twice over that radio (server → laptop → TV).
+  - **Reading:** the server is fast enough in bulk, but each of the TV's frequent re-opened
+    ranges costs a new HTTPS request with about 0.3 s before data and a slow-starting transfer
+    only ~1.6× the film's bitrate, on a Wi-Fi link that carries the film twice. A local file has
+    neither cost. Not a defect in the relay's code; a headroom limit for 134 Mbit/s films.
+  - **Where it stalls (owner decision 2026-11-25: measure first).** A wired laptop is physically
+    impossible, so the causes were separated with a local Range server (`rangeserve.py`,
+    scratchpad, not in the repository) serving the synced copy of `PB014001.MOV` through the same
+    relay, `cast-tv -d --no-browser --no-window -t 192.168.50.142 -p 8897 "http://127.0.0.1:<port>/PB014001.MOV"`;
+    the TV and its connection unchanged.
+
+    | Run | Source behind the relay | Played | Owner saw |
+    | --- | --- | --- | --- |
+    | M1 (row 3.9 above) | Nextcloud over the internet, laptop on Wi-Fi | to the end | stops and buffering every few seconds |
+    | M2a | local server, no delay | `Finished.` | smooth |
+    | M2b | local server, 0.3 s before each response's headers | `Finished.` | a stop of a fraction of a second every few seconds |
+    | M2c | Nextcloud again, with temporary timing in `relay.py` (not committed) | to the end | stops every moment |
+
+    With a local source the TV opens two ranged GETs about every 2 s and takes ~40 MB from the
+    relay each time (M2a/M2b: 36-52 MB in 1.7-2.3 s). In M2c, per 31-74 MB portion: opening the
+    upstream 0.14-0.17 s, **reading from Nextcloud 0.3-0.6 s, writing to the TV 1.6-3.7 s**, so
+    **115-147 Mbit/s towards the TV**, against the film's 134 Mbit/s.
+  - **Conclusion.** The relay's code keeps up (M2a). The limit is the laptop's Wi-Fi carrying the
+    film in both directions at once: while the film arrives from the internet, what reaches the
+    TV drops to about the film's own bitrate, with no headroom; each re-opened range adds
+    ~0.15 s, which alone already gives short stops (M2b). Reusing upstream connections or a
+    read-ahead buffer would remove only the latency, not the shared airtime; fetching the film
+    before playback (as Google Photos originals are) would let the TV read it from the disk, as
+    in M2a.
+
+### M3: lighter H.264 sample through Nextcloud (2026-11-25)
+
+- **Purpose and setting:** follow-up to row 3.9 and M1/M2 above, requested by the owner.
+  Same Fedora laptop, Wi-Fi, running cast-tv instance and Samsung 83" OLED
+  (`192.168.50.142`). The original `PB014001.MOV` was left intact.
+- **Material:** ffmpeg converted the synced original to `PB014001-h264-35M.mp4`, H.264 High,
+  3840×2160 at 60000/1001 fps, AAC LC audio; 30.530667 s, 133,854,698 bytes,
+  35.074162 Mbit/s overall (`ffprobe`). Encoder: libx264, veryfast, 35M target, 40M maxrate,
+  70M buffer; AAC 192k, MP4 faststart. Encoding finished before upload and playback.
+- **Upload:** copied into the Nextcloud sync client's `/cast-tv-test/` folder. The running
+  app's Nextcloud listing confirmed the uploaded filename, `video/mp4` and exact byte count.
+  No credential file was inspected. Browser control was unavailable.
+- **Observed by the agent:** cast through the running app's `/api/cast` with source `nextcloud`.
+  `/api/status`, sampled every second, reported `PLAYING` at 1.253 s, then 5.299, 11.356,
+  15.399, 21.460, 25.503 and 29.544 s; `STOPPED` at 36.13 s after the cast request.
+  Seven media requests, no reported error. Raw status observations are in the temporary
+  local file `/tmp/cast-tv-M3-status.json` (not committed).
+- **Owner observation (2026-11-25):** asked whether picture and sound were smooth on the
+  Samsung during M3, the owner confirmed: "Yes it was smooth".
+  This supports the throughput/headroom diagnosis from M1/M2: the lighter sample plays
+  smoothly through Nextcloud on the same setup. M3 changes both bitrate and
+  codec/container/audio, so it does not isolate bitrate alone.
+  Row 3.9 remains open: this sample does not satisfy the original OM-film criterion.
+- **Cleanup:** the M3 sample, empty local sync folder and temporary encoded file were
+  removed after playback. A fresh Nextcloud root listing confirmed `/cast-tv-test/` absent
+  from active files. **Trash cleanup remains pending:** browser control was unavailable;
+  Nextcloud's Deleted files were neither inspected nor purged. The owner must remove only
+  this test folder/sample there and confirm the result.
