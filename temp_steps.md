@@ -25,15 +25,31 @@ soon as it is done, with the date and, for a merge or a recorded row, the PR or 
 - [x] 2. The owner, on GitHub, PR #117 → **Files changed**: read `README.md`'s Nextcloud section
    (the new paragraph "A film is downloaded before casting…") and FR-014 in
    `context/foundation/prd.md`, and confirm them to Claude (row 4.2). — 2026-11-25, accepted.
-- [ ] 3. Row 3.15 at the next Windows visit (`C:\Source\cast-tv`, after `git fetch;
-   git switch s17-nextcloud; git pull`): start this branch's cast-tv window; on the
-   **Nextcloud** tab type the server address, click **Connect**, click the link (or **Copy
-   link** and paste into Edge); grant access; the tab lists the root folders. Close the window,
-   start cast-tv again: the tab lists the folders without a new sign-in. Click **Disconnect**:
-   the gate appears.
-- [ ] 4. After 1-3: the owner merges PR #117 with **Rebase and merge**; Claude then rewrites the
+- [ ] 3. The owner: restart the laptop and choose **Windows 11** in the boot menu (Fedora and
+   Windows are a dual boot; nothing else is left on Fedora).
+- [ ] 4. The owner, in a PowerShell window, fetch the branch and install the new dependency
+   (S-17 added `defusedxml`, which the Windows `.venv` does not have yet):
+
+   ```powershell
+   cd C:\Source\cast-tv
+   git fetch; git switch s17-nextcloud; git pull
+   .venv\Scripts\pip install -e ".[window]"
+   ```
+
+   The last line ends with `Successfully installed … defusedxml-…` (or says it is already
+   satisfied).
+- [ ] 5. The owner: start Claude Code in `C:\Source\cast-tv` and write "co dalej".
+- [ ] 6. Row 3.15, Claude drives the window and the owner signs in: start this branch's cast-tv
+   window (`.venv\Scripts\python -m castlib -d`); on the **Nextcloud** tab type the server
+   address, click **Connect**, click the link (or **Copy link** and paste into Edge); the owner
+   grants access; the tab lists the root folders. Close the window, start cast-tv again: the tab
+   lists the folders without a new sign-in. Click **Disconnect**: the gate appears. Claude writes
+   the observation into `research.md` (row, date, device, what was seen), the owner confirms,
+   Claude ticks the row and pushes.
+- [ ] 7. After 6: the owner merges PR #117 with **Rebase and merge**; Claude then rewrites the
    recorded SHAs from `main`, archives `s17-nextcloud` and flips roadmap S-17 to `done`.
 
 ## How to resume with Claude
 
-Write "co dalej" in the cast-tv checkout after `git fetch; git switch s17-nextcloud; git pull`.
+On Windows: steps 3-5 above, then "co dalej". On Fedora: write "co dalej" in the cast-tv
+checkout after `git fetch; git switch s17-nextcloud; git pull`.
