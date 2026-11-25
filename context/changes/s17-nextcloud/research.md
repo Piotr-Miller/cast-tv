@@ -294,6 +294,8 @@ Nextcloud 34.0.5; address kept out of the repository); TV: the owner's Samsung 8
   from active files. **Trash cleanup remains pending:** browser control was unavailable;
   Nextcloud's Deleted files were neither inspected nor purged. The owner must remove only
   this test folder/sample there and confirm the result.
+- **Trash cleanup done (2026-11-25):** the owner permanently deleted the M3 test entries
+  (`cast-tv-test`, `PB014001-h264-35M.mp4`) from Nextcloud's Deleted files and confirmed it in chat.
 
 ### Row 5.4: an OM film downloaded first (2026-11-25)
 

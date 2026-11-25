@@ -12,17 +12,17 @@ soon as it is done, with the date and, for a merge or a recorded row, the PR or 
 - **Accepted on Fedora (2026-11-25):** rows 3.5-3.8, 3.10-3.14 and 5.4. Row 3.9 is n/a by owner
   decision (replaced by 5.4). Full review F1-F7 fixed (`12823bd`, `907f31c`).
 - **Still open:** row 3.15 (Windows), row 4.2 (README and PRD text changed by Phase 5, so it was
-  reopened), and the M3 test sample in the Nextcloud trash.
+  reopened).
 - **Film thumbnails:** the owner's Storage Share has `OC\Preview\Movie` enabled but no ffmpeg,
   and konsoleH's occ list cannot set `preview_ffmpeg_path`. The owner chose a separate change:
   roadmap S-19 (proposed), cast-tv making the thumbnail itself.
 
 ## Next
 
-- [ ] 1. The owner, in Chrome: open the Nextcloud **Files** page, click **Deleted files** in the
+- [x] 1. The owner, in Chrome: open the Nextcloud **Files** page, click **Deleted files** in the
    left navigation, select only `cast-tv-test` and/or `PB014001-h264-35M.mp4` (the M3 sample),
    and click **Delete permanently**. Only those entries disappear; leave every other deleted
-   file. Tell Claude, who records it under M3 in `research.md`.
+   file. Tell Claude, who records it under M3 in `research.md`. — 2026-11-25, done by the owner.
 - [ ] 2. The owner, on GitHub, PR #117 → **Files changed**: read `README.md`'s Nextcloud section
    (the new paragraph "A film is downloaded before casting…") and FR-014 in
    `context/foundation/prd.md`, and confirm them to Claude (row 4.2).
