@@ -405,3 +405,11 @@ Window and code as row 3.10; the agent clicks, the owner signs in and enters cod
   the browser of the computer running cast-tv"; the owner allowed access and picked in Google's
   picker: chip "Google Photos 4 picked", 4 photo tiles (`PXL_20261115_….MP.jpg`, 4000 × 3000).
 - **Confirmed by the owner in chat (2026-11-25):** row 3.14 as written above.
+
+### Row 4.2 again, after Phase 5 (2026-11-25)
+
+- **Device and material:** the owner, on GitHub's PR #117 page, "Files changed", at `05db2784efee7bf0edcff7f31bd7f73b76e1a78c`:
+  `README.md`'s Nextcloud section with the paragraph "A film is downloaded before casting…",
+  and FR-014 in `context/foundation/prd.md` (both last changed in `569da31`).
+- **Seen:** the owner confirmed the text in chat ("potwierdzam"). Reopened earlier the same day
+  because Phase 5 changed both files (accepted before at `907f31c`).

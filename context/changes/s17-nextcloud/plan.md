@@ -578,7 +578,7 @@ None: a new file in `config_dir()`; existing sources keep their data. Their tabs
 
 #### Manual
 
-- [ ] 4.2 The owner confirms the README and PRD text
+- [x] 4.2 The owner confirms the README and PRD text — accepted at 05db2784efee7bf0edcff7f31bd7f73b76e1a78c
 
 ### Phase 5: Download a Nextcloud film before casting
 

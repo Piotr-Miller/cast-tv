@@ -11,8 +11,7 @@ soon as it is done, with the date and, for a merge or a recorded row, the PR or 
   smoothly from disk (`research.md`, rows 3.9 and 5.4, measurements M1-M3).
 - **Accepted on Fedora (2026-11-25):** rows 3.5-3.8, 3.10-3.14 and 5.4. Row 3.9 is n/a by owner
   decision (replaced by 5.4). Full review F1-F7 fixed (`12823bd`, `907f31c`).
-- **Still open:** row 3.15 (Windows), row 4.2 (README and PRD text changed by Phase 5, so it was
-  reopened).
+- **Still open:** row 3.15 (Windows) only.
 - **Film thumbnails:** the owner's Storage Share has `OC\Preview\Movie` enabled but no ffmpeg,
   and konsoleH's occ list cannot set `preview_ffmpeg_path`. The owner chose a separate change:
   roadmap S-19 (proposed), cast-tv making the thumbnail itself.
@@ -23,9 +22,9 @@ soon as it is done, with the date and, for a merge or a recorded row, the PR or 
    left navigation, select only `cast-tv-test` and/or `PB014001-h264-35M.mp4` (the M3 sample),
    and click **Delete permanently**. Only those entries disappear; leave every other deleted
    file. Tell Claude, who records it under M3 in `research.md`. — 2026-11-25, done by the owner.
-- [ ] 2. The owner, on GitHub, PR #117 → **Files changed**: read `README.md`'s Nextcloud section
+- [x] 2. The owner, on GitHub, PR #117 → **Files changed**: read `README.md`'s Nextcloud section
    (the new paragraph "A film is downloaded before casting…") and FR-014 in
-   `context/foundation/prd.md`, and confirm them to Claude (row 4.2).
+   `context/foundation/prd.md`, and confirm them to Claude (row 4.2). — 2026-11-25, accepted.
 - [ ] 3. Row 3.15 at the next Windows visit (`C:\Source\cast-tv`, after `git fetch;
    git switch s17-nextcloud; git pull`): start this branch's cast-tv window; on the
    **Nextcloud** tab type the server address, click **Connect**, click the link (or **Copy
