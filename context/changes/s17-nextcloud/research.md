@@ -180,3 +180,15 @@ order of its tries and the completeness of its local copy were not recorded).
 
 **Not yet checked:** an OM MOV through cast-tv's relay from Nextcloud (the relay was proven with an
 H.264 film only; row 5.4 proved an OM MOV through the OneDrive relay).
+
+## Manual acceptance
+
+### Row 4.2: the owner confirms the README and PRD text (2026-11-25)
+
+- **Device and material:** the owner, on GitHub's PR #117 page, "Files changed", at
+  `907f31c8f9fbe7f2f4116bda6d8d61f1dc9911a8`: `README.md`, section *Nextcloud*, and
+  `context/foundation/prd.md`, FR-014 and FR-015.
+- **Seen (the owner's words, translated):** the section and both FR lines match the description:
+  HTTPS only; the last-modified date, not the date the photo was taken; film previews only when
+  the server's admin enabled them; Disconnect removes the password locally first, then tries to
+  revoke it on the server, and a missing confirmation shows a message.

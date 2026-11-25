@@ -519,4 +519,4 @@ None: a new file in `config_dir()`; existing sources keep their data. Their tabs
 
 #### Manual
 
-- [ ] 4.2 The owner confirms the README and PRD text
+- [x] 4.2 The owner confirms the README and PRD text — accepted at 907f31c8f9fbe7f2f4116bda6d8d61f1dc9911a8
