@@ -383,3 +383,23 @@ Window and code as row 3.10 (`569da31` code; the agent drives the window and Chr
   `disconnected` with no `revoke_error`; `ls ~/.config/cast-tv/nextcloud.json`: "No such file
   or directory". Settings → Security reloaded: no cast-tv entry.
 - **Confirmed by the owner in chat (2026-11-25):** rows 3.11-3.13 as written above.
+
+### Row 3.14: Disconnect on the GoPro, OneDrive and Google Photos tabs (2026-11-25)
+
+Window and code as row 3.10; the agent clicks, the owner signs in and enters codes.
+
+- **Before:** GoPro connected after **Open gopro.com again** and the owner's sign-in (100 tiles,
+  "session captured just now"); OneDrive connected from its stored sign-in (7 tiles and folders,
+  the account shown on the chip); Google Photos connected, "nothing picked yet".
+- **Disconnect** on each tab (list header): GoPro 100 → 0 tiles, its gate "Connect GoPro" with
+  **Open gopro.com**; OneDrive 7 → 0, "Connect OneDrive" with **Connect**; Google Photos, "Connect
+  Google Photos" with **Connect**. `/api/status`: all three `disconnected`, `stored` false;
+  `~/.config/cast-tv` held only `google-client.json` and `settings.json` (names listed, contents
+  not read).
+- **Connect again by the usual buttons:** GoPro **Open gopro.com** opened the gopro.com window, the
+  owner signed in (the profile had gone with the Disconnect): connected, 100 tiles. OneDrive
+  **Connect** showed `https://www.microsoft.com/link` and a code, valid 15 min; the owner entered
+  it: connected, 7 tiles and folders. Google Photos **Connect**: "A Google consent page opened in
+  the browser of the computer running cast-tv"; the owner allowed access and picked in Google's
+  picker: chip "Google Photos 4 picked", 4 photo tiles (`PXL_20261115_….MP.jpg`, 4000 × 3000).
+- **Confirmed by the owner in chat (2026-11-25):** row 3.14 as written above.

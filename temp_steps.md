@@ -1,52 +1,40 @@
-# Next steps (2026-11-24, v0.6.0 released and started on both systems; the next roadmap item)
+# Next steps (2026-11-25, S-17 Nextcloud: Fedora rows done; Windows next)
 
 The standing pause note; overwrite it at the next handoff. Claude ticks each step (`- [x]`) as
 soon as it is done, with the date and, for a merge or a recorded row, the PR or commit.
 
 ## Where it stands
 
-- **S-16, a faster-starting release file:** merged as PR #111 (rebase, main fc89537) on
-  2026-11-22 and archived → `context/archive/2026-11-18-s16-faster-start/` (9ae180b). The
-  release is a Nuitka onefile that unpacks once per build into `~/.cache/cast-tv/<version>-gh<run>.<attempt>`
-  (Windows: `%LOCALAPPDATA%\cast-tv\...`). Warm start against PyInstaller: 0.706 on Fedora,
-  0.734 on Windows 11 (bar 0.75); cold 0.633 and 0.828 (bar 1.00). All 21 manual rows accepted.
-- **v0.6.0 is released** (2026-11-22, release run 45073145251): the first Nuitka release, files
-  `cast-tv-linux-x64` (154,876,120 B) and `cast-tv-windows-x64.exe` (18,296,320 B, SHA-256
-  `f99bd2b3…`). v0.5.0 was the last PyInstaller release.
-- **Users will notice:** a new version's first start unpacks (about 550 MB on Linux, 80 MB on
-  Windows), and Windows' firewall asks once per new build (its rule names the unpacked exe).
-- **The HEIC-badge finding is withdrawn (2026-11-24):** the "HEIC → JPEG" badge seen during a
-  video on 2026-11-20 was read over CDP with `textContent`, which includes hidden elements. Re-run
-  on main (HEIC photo, then `Przejazd - SuperCars.mp4`): `/api/status` gives `converted: false`
-  for the video, the badge has `display: none`, and `innerText` shows no badge. No bug; nothing to fix.
-- **Fedora and Windows 11 are a dual boot on one laptop:** every switch is a reboot.
-- **CI notice:** `ubuntu-latest` moves to Ubuntu 26 (the `test` job); the Linux build is pinned to
-  `ubuntu-22.04`.
-- **The TV** allows DLNA per client (Settings → General → Device Connection Manager → Device List).
-  "No TV found" while `curl http://192.168.50.142:9197/dmr` answers 401 means that list.
-- **Measuring on Windows:** check first that `TiWorker` (Windows servicing) is idle; on
-  2026-11-21 it spoiled a whole series.
+- **S-17 Nextcloud** is on branch `s17-nextcloud`, draft PR #117. Phases 1-5 are implemented;
+  Phase 5 (2026-11-25, `569da31`) downloads a Nextcloud film before casting, because the owner's
+  OM films (HEVC 4K60, ~134 Mbit/s) stalled through the relay on the laptop's Wi-Fi and played
+  smoothly from disk (`research.md`, rows 3.9 and 5.4, measurements M1-M3).
+- **Accepted on Fedora (2026-11-25):** rows 3.5-3.8, 3.10-3.14 and 5.4. Row 3.9 is n/a by owner
+  decision (replaced by 5.4). Full review F1-F7 fixed (`12823bd`, `907f31c`).
+- **Still open:** row 3.15 (Windows), row 4.2 (README and PRD text changed by Phase 5, so it was
+  reopened), and the M3 test sample in the Nextcloud trash.
+- **Film thumbnails:** the owner's Storage Share has `OC\Preview\Movie` enabled but no ffmpeg,
+  and konsoleH's occ list cannot set `preview_ffmpeg_path`. The owner chose a separate change:
+  roadmap S-19 (proposed), cast-tv making the thumbnail itself.
 
 ## Next
 
-- [x] 1. Merge the PR of branch `s16-after-merge` (S-16's SHAs rewritten from main, the archive,
-   roadmap S-16 → done, this file). — 2026-11-22, PR #112.
-- [x] 2. The release: the owner picked 0.6.0 (2026-11-22). Claude opens a
-   PR `chore(release): cast-tv <version>` that sets `castlib/__init__.py`; the owner merges it;
-   then the tag `v<version>` on main, whose release run publishes the files. — 2026-11-22,
-   PR #113, tag v0.6.0 on 550ad8e, release run 45073145251 green.
-- [x] 3. After the release: download both files from the GitHub release and start each once on
-   its system (the first start of the published build). Windows done 2026-11-22: `--version`
-   0.6.0, cache `0.6.0-gh45073145251.1`, the firewall prompt allowed, the window cast to the TV
-   (owner: "zadziałało"). Linux done 2026-11-24 on Fedora: SHA-256 equal to the release's
-   (`cafefd39…`), `--version` 0.6.0 unpacked 522 MB into `0.6.0-gh45073145251.1` in 1.7 s, the
-   window ready after 2.7 s, OneDrive listed, `Przejazd - SuperCars.mp4` PLAYING on the TV,
-   Quit stopped the TV (STOPPED) and freed port 8895. GoPro shows "expired" (a 61-day-old
-   session; sign in again from the GoPro tab), not a build issue.
-- [ ] 4. The owner picks the next roadmap item (S-14 Google TV / Chromecast is proposed). The
-   HEIC-badge finding turned out to be no bug (above).
+- [ ] 1. The owner, in Chrome: open the Nextcloud **Files** page, click **Deleted files** in the
+   left navigation, select only `cast-tv-test` and/or `PB014001-h264-35M.mp4` (the M3 sample),
+   and click **Delete permanently**. Only those entries disappear; leave every other deleted
+   file. Tell Claude, who records it under M3 in `research.md`.
+- [ ] 2. The owner, on GitHub, PR #117 → **Files changed**: read `README.md`'s Nextcloud section
+   (the new paragraph "A film is downloaded before casting…") and FR-014 in
+   `context/foundation/prd.md`, and confirm them to Claude (row 4.2).
+- [ ] 3. Row 3.15 at the next Windows visit (`C:\Source\cast-tv`, after `git fetch;
+   git switch s17-nextcloud; git pull`): start this branch's cast-tv window; on the
+   **Nextcloud** tab type the server address, click **Connect**, click the link (or **Copy
+   link** and paste into Edge); grant access; the tab lists the root folders. Close the window,
+   start cast-tv again: the tab lists the folders without a new sign-in. Click **Disconnect**:
+   the gate appears.
+- [ ] 4. After 1-3: the owner merges PR #117 with **Rebase and merge**; Claude then rewrites the
+   recorded SHAs from `main`, archives `s17-nextcloud` and flips roadmap S-17 to `done`.
 
 ## How to resume with Claude
 
-Write "co dalej" in the cast-tv checkout (on Windows: `C:\Source\cast-tv`) after
-`git fetch; git switch main; git pull`.
+Write "co dalej" in the cast-tv checkout after `git fetch; git switch s17-nextcloud; git pull`.
