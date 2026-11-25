@@ -311,3 +311,30 @@ Nextcloud 34.0.5; address kept out of the repository); TV: the owner's Samsung 8
   one 0.5 s sample, the TV's GET `bytes=441390289-` after `bytes=231281246-`; `playing`
   0:00:28.895, then `stopped`. The owner confirmed row 5.4 (picture and sound resumed later in
   the film; ran to the end).
+
+## Spike: can the owner's server make film previews itself? (2026-11-25)
+
+Asked by the owner after row 5.4: MOV tiles show the film placeholder. Owner decision: check the
+server before building anything in cast-tv.
+
+- **Documentary half.** Nextcloud makes film previews with the `OC\Preview\Movie` provider, which
+  needs ffmpeg reachable by the server (`enabledPreviewProviders`, `preview_ffmpeg_path`;
+  https://docs.nextcloud.com/server/31/admin_manual/configuration_files/previews_configuration.html,
+  read 2026-11-25). Hetzner's Storage Share FAQ mentions neither ffmpeg nor previews nor
+  `config.php`; it says occ commands run "via konsoleH"
+  (https://docs.hetzner.com/storage/storage-share/faq/other, read 2026-11-25).
+- **konsoleH, Services → OCC** (the agent, in the owner's signed-in Chrome): a fixed list of
+  commands Hetzner allows. For previews only `config:system:set preview_max_filesize_image`,
+  `preview_max_memory`, `preview:generate-all %USER%`, `preview:pre-generate`; no
+  `enabledPreviewProviders`, no `preview_ffmpeg_path`.
+- **`config:list --output json_pretty`, direct output** (read-only; only the preview keys were
+  extracted): `enabledPreviewProviders` = PNG, JPEG, GIF, BMP, XBitmap, TXT, MarkDown,
+  OpenDocument, Krita, HEIC, Image, **Movie**; no `preview_ffmpeg_path`. The Memories app is
+  installed.
+- **The account's films** (WebDAV `SEARCH` for `video/%` through `NextcloudSource`, the app
+  password kept in the process): 13 files, all `video/quicktime`, all `nc:has-preview` false.
+- **Reading:** Movie is enabled, yet no film is previewable. Nextcloud registers the Movie
+  provider only when it finds an ffmpeg binary, and `has-preview` asks whether a provider is
+  registered for the type, so the host has no ffmpeg (inference from Nextcloud's preview manager,
+  not confirmed by Hetzner). It cannot be pointed at one: `preview_ffmpeg_path` is not among the
+  allowed commands. Server-side film previews are closed on this hosting short of Hetzner support.

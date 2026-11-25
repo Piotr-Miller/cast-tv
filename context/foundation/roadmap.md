@@ -50,11 +50,12 @@ conversion and the cast supervisor. Delivered with `cloud-source-ui` (PR #1, 202
 | S-15 | s15-share-link-album | cast an album from a share link | S-09 | FR-012 | parked (2026-10-15): the picker covers the owner's own albums |
 | S-16 | s16-faster-start | start the release file faster (and smaller, if it can be), especially on Linux | S-12 | NFR platforms | done |
 | S-17 | s17-nextcloud | browse a Nextcloud server and cast its photos and videos; disconnect any tab | S-04 | FR-014, FR-015 | in-progress |
+| S-19 | (not opened) | see a film's tile with a frame of the film when its cloud gives none (Nextcloud first) | S-17 | FR-014 | proposed |
 
 ## Streams
 
 - **Casting core** (B-00, F-01, S-01, S-02, S-11, S-14): discovery, the server, the relay, photos, the supervisor.
-- **Sources** (S-03, S-04, S-05, S-09, S-10, S-13, S-15, S-17): one tab each, each behind its own connection.
+- **Sources** (S-03, S-04, S-05, S-09, S-10, S-13, S-15, S-17, S-19): one tab each, each behind its own connection.
 - **Platforms & install** (S-06, S-07, S-08, S-12): Fedora, Windows 11, the standalone release.
 
 ## Baseline
@@ -256,6 +257,24 @@ plan. The ideas under each are starting points, not findings.
   refusal probe through cast-tv's own media address, the tab with a Disconnect control on every
   signed-in tab, and these documents. The Fedora and Windows rows of Phase 3 (the real server,
   the TV, the phone) are still to run.
+
+### S-19: Film thumbnails made by cast-tv
+
+- **Phase:** phase:post-mvp
+- **Status:** proposed
+- **Prerequisites:** S-17; **PRD:** FR-014.
+- **Owner's words (2026-11-25):** "miniaturki filmów mov z cast-tv nie mają podglądu" ("the MOV
+  films' thumbnails in cast-tv have no preview"); the owner chose a separate change, with cast-tv
+  making the thumbnail itself.
+- **Starting point** (`s17-nextcloud/research.md`, "can the owner's server make film previews
+  itself?"): the owner's Storage Share has `OC\Preview\Movie` enabled but no ffmpeg, and
+  `preview_ffmpeg_path` is not among the occ commands Hetzner allows; all 13 MOV files answer
+  `has-preview` false.
+- **Ideas:** grab one frame with a local `ffmpeg` reading the film through cast-tv's own media
+  address (the media token on the command line, never the app password), cache it with the
+  listing, keep the placeholder when ffmpeg is missing (the release does not carry it).
+- **To find out:** how many bytes a frame costs for an OM MOV (its index sits at the end), the
+  time per tile, and whether to make them only for visible tiles.
 
 ## Open Roadmap Questions
 
