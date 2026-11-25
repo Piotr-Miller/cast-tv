@@ -353,3 +353,33 @@ server before building anything in cast-tv.
   code changes before the acceptance revision are Phase 5's (a Nextcloud video resolves with
   `download=True`; the download hint per source), which touch none of sign-in, the credential
   file, listing, previews or photo casting.
+
+### Rows 3.11-3.13 (2026-11-25)
+
+Window and code as row 3.10 (`569da31` code; the agent drives the window and Chrome).
+
+- **Row 3.11, phone.** **Disconnect** in the window's Nextcloud tab: the gate with the address
+  field (prefilled with the server's address), no revoke note; `/api/status` `disconnected`;
+  `nextcloud.json` gone. The owner, on the phone on the same Wi-Fi, opened
+  `http://192.168.50.198:8895/ui/`, the **Nextcloud** tab, typed the address, tapped
+  **Connect**, the link, signed in and granted access in the phone's browser; the phone's
+  cast-tv page listed the root folders (owner: "all ok"). `/api/status` `connected`,
+  `stat -c %a` `600`. Settings → Security: exactly one **cast-tv** entry (the earlier one gone
+  with the Disconnect), and "Google Chrome for Android - 157" active a few seconds before.
+- **Row 3.12, revoked on the server.** With the window listing `Pictures` (crumbs
+  `Nextcloud / Pictures`, folders `OM Workspace`, `Test_Pictures`), the agent opened cast-tv's
+  "…" menu in Chrome, **Revoke**, confirmed "Revoke app password?"; Nextcloud then asked for the
+  account password ("Authentication required"), which the owner typed. A folder opened before
+  that confirmation (`OM Workspace`) still listed normally. After it: in the `OM Workspace`
+  list, the folder `2026_11_01` clicked → `/api/status` `expired`; the window kept the crumbs
+  `Nextcloud / Pictures / OM Workspace` and its 47 folders, with the tab chip "sign-in
+  expired" and the banner "The Nextcloud sign-in is no longer valid · The server no longer
+  accepts cast-tv's app password (revoked under Settings → Security, or removed). This list is
+  what was fetched last; connect again to keep going." **Connect again**: the link step for the
+  same server (`…/login/v2/flow/<token>`), no address field. (The criterion's folders were
+  `Pictures` → `OM Workspace`; the revoke's password confirmation shifted it one level down.)
+- **Row 3.13, Disconnect revokes.** The owner granted access again; `connected`, the file
+  `-rw-------`. **Disconnect**: the gate with the address field and no revoke note,
+  `disconnected` with no `revoke_error`; `ls ~/.config/cast-tv/nextcloud.json`: "No such file
+  or directory". Settings → Security reloaded: no cast-tv entry.
+- **Confirmed by the owner in chat (2026-11-25):** rows 3.11-3.13 as written above.

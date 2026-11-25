@@ -564,9 +564,9 @@ None: a new file in `config_dir()`; existing sources keep their data. Their tabs
 - [x] 3.8 Cast a HEIC photo from Nextcloud — accepted at 4b772e11c4b7032ddd4872872589218e5bf6d8d5
 - [-] 3.9 Cast an OM film from Nextcloud through the relay, seek with the remote — n/a: owner decision 2026-11-25: the film stalled through the relay on Wi-Fi (research.md, row 3.9, M1-M3); Nextcloud films are downloaded first (Phase 5), checked by row 5.4
 - [x] 3.10 A mixed slideshow from Nextcloud — accepted at 4b772e11c4b7032ddd4872872589218e5bf6d8d5
-- [ ] 3.11 Sign-in from the phone
-- [ ] 3.12 A password revoked on the server shows the expired banner over the last list; Connect again
-- [ ] 3.13 Disconnect revokes the app password and removes the file
+- [x] 3.11 Sign-in from the phone — accepted at 9e318a6b932b3b413292a2e972c43930e0ecf14a
+- [x] 3.12 A password revoked on the server shows the expired banner over the last list; Connect again — accepted at 9e318a6b932b3b413292a2e972c43930e0ecf14a
+- [x] 3.13 Disconnect revokes the app password and removes the file — accepted at 9e318a6b932b3b413292a2e972c43930e0ecf14a
 - [ ] 3.14 Disconnect on the GoPro, OneDrive and Google Photos tabs
 - [ ] 3.15 Sign-in, restart and Disconnect in the cast-tv window on Windows
 
