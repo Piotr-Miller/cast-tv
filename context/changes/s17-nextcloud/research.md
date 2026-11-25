@@ -294,3 +294,20 @@ Nextcloud 34.0.5; address kept out of the repository); TV: the owner's Samsung 8
   from active files. **Trash cleanup remains pending:** browser control was unavailable;
   Nextcloud's Deleted files were neither inspected nor purged. The owner must remove only
   this test folder/sample there and confirm the result.
+
+### Row 5.4: an OM film downloaded first (2026-11-25)
+
+- **Setting:** as the Phase 3 rows above, with this branch at `569da31` (Phase 5); the cast-tv
+  window restarted so the download cache was empty.
+- **Run 1 (fresh download):** window, `Pictures / OM Workspace / 2026_11_01 / video`, tile
+  `PB014001.MOV` (489.1 MB), "Cast now". `/api/status` sampled every 0.5 s from the click: the
+  download ran for about 7.6 s, `starting` at 7.6 s, **`playing` at 10.0 s** (position
+  0:00:00.398), `playing` 0:00:29.081 at 40.4 s, `stopped` at 41.0 s. The TV's ranged GETs were
+  answered from the downloaded file in `/var/tmp/cast-tv-videos-<pid>-*` (no `upstream:` line),
+  in the two-requests-every-2-s pattern of a local file. The owner: **smooth, no stops or
+  buffering**, picture and sound (the remote was not pressed in this run).
+- **Run 2 (from the download cache), seek:** "Cast now" again; `playing` at once; the owner
+  pressed the remote's forward/seek once at about 0:15: position 0:00:15.64 → 0:00:26.843 within
+  one 0.5 s sample, the TV's GET `bytes=441390289-` after `bytes=231281246-`; `playing`
+  0:00:28.895, then `stopped`. The owner confirmed row 5.4 (picture and sound resumed later in
+  the film; ran to the end).

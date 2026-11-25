@@ -584,10 +584,10 @@ None: a new file in `config_dir()`; existing sources keep their data. Their tabs
 
 #### Automated
 
-- [x] 5.1 The Nextcloud tests pass
-- [x] 5.2 The whole suite passes
-- [x] 5.3 pyflakes is clean
+- [x] 5.1 The Nextcloud tests pass — 569da31
+- [x] 5.2 The whole suite passes — 569da31
+- [x] 5.3 pyflakes is clean — 569da31
 
 #### Manual
 
-- [ ] 5.4 An OM film downloaded first plays on the TV without stalls, seek with the remote
+- [x] 5.4 An OM film downloaded first plays on the TV without stalls, seek with the remote — accepted at 569da310790450de25dd56a33a59bdfcc93bd7a5
