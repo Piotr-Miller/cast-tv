@@ -8,7 +8,7 @@ and the cast-tv window opens on the expected engine.
 under the cast-tv cache whose name matches the build identity grammar, otherwise ``none``.
 
 Exits non-zero on the first failure. Starts the binary with ``--no-browser`` on a
-spare port, waits up to 60 s for ``/ui/``, reads ``/api/status``, then ends it with
+spare port, waits up to 60 s for ``/ui/``, reads ``/api/status`` (it must list the nextcloud source), then ends it with
 ``POST /api/quit`` and checks the port is free again: on Windows the onefile exe is a
 bootloader and a child, and killing the process this script started ends only the bootloader.
 Then ``--window-check`` shows ``/ui/`` in the window and reads it back; on Linux
@@ -176,7 +176,11 @@ def main(binary, nuitka=False) -> int:
         if status != 200 or b"cast-tv" not in body:
             sys.exit("/ui/ answered %d" % status)
         gphotos = state["sources"]["gphotos"]["state"]
-        print("/ui/ 200, /api/status 200, gphotos %s" % gphotos)
+        # the Nextcloud source (and the defusedxml it imports) must have loaded in the binary
+        nextcloud = (state["sources"].get("nextcloud") or {}).get("state")
+        if not nextcloud or nextcloud == "error":
+            sys.exit("/api/status lists no working nextcloud source")
+        print("/ui/ 200, /api/status 200, gphotos %s, nextcloud %s" % (gphotos, nextcloud))
     finally:
         ended = stop(proc, port, instance)   # no HTTP Quit until ownership is established
     if not ended:

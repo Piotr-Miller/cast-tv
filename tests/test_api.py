@@ -42,7 +42,8 @@ def test_status_shape(app):
     assert d["tvs"] == [] and d["cast"] is None and d["show"] is None
     assert d["sources"] == {"gopro": {"state": "disconnected", "detail": {"stored": False}},
                             "onedrive": {"state": "disconnected", "detail": {"stored": False}},
-                            "gphotos": {"state": "disconnected", "detail": {"stored": False}}}
+                            "gphotos": {"state": "disconnected", "detail": {"stored": False}},
+                            "nextcloud": {"state": "disconnected", "detail": {"stored": False}}}
     assert d["session"] == []
     assert isinstance(d["addresses"], list) and d["errors"] == 0 and d["errors_seq"] == 0
     assert d["settings"]["interval"] == 8

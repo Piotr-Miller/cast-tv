@@ -1,6 +1,14 @@
 """The cast supervisor and the slideshow engine, against a scripted ``soap()``."""
+import base64
+import http.server
+import os
+import socketserver
 import threading
 import time
+import urllib.error
+import urllib.request
+
+import pytest
 
 from castlib.platform import firewall_hint
 from castlib.sources.local import item_for_path
@@ -61,8 +69,195 @@ def test_never_started_probes_a_relayed_item_by_its_fresh_address(app, monkeypat
     c = app.cast(item)
     assert c.done.wait(5)
     assert c.state == "failed" and c.reason.code == "tv_never_started"
-    assert probed == ["https://cdn.test/vid-1/source.mp4?sig=1"]      # the address, not the id
+    assert probed == [app.server.media_url(item)]     # cast-tv's own address: the relay adds the headers
+    assert "cdn.test" not in probed[0] and "sig=" not in probed[0]
     assert "cast-gopro <n> -q proxy" in c.reason.hint and c.media_line.startswith("hevc")
+
+
+class _BasicUpstream(http.server.BaseHTTPRequestHandler):
+    """A remote film behind Basic auth: 401 without the expected header, Range honoured with it."""
+    protocol_version = "HTTP/1.1"
+    AUTH = "Basic " + base64.b64encode(b"pat:s3cret-app-password").decode()
+    BODY = bytes(range(256)) * 8
+
+    def log_message(self, *a):
+        pass
+
+    def do_GET(self):
+        self.server.seen.append({"path": self.path, "auth": self.headers.get("Authorization"),
+                                 "range": self.headers.get("Range")})
+        if self.headers.get("Authorization") != self.AUTH or self.path.startswith("/stale"):
+            self.send_response(401)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        rng = self.headers.get("Range")
+        data, status = self.BODY, 200
+        if rng:
+            a, b = rng.replace("bytes=", "").split("-")
+            start = int(a)
+            end = int(b) if b else len(self.BODY) - 1
+            data, status = self.BODY[start:end + 1], 206
+        self.send_response(status)
+        if status == 206:
+            self.send_header("Content-Range", "bytes %d-%d/%d" % (start, end, len(self.BODY)))
+        self.send_header("Content-Type", "video/quicktime")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+
+@pytest.fixture
+def basic_upstream():
+    srv = socketserver.ThreadingTCPServer(("127.0.0.1", 0), _BasicUpstream)
+    srv.daemon_threads = True
+    srv.seen = []
+    srv.base = "http://127.0.0.1:%d" % srv.server_address[1]
+    threading.Thread(target=srv.serve_forever, kwargs={"poll_interval": 0.05}, daemon=True).start()
+    try:
+        yield srv
+    finally:
+        srv.shutdown()
+        srv.server_close()
+
+
+def _reading_probe(app, item, record):
+    """An ``explain_failure`` double that really reads a range of what it is given, as ffprobe would."""
+    def probe(target):
+        entry = {"target": target, "registered": app.registry.get(item.id) is item,
+                 "retired": item.retired_at is not None}
+        if target.startswith("http"):
+            req = urllib.request.Request(target, headers={"Range": "bytes=0-99"})
+            try:
+                with urllib.request.urlopen(req, timeout=5) as resp:
+                    entry["status"], entry["bytes"] = resp.status, resp.read()
+            except urllib.error.HTTPError as e:
+                entry["status"], entry["bytes"] = e.code, b""
+        else:
+            with open(target, "rb") as fh:
+                entry["status"], entry["bytes"] = "file", fh.read(100)
+        record.append(entry)
+        if entry["bytes"] == _BasicUpstream.BODY[:100]:
+            return "hevc 3840x2160, 118 Mbit/s", ["118 Mbit/s - DLNA players usually top out near 60"]
+        return None, []
+    return probe
+
+
+def _remote_video(source_id, resolve, refresh=None, download=False):
+    from castlib.items import MediaItem
+    return MediaItem(kind="video", title=source_id, mime="video/quicktime", source="nextcloud",
+                     source_id=source_id, resolve=resolve, refresh=refresh, download=download)
+
+
+def test_refusal_probe_reads_media_url(app, monkeypatch, basic_upstream):
+    from castlib import supervisor
+    from castlib.items import Upstream
+    record = []
+    item = _remote_video("101", lambda: Upstream(basic_upstream.base + "/dav/PB014001.MOV",
+                                                 {"Authorization": _BasicUpstream.AUTH}))
+    monkeypatch.setattr(supervisor, "explain_failure", _reading_probe(app, item, record))
+    app.tv_fake.video_script = ["STOPPED"]
+    item.requests = 1                                         # the TV did fetch; it just never played
+    c = app.cast(item)
+    assert c.done.wait(5)
+    assert c.state == "failed" and c.reason.code == "tv_never_started"
+    [probe] = record
+    assert probe["target"] == app.server.media_url(item)
+    assert "s3cret" not in probe["target"] and "Basic" not in probe["target"]
+    assert probe["registered"] and not probe["retired"]       # served while the probe reads it
+    assert probe["status"] == 206 and probe["bytes"] == _BasicUpstream.BODY[:100]
+    assert basic_upstream.seen == [{"path": "/dav/PB014001.MOV", "auth": _BasicUpstream.AUTH,
+                                    "range": "bytes=0-99"}]
+    assert "118 Mbit/s" in c.reason.hint and c.media_line.startswith("hevc")
+    assert c.item.retired_at is not None                      # retired once the probe is done
+
+
+def test_refusal_probe_marked_in_debug_log(app, monkeypatch, basic_upstream, capsys):
+    from castlib import supervisor
+    from castlib.items import Upstream
+    record = []
+    item = _remote_video("102", lambda: Upstream(basic_upstream.base + "/dav/PB014042.MOV",
+                                                 {"Authorization": _BasicUpstream.AUTH}))
+    item.debug = True                                         # as `python -m castlib -d` sets it
+    monkeypatch.setattr(supervisor, "explain_failure", _reading_probe(app, item, record))
+    app.tv_fake.video_script = ["STOPPED"]
+    item.requests = 1
+    c = app.cast(item)
+    assert c.done.wait(5)
+    assert record and record[0]["status"] == 206
+    err = capsys.readouterr().err
+    start = err.index("[probe] ffprobe reads %s through cast-tv's relay" % item.id)
+    end = err.index("[probe] done")
+    relay_lines = [i for i in range(len(err)) if err.startswith("[tv] GET /m/", i)]
+    assert relay_lines and all(start < i < end for i in relay_lines)   # the probe's reads, inside the markers
+    assert "s3cret" not in err
+
+
+def test_refusal_probe_custom_opener_and_refresh(app, monkeypatch, basic_upstream):
+    from castlib import supervisor
+    from castlib.items import Upstream
+    opened = []
+    opener = urllib.request.build_opener()
+    real_open = opener.open
+
+    def recording_open(req, *a, **kw):
+        opened.append(req.full_url)
+        return real_open(req, *a, **kw)
+    opener.open = recording_open
+    refreshed = []
+
+    def refresh():
+        refreshed.append(1)
+        return Upstream(basic_upstream.base + "/fresh/clip.mov",
+                        {"Authorization": _BasicUpstream.AUTH}, opener)
+    record = []
+    item = _remote_video("link-1", lambda: Upstream(basic_upstream.base + "/stale/clip.mov",
+                                                    {"Authorization": _BasicUpstream.AUTH}, opener),
+                         refresh=refresh)
+    monkeypatch.setattr(supervisor, "explain_failure", _reading_probe(app, item, record))
+    app.tv_fake.video_script = ["STOPPED"]
+    item.requests = 1
+    c = app.cast(item)
+    assert c.done.wait(5)
+    [probe] = record
+    assert probe["target"] == app.server.media_url(item)
+    assert probe["status"] == 206 and probe["bytes"] == _BasicUpstream.BODY[:100]
+    assert refreshed == [1]                                   # the stale address answered 401: refreshed once
+    assert opened == [basic_upstream.base + "/stale/clip.mov", basic_upstream.base + "/fresh/clip.mov"]
+    assert c.reason.hint and "118 Mbit/s" in c.reason.hint
+
+
+def test_refusal_probe_downloaded_item_uses_path(app, monkeypatch, basic_upstream):
+    from castlib import supervisor
+    from castlib.items import Upstream
+    record = []
+    item = _remote_video("dl-1", lambda: Upstream(basic_upstream.base + "/dav/whole.mov",
+                                                  {"Authorization": _BasicUpstream.AUTH}),
+                         download=True)
+    monkeypatch.setattr(supervisor, "explain_failure", _reading_probe(app, item, record))
+    app.tv_fake.video_script = ["STOPPED"]
+    item.requests = 1
+    c = app.cast(item)
+    assert c.done.wait(5)
+    assert item.path and os.path.isfile(item.path)
+    [probe] = record
+    assert probe["target"] == item.path                       # the downloaded file, not the media address
+    assert probe["status"] == "file" and probe["bytes"] == _BasicUpstream.BODY[:100]
+    assert len(basic_upstream.seen) == 1                      # the download only; the probe read the disk
+
+
+def test_refusal_probe_local_path_unchanged(app, monkeypatch, tmp_path):
+    from castlib import supervisor
+    probed = []
+    monkeypatch.setattr(supervisor, "explain_failure", lambda target: probed.append(target) or (None, []))
+    app.tv_fake.video_script = ["STOPPED"]
+    item = _video(tmp_path, "local.mp4")
+    item.requests = 1
+    c = app.cast(item)
+    assert c.done.wait(5)
+    assert c.state == "failed" and c.reason.code == "tv_never_started"
+    assert probed == [item.path] and not probed[0].startswith("http")
+    assert c.reason.hint is None                              # no reason found: no hint, as before
 
 
 def test_zero_requests_is_firewall_diagnosis(app, tmp_path):

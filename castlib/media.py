@@ -95,7 +95,8 @@ def kind_from_facets(source: str, data: dict) -> str | None:
 
     Pure: ``data`` is the listing entry as the API returned it. Graph entries
     carry ``folder``/``file``/``image``/``photo``/``video`` facets, Picker items
-    ``type`` plus ``mediaFile.mimeType``, GoPro entries a ``type`` string.
+    ``type`` plus ``mediaFile.mimeType``, GoPro entries a ``type`` string,
+    Nextcloud entries WebDAV's ``getcontenttype``.
     """
     if source == "onedrive":
         if "folder" in data:
@@ -112,6 +113,13 @@ def kind_from_facets(source: str, data: dict) -> str | None:
         if t == "VIDEO":
             return "video"
         if t == "PHOTO" and is_allowed_photo((data.get("mediaFile") or {}).get("mimeType")):
+            return "photo"
+        return None
+    if source == "nextcloud":
+        mime = (data.get("getcontenttype") or "").split(";")[0].strip().lower()
+        if mime.startswith("video/"):
+            return "video"
+        if is_allowed_photo(mime):
             return "photo"
         return None
     if source == "gopro":

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<D:multistatus xmlns:D="DAV:" xmlns:x1="http://owncloud.org/ns" xmlns:x2="http://nextcloud.org/ns">
+ <D:response>
+  <D:href>/remote.php/dav/files/pat/odd/</D:href>
+  <D:propstat><D:prop><D:resourcetype><D:collection/></D:resourcetype></D:prop><D:status>HTTP/1.1 200 OK</D:status></D:propstat>
+ </D:response>
+ <D:response>
+  <D:href>/remote.php/dav/files/pat/odd/IMG_0001.JPG</D:href>
+  <D:propstat>
+   <D:prop xmlns:y="http://owncloud.org/ns">
+    <D:getcontenttype>image/jpeg; charset=binary</D:getcontenttype>
+    <D:getcontentlength>4096</D:getcontentlength>
+    <D:getlastmodified>Wed, 05 Mar 2025 07:08:09 GMT</D:getlastmodified>
+    <D:resourcetype/>
+    <y:fileid>301</y:fileid>
+    <x2:has-preview>true</x2:has-preview>
+   </D:prop>
+   <D:status>HTTP/1.1 200 OK</D:status>
+  </D:propstat>
+ </D:response>
+ <response xmlns="DAV:">
+  <href>/remote.php/dav/files/pat/odd/VID_0002.mp4</href>
+  <propstat>
+   <prop>
+    <getcontenttype>video/mp4</getcontenttype>
+    <resourcetype/>
+    <fileid xmlns="http://owncloud.org/ns">302</fileid>
+   </prop>
+   <status>HTTP/1.1 200 OK</status>
+  </propstat>
+ </response>
+</D:multistatus>

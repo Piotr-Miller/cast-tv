@@ -18,6 +18,7 @@ registered until the registry evicts it.
 """
 from __future__ import annotations
 
+import sys
 import threading
 import time
 import urllib.error
@@ -339,20 +340,32 @@ class Cast:
             return self._fetched_nothing()
         reasons: list[str] = []
         if item.kind == "video":
+            # a local or downloaded file is read from disk; a remote one through cast-tv's own
+            # media address, so the relay adds the source's headers (a Nextcloud password, a
+            # bearer) and opener. The URL carries only this run's media token, never a provider
+            # credential. The item is still registered here: _finish retires it afterwards.
             target = item.path
-            if target is None and item.resolve is not None:
-                try:
-                    target = item.resolve().url     # ffprobe reads over HTTP(S), as the CLI always did
-                except Exception:
-                    target = None
+            if target is None and item.resolve is not None and item.id:
+                target = self.app.server.media_url(item)
             if target:
+                # the probe's reads through the relay are logged as [tv] lines: mark where they
+                # start and end, so a debug log is not read as the TV fetching after it gave up
+                self._probe_note(item, "[probe] ffprobe reads %s %s" % (
+                    item.id, "from its file" if item.path else "through cast-tv's relay"))
                 self.media_line, reasons = explain_failure(target)
+                self._probe_note(item, "[probe] done")
         self.reasons = reasons
         hint = None
         if reasons:
             hint = "; ".join(reasons) + ". " + lighter_hint(item)
         return TVError("tv_never_started", "The TV never started playing.", hint=hint,
                        source=item.source, item=item.source_id)
+
+    @staticmethod
+    def _probe_note(item, msg: str) -> None:
+        if item.debug:
+            sys.stderr.write("\n   %s\n" % msg)
+            sys.stderr.flush()
 
     # ------------------------------------------------------------- endings
     def _finish(self, state: str, reason: CastError | None = None) -> None:

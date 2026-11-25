@@ -222,7 +222,7 @@
             </div>
             <div class="meta">
               <div class="name" x-text="it.name" :title="it.name"></div>
-              <div class="sub"><span x-text="metaOf(it)"></span></div>
+              <div class="sub"><span x-text="metaOf(it)" :title="metaTitle(it)"></span></div>
             </div>
           </div>
         </div>
@@ -292,6 +292,26 @@
                 </div>
               </div>
             </template>
+            <!-- Nextcloud Login Flow v2: the link opens on any device; this page flips once access is granted -->
+            <template x-if="connecting(tab) && connectStep(tab) === 'login'">
+              <div class="devicecode consent">
+                <div class="lead">Open this link on any device, sign in to Nextcloud and grant access:</div>
+                <div class="lead"><a class="mono" :href="source(tab).detail.login_url" target="_blank" rel="noopener" x-text="source(tab).detail.login_url"></a></div>
+                <div class="wait"><span class="dot busy"></span><span>waiting for access…</span><span class="muted mono" x-text="'valid ' + Math.max(1, Math.round(source(tab).detail.expires_in / 60)) + ' min'"></span></div>
+                <div class="phone small muted">On a phone: open the link in this phone’s browser. This page shows your folders as soon as Nextcloud grants access.</div>
+                <div class="cta">
+                  <button @click="copyLogin(tab)">Copy link</button>
+                  <button class="ghost" @click="cancelConnect(tab)">Cancel</button>
+                </div>
+              </div>
+            </template>
+            <!-- Nextcloud: the server's address before a flow -->
+            <template x-if="addressForm(tab)">
+              <form class="paste" @submit.prevent="connectServer(tab)">
+                <input type="text" x-model="serverInput" @input="_serverTouched = true" placeholder="cloud.example.com" autocomplete="url" spellcheck="false" aria-label="Nextcloud server address">
+                <button type="submit" class="primary" :disabled="busy.connect || !serverInput.trim()" x-text="busy.connect ? 'Starting…' : gate(tab).cta"></button>
+              </form>
+            </template>
             <!-- device code: the code is typed on any device, this page flips by itself -->
             <template x-if="connecting(tab) && connectStep(tab) === 'code'">
               <div class="devicecode">
@@ -305,7 +325,7 @@
                 </div>
               </div>
             </template>
-            <template x-if="!connecting(tab)">
+            <template x-if="!connecting(tab) && !addressForm(tab)">
               <div class="cta">
                 <button class="primary" @click="connect(tab)" :disabled="busy.connect" x-text="busy.connect ? 'Starting…' : (expired(tab) ? 'Connect again' : gate(tab).cta)"></button>
               </div>
@@ -314,8 +334,13 @@
             <div class="later" x-show="flowError(tab) && !connecting(tab)" x-text="flowError(tab)"></div>
           </div>
         </template>
+        <!-- an expired sign-in with no list: the gate, not the header, offers Disconnect -->
+        <div class="cta" x-show="(canDisconnect(tab) || disconnecting === tab) && !connecting(tab)" x-cloak>
+          <button class="ghost" @click="disconnect(tab)" :disabled="busy.connect || !!disconnecting" title="Forget this sign-in on this computer" x-text="disconnecting === tab ? 'Disconnecting…' : 'Disconnect'"></button>
+        </div>
         <div class="note" x-text="gate(tab).note"></div>
         <div class="later" x-show="gateNote[tab]" x-text="gateNote[tab]"></div>
+        <div class="later" x-show="revokeError(tab) && !connecting(tab)" x-text="revokeError(tab)"></div>
         <!-- a share link needs no consent: the page is scraped, so it is pasted here before any sign-in -->
         <form class="paste linkpaste" x-show="tab === 'gphotos' && !connecting(tab)" x-cloak @submit.prevent="addLink()">
           <span class="small muted">Or a photo or a video from a shared link, no sign-in needed:</span>
@@ -358,6 +383,7 @@
         <span class="n" x-text="items(tab).length"></span>
         <button class="ghost tiny" @click="loadList(tab)" :disabled="listOf(tab).loading || expired(tab)" title="Fetch the list again">Refresh</button>
         <span class="age" x-text="headerLine(tab)"></span>
+        <button class="ghost tiny" x-show="canDisconnect(tab)" @click="disconnect(tab)" :disabled="busy.connect || !!disconnecting" title="Forget this sign-in on this computer">Disconnect</button>
       </h2>
       <!-- Google Photos: the pick happens in Google's own picker, on any device; the picks land here -->
       <div class="pickbar" x-show="tab === 'gphotos' && !expired(tab)" x-cloak>
@@ -416,7 +442,7 @@
               </div>
               <div class="meta">
                 <div class="name" x-text="it.name" :title="it.name"></div>
-                <div class="sub"><span x-text="metaOf(it)"></span></div>
+                <div class="sub"><span x-text="metaOf(it)" :title="metaTitle(it)"></span></div>
               </div>
               <!-- a heavy clip: the variant choice covers the card until one is picked -->
               <div class="chooser" x-show="chooser === key(it)" x-cloak @click.stop @click.outside="chooser = null">

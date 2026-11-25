@@ -26,14 +26,14 @@ copies every header, ``Authorization`` included, onto the redirected request."""
 
 
 def _origin(url: str) -> tuple | None:
-    """``(scheme, host, port)`` with the default port filled in; ``None`` when the port is unreadable."""
-    parts = urllib.parse.urlsplit(url)
-    scheme = parts.scheme.lower()
+    """``(scheme, host, port)`` with the default port filled in; ``None`` for a malformed URL."""
     try:
+        parts = urllib.parse.urlsplit(url)
+        scheme, host = parts.scheme.lower(), (parts.hostname or "").lower()
         port = parts.port or {"http": 80, "https": 443}.get(scheme)
     except ValueError:
         return None
-    return scheme, (parts.hostname or "").lower(), port
+    return scheme, host, port
 
 
 class _DropAuthAcrossOrigins(urllib.request.HTTPRedirectHandler):

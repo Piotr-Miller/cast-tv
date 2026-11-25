@@ -1,0 +1,3 @@
+<?xml version="1.0"?>
+<!DOCTYPE d:multistatus [<!ENTITY ext SYSTEM "file:///etc/passwd">]>
+<d:multistatus xmlns:d="DAV:"><d:response><d:href>/remote.php/dav/files/pat/&ext;</d:href></d:response></d:multistatus>

@@ -514,3 +514,341 @@ def test_driver_reports_a_started_async_failure_before_exiting(tmp_path, monkeyp
 def test_phone_page_never_marks_ready():
     out = drive_ui([{"status": _ready_status(host=False)}, {"call": "refresh"}, {"call": "refresh"}, {"wait": True}])
     assert _ready_posts(out) == 0
+
+
+# ------------------------------------------------------------- Nextcloud, Disconnect, the shared list fixes (s17)
+
+NC_LIST = "/api/sources/nextcloud/list"
+NC_LOGIN = "https://cloud.example.test/index.php/login/v2/flow/abc"
+
+
+def _sources(**sources):
+    return {"tv": None, "tvs": [], "interfaces": [], "cast": None, "show": None, "sources": sources,
+            "session": [], "errors": 0, "settings": {"interval": 8}}
+
+
+def _nc(state, **detail):
+    base = {"stored": state != "disconnected"}
+    base.update(detail)
+    return {"state": state, "detail": base}
+
+
+def _nc_login():
+    return _nc("connecting", step="login", login_url=NC_LOGIN, expires_in=1199, server="https://cloud.example.test")
+
+
+def _gate_html():
+    html = _ui_text("index.html")
+    return html[html.index('<section class="gate">'):html.index('<template x-if="listVisible(tab)">')]
+
+
+def _tile(i, source="nextcloud", **extra):
+    return dict({"source": source, "id": str(i), "name": "P%d.JPG" % i, "kind": "photo"}, **extra)
+
+
+def test_nextcloud_gate_posts_server():
+    """Before a flow: the address field (prefilled from detail.server) and Connect, which posts {server}."""
+    gate = _gate_html()
+    assert '<template x-if="addressForm(tab)">' in gate and 'x-model="serverInput"' in gate
+    assert 'connectServer(tab)' in gate
+    assert "{ name: 'nextcloud', label: 'Nextcloud' }" in _ui_text("app.js")
+    out = drive_ui([
+        {"status": _sources(nextcloud=_nc("disconnected", server="https://old.example.test"))}, {"call": "refresh"},
+        {"read": "listVisible", "args": ["nextcloud"]}, {"read": "addressForm", "args": ["nextcloud"]},
+        {"read": "serverInput"},
+        {"set": {"serverInput": "  cloud.example.test  "}},
+        {"answer": {"path": "/api/sources/nextcloud/connect", "body": _nc_login()}},
+        {"status": _sources(nextcloud=_nc_login())},
+        {"call": "connectServer", "args": ["nextcloud"]},
+        {"read": "addressForm", "args": ["nextcloud"]},
+    ])
+    visible, form, prefilled, form_during_flow = out["reads"]
+    assert visible is False and form is True and prefilled == "https://old.example.test"
+    assert ["POST /api/sources/nextcloud/connect", {"server": "cloud.example.test"}] in out["bodies"]
+    assert form_during_flow is False
+    empty = drive_ui([{"status": _sources(nextcloud=_nc("disconnected"))}, {"call": "refresh"},
+                      {"call": "connectServer", "args": ["nextcloud"]}])
+    assert "POST /api/sources/nextcloud/connect" not in empty["requests"]   # an empty field sends nothing
+
+
+def test_nextcloud_login_step_shows_link():
+    """During the flow: the link (new tab), Copy link, Cancel and the minutes left; no list, no address field."""
+    gate = _gate_html()
+    block = gate[gate.index("connectStep(tab) === 'login'"):gate.index('<template x-if="addressForm(tab)">')]
+    assert "Open this link on any device, sign in to Nextcloud and grant access" in block
+    assert ':href="source(tab).detail.login_url" target="_blank" rel="noopener"' in block
+    assert "copyLogin(tab)" in block and "cancelConnect(tab)" in block and "expires_in" in block
+    out = drive_ui([
+        {"status": _sources(nextcloud=_nc_login())}, {"call": "refresh"},
+        {"read": "connecting", "args": ["nextcloud"]}, {"read": "connectStep", "args": ["nextcloud"]},
+        {"read": "listVisible", "args": ["nextcloud"]}, {"read": "addressForm", "args": ["nextcloud"]},
+        {"read": "sourceHint", "args": ["nextcloud"]},
+        {"answer": {"path": "/api/sources/nextcloud/connect", "body": _nc("disconnected")}},
+        {"call": "cancelConnect", "args": ["nextcloud"]},
+    ])
+    assert out["reads"] == [True, "login", False, False, "waiting for access…"]
+    assert ["POST /api/sources/nextcloud/connect", {"cancel": True}] in out["bodies"]
+
+
+def test_nextcloud_copy_link_copies_login_url():
+    out = drive_ui([{"status": _sources(nextcloud=_nc_login())}, {"call": "refresh"},
+                    {"call": "copyLogin", "args": ["nextcloud"]}, {"read": "toast"}])
+    assert out["copied"] == ["copy: " + NC_LOGIN] and out["reads"] == ["Copied."]
+    refused = drive_ui([{"status": _sources(nextcloud=_nc_login())}, {"call": "refresh"}, {"copy": False},
+                        {"call": "copyLogin", "args": ["nextcloud"]}])
+    assert refused["copied"] == ["prompt: Copy this link: " + NC_LOGIN]
+
+
+def test_nextcloud_address_note_survives_poll():
+    """A refused address answers in gateNote, which the status poll leaves alone (lessons.md)."""
+    message = "cast-tv talks to Nextcloud only over HTTPS: type the address with https://, or without a scheme."
+    out = drive_ui([
+        {"status": _sources(nextcloud=_nc("disconnected"))}, {"call": "refresh"},
+        {"answer": {"path": "/api/sources/nextcloud/connect",
+                    "body": {"error": {"code": "http_refused", "message": message}}}},
+        {"set": {"serverInput": "http://192.168.50.10"}},
+        {"call": "connectServer", "args": ["nextcloud"]},
+        {"call": "refresh"}, {"call": "refresh"},
+        {"read": "gateNote"}, {"read": "serverInput"}, {"read": "addressForm", "args": ["nextcloud"]},
+    ])
+    notes, typed, form = out["reads"]
+    assert notes["nextcloud"] == message and typed == "http://192.168.50.10" and form is True
+    assert 'x-show="gateNote[tab]" x-text="gateNote[tab]"' in _gate_html()
+
+
+def test_nextcloud_connect_again_posts_empty():
+    """Expired: Connect again (gate or banner) posts {} for the stored server; no address field."""
+    expired = _nc("expired", account="Pat (pat@example.test)", server="https://cloud.example.test",
+                  error={"code": "nextcloud_unauthorized", "message": "Nextcloud no longer accepts the password."})
+    out = drive_ui([
+        {"status": _sources(nextcloud=expired)}, {"call": "refresh"},
+        {"read": "addressForm", "args": ["nextcloud"]}, {"read": "listVisible", "args": ["nextcloud"]},
+        {"answer": {"path": "/api/sources/nextcloud/connect", "body": _nc_login()}},
+        {"status": _sources(nextcloud=_nc_login())},
+        {"call": "connect", "args": ["nextcloud"]},
+        {"read": "connectStep", "args": ["nextcloud"]},
+    ])
+    assert out["reads"] == [False, False, "login"]
+    assert ["POST /api/sources/nextcloud/connect", {}] in out["bodies"]
+    gate = _gate_html()
+    assert "x-if=\"!connecting(tab) && !addressForm(tab)\"" in gate and "'Connect again'" in gate
+
+
+SIGNED_IN = {
+    "gopro": {"state": "connected", "detail": {"stored": True, "age": "session captured just now"}},
+    "onedrive": {"state": "connected", "detail": {"stored": True, "account": "pat@example.test"}},
+    "gphotos": {"state": "connected", "detail": {"stored": True, "picks": 1, "picks_seq": 1}},
+    "nextcloud": _nc("connected", account="Pat (pat)", server="https://cloud.example.test"),
+}
+
+
+def _expired_of(name):
+    s = SIGNED_IN[name]
+    return {"state": "expired", "detail": dict(s["detail"], picks=0,
+                                               error={"code": "x", "message": "The sign-in expired."})}
+
+
+def test_disconnect_every_source():
+    """Every signed-in tab offers Disconnect: in the list header when a list is on screen, on the gate when
+    an expired tab has none; each posts the source's disconnect route."""
+    html = _ui_text("index.html")
+    header = html[html.index("<h2>", html.index('<template x-if="listVisible(tab)">')):]
+    header = header[:header.index("</h2>")]
+    assert 'x-show="canDisconnect(tab)" @click="disconnect(tab)"' in header
+    assert 'x-show="(canDisconnect(tab) || disconnecting === tab) && !connecting(tab)"' in _gate_html()
+    assert "disconnect(tab)" in _gate_html()
+    for name in SIGNED_IN:
+        listed = {"answer": {"path": "/api/sources/%s/list" % name, "body": {"items": [_tile(1, name)]}}}
+        gone = {"answer": {"path": "/api/sources/%s/disconnect" % name, "body": {"state": "disconnected",
+                                                                                  "detail": {"stored": False}}}}
+        cases = [
+            ("connected", [{"status": _sources(**{name: SIGNED_IN[name]})}, {"call": "refresh"},
+                           {"call": "ensureList", "args": [name]}, {"wait": True}], True),
+            ("expired with a list", [{"status": _sources(**{name: SIGNED_IN[name]})}, {"call": "refresh"},
+                                     {"call": "ensureList", "args": [name]}, {"wait": True},
+                                     {"status": _sources(**{name: _expired_of(name)})}, {"call": "refresh"}], True),
+            ("expired without a list", [{"status": _sources(**{name: _expired_of(name)})}, {"call": "refresh"}], False),
+        ]
+        for label, steps, list_on_screen in cases:
+            out = drive_ui([listed, gone] + steps + [
+                {"read": "listVisible", "args": [name]}, {"read": "canDisconnect", "args": [name]},
+                {"status": _sources(**{name: {"state": "disconnected", "detail": {"stored": False}}})},
+                {"call": "disconnect", "args": [name]},
+                {"read": "listVisible", "args": [name]},
+            ])
+            visible, offered, after = out["reads"]
+            assert (visible, offered, after) == (list_on_screen, True, False), (name, label)
+            assert out["requests"].count("POST /api/sources/%s/disconnect" % name) == 1, (name, label)
+    out = drive_ui([{"status": _sources(onedrive={"state": "disconnected", "detail": {"stored": False}})},
+                    {"call": "refresh"}, {"read": "canDisconnect", "args": ["onedrive"]}])
+    assert out["reads"] == [False]
+
+
+def test_disconnect_clears_list_and_selection():
+    od = "/api/sources/onedrive/list"
+    out = drive_ui([
+        {"answer": {"path": od, "body": {"items": [_tile(1, "onedrive"), _tile(2, "onedrive")],
+                                         "folders": [{"id": "f", "name": "F"}]}}},
+        {"answer": {"path": "/api/sources/gopro/list", "body": {"items": [_tile(9, "gopro")]}}},
+        {"answer": {"path": "/api/sources/onedrive/disconnect", "body": {"state": "disconnected",
+                                                                         "detail": {"stored": False}}}},
+        {"status": _sources(onedrive=SIGNED_IN["onedrive"], gopro=SIGNED_IN["gopro"])}, {"call": "refresh"},
+        {"call": "loadList", "args": ["onedrive"]},
+        {"call": "toggle", "args": [_tile(1, "onedrive")]}, {"call": "toggle", "args": [_tile(9, "gopro")]},
+        {"status": _sources(onedrive={"state": "disconnected", "detail": {"stored": False}}, gopro=SIGNED_IN["gopro"])},
+        {"call": "disconnect", "args": ["onedrive"]},
+        {"read": "items", "args": ["onedrive"]}, {"read": "listVisible", "args": ["onedrive"]},
+        {"read": "selection"}, {"read": "items", "args": ["gopro"]},
+    ])
+    items, visible, selection, gopro = out["reads"]
+    assert items == [] and visible is False
+    assert [(s["source"], s["id"]) for s in selection] == [("gopro", "9")]
+    assert [it["id"] for it in gopro] == ["9"]
+
+
+def test_disconnect_shows_revoke_error():
+    """A revoke the server did not confirm: the local sign-in is gone, and the gate says so from the status."""
+    message = ("The Nextcloud server did not confirm that cast-tv's app password was removed; "
+               "cast-tv may still be listed under Settings -> Security on the server.")
+    after = _nc("disconnected", server="https://cloud.example.test",
+                revoke_error={"code": "revoke_failed", "message": message})
+    out = drive_ui([
+        {"answer": {"path": NC_LIST, "body": {"items": [_tile(1)]}}},
+        {"answer": {"path": "/api/sources/nextcloud/disconnect", "body": after}},
+        {"status": _sources(nextcloud=SIGNED_IN["nextcloud"])}, {"call": "refresh"},
+        {"read": "revokeError", "args": ["nextcloud"]},
+        {"status": _sources(nextcloud=after)},
+        {"call": "disconnect", "args": ["nextcloud"]}, {"call": "refresh"},
+        {"read": "listVisible", "args": ["nextcloud"]}, {"read": "revokeError", "args": ["nextcloud"]},
+        {"read": "addressForm", "args": ["nextcloud"]}, {"read": "serverInput"},
+    ])
+    assert out["reads"] == ["", False, message, True, "https://cloud.example.test"]
+    assert 'x-show="revokeError(tab) && !connecting(tab)" x-text="revokeError(tab)"' in _gate_html()
+
+
+def test_nextcloud_tile_shows_date():
+    """The last-modified date on Nextcloud tiles only, with the tooltip; no date text without one."""
+    html = _ui_text("index.html")
+    assert html.count(':title="metaTitle(it)"') == 2
+    out = drive_ui([
+        {"read": "metaOf", "args": [_tile(1, size=2048, date="2026-11-01")]},
+        {"read": "metaTitle", "args": [_tile(1, size=2048, date="2026-11-01")]},
+        {"read": "metaOf", "args": [_tile(2, size=2048, date=None)]},
+        {"read": "metaTitle", "args": [_tile(2, size=2048, date=None)]},
+        {"read": "metaOf", "args": [_tile(3, kind="video", mime="video/quicktime", date="2026-11-01")]},
+        {"read": "metaOf", "args": [_tile(4, "onedrive", size=2048, date="2026-11-01")]},
+        {"read": "metaTitle", "args": [_tile(4, "onedrive", size=2048, date="2026-11-01")]},
+    ])
+    assert out["reads"] == ["2 KB · 2026-11-01", "last modified", "2 KB", "", "video/quicktime · 2026-11-01",
+                            "2 KB", ""]
+
+
+def test_nextcloud_load_more_keeps_folders():
+    """Every folder arrives on the first page; Load more appends media and keeps them (once per id)."""
+    folders = [{"id": "Pictures", "name": "Pictures"}, {"id": "Video", "name": "Video"}]
+    out = drive_ui([
+        {"answer": {"path": NC_LIST, "body": {"items": [_tile(1), _tile(2)], "folders": folders, "next": "2",
+                                              "crumbs": [{"id": "", "name": "Nextcloud"}]}}},
+        {"status": _sources(nextcloud=SIGNED_IN["nextcloud"])}, {"call": "refresh"},
+        {"call": "loadList", "args": ["nextcloud"]},
+        {"answer": {"path": NC_LIST, "body": {"items": [_tile(3)], "folders": [folders[1], {"id": "X", "name": "X"}],
+                                              "next": None, "crumbs": [{"id": "", "name": "Nextcloud"}]}}},
+        {"call": "loadList", "args": ["nextcloud", True]},
+        {"read": "listOf", "args": ["nextcloud"]},
+    ])
+    l = out["reads"][0]
+    assert [f["id"] for f in l["folders"]] == ["Pictures", "Video", "X"]
+    assert [it["id"] for it in l["items"]] == ["1", "2", "3"] and l["next"] is None
+    assert "GET /api/sources/nextcloud/list?page=2" in out["requests"]
+
+
+def test_nextcloud_failed_folder_keeps_list():
+    """A folder that answers 401: the same items, folders and crumbs stay, under the expired banner."""
+    crumbs = [{"id": "", "name": "Nextcloud"}, {"id": "Pictures", "name": "Pictures"}]
+    expired = _nc("expired", account="Pat (pat)", server="https://cloud.example.test",
+                  error={"code": "nextcloud_unauthorized", "message": "Nextcloud no longer accepts the password."})
+    out = drive_ui([
+        {"answer": {"path": NC_LIST, "body": {"items": [_tile(1)], "crumbs": crumbs,
+                                              "folders": [{"id": "Pictures/OM Workspace", "name": "OM Workspace"}]}}},
+        {"status": _sources(nextcloud=SIGNED_IN["nextcloud"])}, {"call": "refresh"},
+        {"call": "openFolder", "args": ["nextcloud", "Pictures"]},
+        {"answer": {"path": NC_LIST, "body": {"error": {"code": "nextcloud_unauthorized",
+                                                        "message": "Nextcloud no longer accepts the password."}}}},
+        {"status": _sources(nextcloud=expired)},
+        {"call": "openFolder", "args": ["nextcloud", "Pictures/OM Workspace"]},
+        {"read": "listOf", "args": ["nextcloud"]},
+        {"read": "listVisible", "args": ["nextcloud"]}, {"read": "expired", "args": ["nextcloud"]},
+    ])
+    l, visible, banner = out["reads"]
+    assert l["path"] == "Pictures" and l["crumbs"] == crumbs and [it["id"] for it in l["items"]] == ["1"]
+    assert [f["name"] for f in l["folders"]] == ["OM Workspace"]
+    assert visible is True and banner is True
+    failed = out["requests"].index("GET /api/sources/nextcloud/list?path=Pictures%2FOM%20Workspace")
+    assert "GET /api/status" in out["requests"][failed:]        # the 401 code refreshes the status at once
+
+
+def test_onedrive_open_folder_unchanged():
+    """A successful open still replaces path, items, folders and crumbs, for every source."""
+    od = "/api/sources/onedrive/list"
+    opened = [
+        {"answer": {"path": od, "body": {"items": [_tile(1, "onedrive")], "folders": [{"id": "f1", "name": "F1"}],
+                                         "next": "tok", "crumbs": [{"id": None, "name": "OneDrive"}]}}},
+        {"status": _sources(onedrive=SIGNED_IN["onedrive"])}, {"call": "refresh"},
+        {"call": "loadList", "args": ["onedrive"]},
+        {"answer": {"path": od, "body": {"items": [_tile(2, "onedrive")], "folders": [],
+                                         "crumbs": [{"id": None, "name": "OneDrive"}, {"id": "f1", "name": "F1"}]}}},
+        {"call": "openFolder", "args": ["onedrive", "f1"]},
+    ]
+    inside = drive_ui(opened + [{"read": "listOf", "args": ["onedrive"]}])["reads"][0]   # reads hold the live list
+    out = drive_ui(opened + [{"call": "openFolder", "args": ["onedrive", None]}, {"read": "listOf", "args": ["onedrive"]}])
+    root = out["reads"][0]
+    assert inside["path"] == "f1" and [it["id"] for it in inside["items"]] == ["2"] and inside["folders"] == []
+    assert [c["name"] for c in inside["crumbs"]] == ["OneDrive", "F1"] and inside["next"] is None
+    assert root["path"] is None
+    assert "GET /api/sources/onedrive/list?path=f1" in out["requests"]
+    assert out["requests"][-1].startswith("GET /api/sources/onedrive/list") and "path=" not in out["requests"][-1]
+
+
+def test_nextcloud_unchecked_stored_sign_in_checks_again():
+    """Review F1 (phase 3): a stored sign-in whose check failed (no network at start) is checked again by
+    Connect ({}), never replaced by a fresh flow that would leave the old app password live; and it can
+    be disconnected from the gate."""
+    stored = _nc("disconnected", stored=True, account="Pat (pat)", server="https://cloud.example.test")
+    out = drive_ui([
+        {"status": _sources(nextcloud=stored)}, {"call": "refresh"},
+        {"read": "listVisible", "args": ["nextcloud"]}, {"read": "addressForm", "args": ["nextcloud"]},
+        {"read": "canDisconnect", "args": ["nextcloud"]},
+        {"answer": {"path": "/api/sources/nextcloud/connect", "body": SIGNED_IN["nextcloud"]}},
+        {"call": "connect", "args": ["nextcloud"]},             # the gate's Connect, as the button sends it
+    ])
+    assert out["reads"] == [False, False, True]
+    assert [b for b in out["bodies"] if b[0] == "POST /api/sources/nextcloud/connect"] == [
+        ["POST /api/sources/nextcloud/connect", {}]]
+    gate = _gate_html()
+    assert '<template x-if="!connecting(tab) && !addressForm(tab)">' in gate and "@click=\"connect(tab)\"" in gate
+
+
+def test_disconnect_clears_the_list_before_the_server_answers():
+    """Review F2 (phase 3): the revoke may take up to 30 s; the list goes at once and the gate says
+    Disconnecting… on that tab only, until the answer lands."""
+    gone = _nc("disconnected", server="https://cloud.example.test")
+    out = drive_ui([
+        {"answer": {"path": NC_LIST, "body": {"items": [_tile(1)]}}},
+        {"answer": {"path": "/api/sources/onedrive/list", "body": {"items": [_tile(2, "onedrive")]}}},
+        {"answer": {"path": "/api/sources/nextcloud/disconnect", "body": gone}},
+        {"status": _sources(nextcloud=SIGNED_IN["nextcloud"], onedrive=SIGNED_IN["onedrive"])}, {"call": "refresh"},
+        {"call": "loadList", "args": ["nextcloud"]}, {"call": "loadList", "args": ["onedrive"]},
+        {"call": "toggle", "args": [_tile(1)]},
+        {"hold": "/api/sources/nextcloud/disconnect"},
+        {"start": "disconnect", "args": ["nextcloud"]}, {"wait": True},
+        {"status": _sources(nextcloud=gone, onedrive=SIGNED_IN["onedrive"])}, {"call": "refresh"},
+        {"read": "listVisible", "args": ["nextcloud"]}, {"read": "items", "args": ["nextcloud"]},
+        {"read": "selection"}, {"read": "disconnecting"}, {"read": "listVisible", "args": ["onedrive"]},
+        {"release": "/api/sources/nextcloud/disconnect"},
+        {"read": "disconnecting"}, {"read": "listVisible", "args": ["nextcloud"]},
+    ])
+    visible, items, selection, busy, other, after, still_gate = out["reads"]
+    assert visible is False and items == [] and selection == [] and busy == "nextcloud"
+    assert other is True                                        # another tab's list is untouched
+    assert after == "" and still_gate is False
+    assert "Disconnecting…" in _gate_html()

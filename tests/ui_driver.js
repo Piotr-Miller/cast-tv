@@ -23,7 +23,9 @@
 //   {"requests": true}                      record a snapshot of the requests so far
 // With top-level manualRender:true, $nextTick and requestAnimationFrame use controlled queues:
 //   {"tick": true} / {"frame": true}          advance one render tick / one animation frame
-// stdout: {"reads": [...], "requests": ["GET /api/status", "POST /api/sources/gopro/connect", ...]}
+// stdout: {"reads": [...], "requests": ["GET /api/status", "POST /api/sources/gopro/connect", ...],
+//          "bodies": [["POST /api/sources/nextcloud/connect", {"server": "..."}], ...] (every request with a body),
+//          "copied": ["copy: <text>" through execCommand, or "prompt: <label> <text>" when it was refused]}
 'use strict';
 const fs = require('fs');
 
@@ -31,6 +33,7 @@ const src = process.argv.slice(3).map(f => fs.readFileSync(f, 'utf8') + '\n').jo
   + fs.readFileSync(process.argv[2], 'utf8');
 const script = JSON.parse(fs.readFileSync(0, 'utf8'));
 const requests = [];
+const bodies = [];
 let status = { sources: {}, session: [], errors: 0, settings: { interval: 8 } };
 const answers = {};
 const held = {};           // path -> resolvers of requests waiting for {"release": path}; absent when not held
@@ -39,6 +42,7 @@ const failing = {};
 async function fetch(path, init) {
   const method = (init && init.method) || 'GET';
   requests.push(method + ' ' + path);
+  if (init && init.body !== undefined) bodies.push([method + ' ' + path, JSON.parse(init.body)]);
   const key = path.split('?')[0];
   let body;
   if (key === '/api/status') body = status;
@@ -53,11 +57,16 @@ async function fetch(path, init) {
 
 const copied = [];         // what copy() put on the clipboard through execCommand; {"copy": false} refuses it
 let copyWorks = true;
+let lastCreated = null;
 const document = {
   addEventListener() {}, visibilityState: 'visible',
   body: { appendChild() {} },
-  createElement: () => ({ style: {}, setAttribute() {}, select() {}, remove() {} }),
-  execCommand(cmd) { return cmd === 'copy' && copyWorks; },
+  createElement: () => (lastCreated = { style: {}, setAttribute() {}, select() {}, remove() {} }),
+  execCommand(cmd) {
+    const ok = cmd === 'copy' && copyWorks;
+    if (ok && lastCreated) copied.push('copy: ' + lastCreated.value);
+    return ok;
+  },
 };
 const window = { matchMedia: () => ({ matches: false }), prompt: (label, text) => copied.push('prompt: ' + label + ' ' + text) };
 const ticks = [], frames = [], watchers = new Map();
@@ -104,5 +113,5 @@ let backgroundError;
   }
   await settle();
   if (backgroundError) throw backgroundError;
-  process.stdout.write(JSON.stringify({ reads, requests, copied }), () => process.exit(0));   // init() leaves its poll timer running
+  process.stdout.write(JSON.stringify({ reads, requests, bodies, copied }), () => process.exit(0));   // init() leaves its poll timer running
 })().catch(e => { process.stderr.write(String((e && e.stack) || e)); process.exit(1); });

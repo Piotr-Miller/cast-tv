@@ -1,0 +1,194 @@
+<?xml version="1.0"?>
+<d:multistatus xmlns:d="DAV:" xmlns:s="http://sabredav.org/ns" xmlns:oc="http://owncloud.org/ns" xmlns:nc="http://nextcloud.org/ns">
+ <d:response>
+  <d:href>/remote.php/dav/files/pat/Pictures/</d:href>
+  <d:propstat>
+   <d:prop>
+    <d:getlastmodified>Mon, 24 Nov 2026 18:40:11 GMT</d:getlastmodified>
+    <d:resourcetype><d:collection/></d:resourcetype>
+    <d:getetag>"6743a0bb1d2f5"</d:getetag>
+    <oc:fileid>11</oc:fileid>
+    <oc:size>38764484634</oc:size>
+    <nc:has-preview>false</nc:has-preview>
+   </d:prop>
+   <d:status>HTTP/1.1 200 OK</d:status>
+  </d:propstat>
+ </d:response>
+ <d:response>
+  <d:href>/remote.php/dav/files/pat/Pictures/Test_Pictures/</d:href>
+  <d:propstat>
+   <d:prop>
+    <d:getlastmodified>Sat, 18 Oct 2025 09:12:00 GMT</d:getlastmodified>
+    <d:resourcetype><d:collection/></d:resourcetype>
+    <d:getetag>"68f35b10"</d:getetag>
+    <oc:fileid>21</oc:fileid>
+    <oc:size>91234567</oc:size>
+    <nc:has-preview>false</nc:has-preview>
+   </d:prop>
+   <d:status>HTTP/1.1 200 OK</d:status>
+  </d:propstat>
+ </d:response>
+ <d:response>
+  <d:href>/remote.php/dav/files/pat/Pictures/OM%20Workspace/</d:href>
+  <d:propstat>
+   <d:prop>
+    <d:getlastmodified>Mon, 24 Nov 2026 18:40:11 GMT</d:getlastmodified>
+    <d:resourcetype><d:collection/></d:resourcetype>
+    <d:getetag>"6743a0bb1d2f6"</d:getetag>
+    <oc:fileid>22</oc:fileid>
+    <oc:size>38673250067</oc:size>
+    <nc:has-preview>false</nc:has-preview>
+   </d:prop>
+   <d:status>HTTP/1.1 200 OK</d:status>
+  </d:propstat>
+ </d:response>
+ <d:response>
+  <d:href>/remote.php/dav/files/pat/Pictures/shelf-christmas-decoration.heic</d:href>
+  <d:propstat>
+   <d:prop>
+    <d:getlastmodified>Sat, 06 Dec 2025 17:20:31 GMT</d:getlastmodified>
+    <d:getcontenttype>image/heic</d:getcontenttype>
+    <d:getcontentlength>1843021</d:getcontentlength>
+    <d:resourcetype/>
+    <d:getetag>"2b7e1c0a9d"</d:getetag>
+    <oc:fileid>102</oc:fileid>
+    <oc:size>1843021</oc:size>
+    <nc:has-preview>true</nc:has-preview>
+   </d:prop>
+   <d:status>HTTP/1.1 200 OK</d:status>
+  </d:propstat>
+ </d:response>
+ <d:response>
+  <d:href>/remote.php/dav/files/pat/Pictures/PB014004.JPG</d:href>
+  <d:propstat>
+   <d:prop>
+    <d:getlastmodified>Sat, 01 Nov 2026 23:59:59 GMT</d:getlastmodified>
+    <d:getcontenttype>image/jpeg</d:getcontenttype>
+    <d:getcontentlength>7340122</d:getcontentlength>
+    <d:resourcetype/>
+    <d:getetag>"9c1f5e22aa"</d:getetag>
+    <oc:fileid>101</oc:fileid>
+    <oc:size>7340122</oc:size>
+    <nc:has-preview>true</nc:has-preview>
+   </d:prop>
+   <d:status>HTTP/1.1 200 OK</d:status>
+  </d:propstat>
+ </d:response>
+ <d:response>
+  <d:href>/remote.php/dav/files/pat/Pictures/PB014001.MOV</d:href>
+  <d:propstat>
+   <d:prop>
+    <d:getlastmodified>Sat, 01 Nov 2026 10:02:14 GMT</d:getlastmodified>
+    <d:getcontenttype>video/quicktime</d:getcontenttype>
+    <d:getcontentlength>268748800</d:getcontentlength>
+    <d:resourcetype/>
+    <d:getetag>"71aa0c3e5b"</d:getetag>
+    <oc:fileid>103</oc:fileid>
+    <oc:size>268748800</oc:size>
+    <nc:has-preview>false</nc:has-preview>
+   </d:prop>
+   <d:status>HTTP/1.1 200 OK</d:status>
+  </d:propstat>
+ </d:response>
+ <d:response>
+  <d:href>/remote.php/dav/files/pat/Pictures/party.gif</d:href>
+  <d:propstat>
+   <d:prop>
+    <d:getlastmodified>Sat, 01 Nov 2026 10:00:00 GMT</d:getlastmodified>
+    <d:getcontenttype>image/gif</d:getcontenttype>
+    <d:getcontentlength>48211</d:getcontentlength>
+    <d:resourcetype/>
+    <d:getetag>"0g1"</d:getetag>
+    <oc:fileid>104</oc:fileid>
+    <oc:size>48211</oc:size>
+    <nc:has-preview>true</nc:has-preview>
+   </d:prop>
+   <d:status>HTTP/1.1 200 OK</d:status>
+  </d:propstat>
+ </d:response>
+ <d:response>
+  <d:href>/remote.php/dav/files/pat/Pictures/receipt.pdf</d:href>
+  <d:propstat>
+   <d:prop>
+    <d:getlastmodified>Sat, 01 Nov 2026 10:00:00 GMT</d:getlastmodified>
+    <d:getcontenttype>application/pdf</d:getcontenttype>
+    <d:getcontentlength>8811</d:getcontentlength>
+    <d:resourcetype/>
+    <d:getetag>"0p1"</d:getetag>
+    <oc:fileid>105</oc:fileid>
+    <oc:size>8811</oc:size>
+    <nc:has-preview>false</nc:has-preview>
+   </d:prop>
+   <d:status>HTTP/1.1 200 OK</d:status>
+  </d:propstat>
+ </d:response>
+ <d:response>
+  <d:href>/remote.php/dav/files/pat/Pictures/%c5%81%c3%b3d%c5%ba%20zim%C4%85.jpg</d:href>
+  <d:propstat>
+   <d:prop>
+    <d:getcontenttype>image/jpeg</d:getcontenttype>
+    <d:getcontentlength>2210331</d:getcontentlength>
+    <d:resourcetype/>
+    <d:getetag>"l0dz"</d:getetag>
+    <oc:fileid>106</oc:fileid>
+    <oc:size>2210331</oc:size>
+    <nc:has-preview>true</nc:has-preview>
+   </d:prop>
+   <d:status>HTTP/1.1 200 OK</d:status>
+  </d:propstat>
+  <d:propstat>
+   <d:prop><d:getlastmodified/></d:prop>
+   <d:status>HTTP/1.1 404 Not Found</d:status>
+  </d:propstat>
+ </d:response>
+ <d:response>
+  <d:href>/remote.php/dav/files/pat/Pictures/broken.png</d:href>
+  <d:propstat>
+   <d:prop>
+    <d:resourcetype/>
+    <d:getetag>"b0"</d:getetag>
+    <oc:fileid>107</oc:fileid>
+   </d:prop>
+   <d:status>HTTP/1.1 200 OK</d:status>
+  </d:propstat>
+  <d:propstat>
+   <d:prop>
+    <d:getcontenttype>image/png</d:getcontenttype>
+    <nc:has-preview>true</nc:has-preview>
+   </d:prop>
+   <d:status>HTTP/1.1 404 Not Found</d:status>
+  </d:propstat>
+ </d:response>
+ <d:response>
+  <d:href>/remote.php/dav/files/pat/Pictures/PB014004%20copy.JPG</d:href>
+  <d:propstat>
+   <d:prop>
+    <d:getlastmodified>Sat, 01 Nov 2026 23:59:59 GMT</d:getlastmodified>
+    <d:getcontenttype>image/jpeg</d:getcontenttype>
+    <d:getcontentlength>7340122</d:getcontentlength>
+    <d:resourcetype/>
+    <d:getetag>"9c1f5e22ab"</d:getetag>
+    <oc:fileid>101</oc:fileid>
+    <oc:size>7340122</oc:size>
+    <nc:has-preview>true</nc:has-preview>
+   </d:prop>
+   <d:status>HTTP/1.1 200 OK</d:status>
+  </d:propstat>
+ </d:response>
+ <d:response>
+  <d:href>/remote.php/dav/files/pat/Pictures/clip.mp4</d:href>
+  <d:propstat>
+   <d:prop>
+    <d:getlastmodified>Sat, 01 Nov 2026 10:00:00 GMT</d:getlastmodified>
+    <d:getcontenttype>application/octet-stream</d:getcontenttype>
+    <d:getcontentlength>100</d:getcontentlength>
+    <d:resourcetype/>
+    <d:getetag>"c1"</d:getetag>
+    <oc:fileid>108</oc:fileid>
+    <oc:size>100</oc:size>
+    <nc:has-preview>false</nc:has-preview>
+   </d:prop>
+   <d:status>HTTP/1.1 200 OK</d:status>
+  </d:propstat>
+ </d:response>
+</d:multistatus>
