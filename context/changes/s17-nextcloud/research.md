@@ -338,3 +338,18 @@ server before building anything in cast-tv.
   registered for the type, so the host has no ffmpeg (inference from Nextcloud's preview manager,
   not confirmed by Hetzner). It cannot be pointed at one: `preview_ffmpeg_path` is not among the
   allowed commands. Server-side film previews are closed on this hosting short of Hetzner support.
+
+### Row 3.10 and the Phase 3 confirmations (2026-11-25)
+
+- **Row 3.10.** Window at `569da31` code (Phase 5): in `2026_11_01` the tiles `PB014004.JPG`,
+  `PB014008.JPG`, `PB014012.JPG` ticked, then in `video` `PB014001.MOV`; **Start show**.
+  `/api/status` each second: `PB014004.JPG` playing at 5 s, `PB014008.JPG` at 13 s,
+  `PB014012.JPG` at 21 s, `PB014001.MOV` starting at 28 s and playing at 30 s (from the
+  download cache), show `finished` at 61 s. The window: "SLIDESHOW 4 / 4 finished · Show
+  finished · The TV is back on its own input." The owner saw the three photos and then the film
+  on the TV in that order.
+- **Confirmed by the owner in chat:** rows 3.5, 3.8 and 3.10 ("tak", "potwierdzam") and the
+  agent's observations of rows 3.6 and 3.7. Rows 3.5-3.8 ran on the code of `c91adba`; the later
+  code changes before the acceptance revision are Phase 5's (a Nextcloud video resolves with
+  `download=True`; the download hint per source), which touch none of sign-in, the credential
+  file, listing, previews or photo casting.
